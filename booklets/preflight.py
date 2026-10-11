@@ -9,7 +9,11 @@ def check(s,body,objects,fill=False):
     if not b.get('sections'):error(None,'Boekje','Voeg eerst een bouwsteen toe.')
     for i,slot in enumerate(b.get('sections',[])):
         sec=slot.get('selected') if slot.get('choice') else slot
-        if not sec:missing.append(slot.get('title','Keuzepagina'));continue
+        if not sec:
+            if slot.get('choice')=='document':
+                if not slot.get('omitted'):error(i,slot.get('title','Document'),'Haal dit boekingsdocument op, upload een PDF of kies bewust Weglaten.')
+            else:missing.append(slot.get('title','Keuzepagina'))
+            continue
         title=sec.get('title','Bouwsteen')
         try:
             s.validate_body('book',{'format':b.get('format','A4'),'sections':[sec]})

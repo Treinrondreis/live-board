@@ -12,7 +12,7 @@ const front=http.createServer(async(req,res)=>{if(!await gateway(req,res,new URL
 await new Promise(r=>front.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${front.address().port}`;
 try{
- for(const path of ['/api/state','/files/export/'+ 'a'.repeat(32),'/digital/'+'b'.repeat(32),'/import','/api/mail-tickets/search','/api/mail-tickets/download']){
+ for(const path of ['/api/state','/files/export/'+ 'a'.repeat(32),'/digital/'+'b'.repeat(32),'/import','/api/mail-tickets/search','/api/mail-tickets/download','/api/booking-data/search','/api/booking-data/documents','/api/booking-data/document']){
    const r=await fetch(base+p+path);assert.equal(r.status,401);assert.equal(r.headers.get('cache-control'),'no-store');
  }
  assert.equal(seen.length,0);

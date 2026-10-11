@@ -2,6 +2,7 @@
 import copy
 from pdf_geometry import display_meta, normalize_page
 import ticket_import
+import booking_documents
 import field_background
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 from types import SimpleNamespace
@@ -33,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.2'
+APP_VERSION = '2026.10.11.3'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -187,12 +188,18 @@ def validate_body(kind,b,prepared=False):
         if b.get('fillerOrder') and (b.get('pages')!=1 or int(b['fillerOrder']) not in (1,2,3)):raise ValueError('Een vulbouwsteen bevat één pagina en heeft volgorde 1, 2 of 3.')
         a=asset(b['asset']);b['pages']=a['pages']; fields_validate(b.get('fields',[]),a['meta'])
     elif kind in ('template','book'):
+        if kind=='template' and b.get('sanityBooking'):raise ValueError('Koppel klantgegevens alleen aan een persoonlijk boekje.')
         if len(b.get('sections',[]))>100: raise ValueError('Maximaal 100 bouwstenen.')
         if b.get('format','A4') not in SIZES:raise ValueError('Kies A4 of A5.')
         for slot in b.get('sections',[]):
             if kind=='template' and slot.get('oneOff'):raise ValueError('Eenmalige PDF’s horen alleen bij een persoonlijk boekje.')
             if slot.get('choice'):
-                if slot.get('choice') not in ('manual','route'):raise ValueError('Ongeldige keuzeplek.')
+                if slot.get('choice') not in ('manual','route','document'):raise ValueError('Ongeldige keuzeplek.')
+                if slot.get('choice')=='document':
+                    if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
+                    if slot.get('options'):raise ValueError('Een documentplek bevat geen bibliotheekkeuzes.')
+                    if kind=='template' and slot.get('selected'):raise ValueError('Klantdocumenten horen alleen bij een persoonlijk boekje.')
+                    if slot.get('selected') and slot['selected'].get('bookingDocument') and slot['selected']['bookingDocument'].get('bookingId')!=b.get('sanityBooking',{}).get('id'):raise ValueError('Dit klantdocument hoort bij een andere Sanity-boeking.')
                 if slot.get('choice')=='route' and slot.get('country') not in COUNTRIES:raise ValueError('Kies een land voor de routekeuze.')
             candidates=([*slot.get('options',[]),*([slot['selected']] if slot.get('selected') else [])] if slot.get('choice') else [slot])
             for candidate in candidates:
@@ -242,6 +249,7 @@ def make_export(book,options=None):
     if options.get('libraryStamp') is not None and options['libraryStamp']!=library_stamp(objects):raise ValueError('De bibliotheek is gewijzigd tijdens de controle. Maak de PDF opnieuw om de nieuwste pagina’s te controleren.')
     b=refresh_blocks(b,objects);b=sanity_sources.refresh_export(SimpleNamespace(**globals()),b);book['body']=b
     validate_body('book',b)
+    if any(slot.get('choice')=='document' and not slot.get('selected') and not slot.get('omitted') for slot in b.get('sections',[])):raise ValueError('Vul de ontbrekende boekingsdocumenten in of kies per document bewust Weglaten.')
     google_warnings=google_sources.verify(b)
     preparation=plan(b,objects)
     if preparation['missing'] and not options.get('skipChoices'):raise ValueError('Bevestig eerst dat niet ingestelde keuzes mogen worden overgeslagen.')
@@ -463,6 +471,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan accounts toevoegen.'})
                 user_create(b['name'],b['password']);return self.send(200,{'ok':True})
             if path=='/api/tickets/compose':return self.send(200,ticket_import.compose(SimpleNamespace(**globals()),b))
+            if path=='/api/booking-documents/render':return self.send(200,booking_documents.render(SimpleNamespace(**globals()),b))
+            if path=='/api/booking-documents/drive-search':return self.send(200,booking_documents.drive_search(SimpleNamespace(**globals()),b))
+            if path=='/api/booking-documents/drive-load':return self.send(200,booking_documents.drive_load(SimpleNamespace(**globals()),b))
             if path.startswith('/api/sanity/'):
                 context=SimpleNamespace(**globals());action=path.rsplit('/',1)[-1]
                 if action=='search':return self.send(200,sanity_sources.search(b))
@@ -475,7 +486,7 @@ class Handler(BaseHTTPRequestHandler):
                 if action in ('configure','connect','disconnect'):
                     if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan Google koppelen.'})
                     if action=='configure':google_connection.configure(DATA,b.get('config',''));return self.send(200,{'ok':True})
-                    if action=='connect':return self.send(200,{'url':google_connection.connect(DATA,self.server.server_port,b.get('create') is True)})
+                    if action=='connect':return self.send(200,{'url':google_connection.connect(DATA,self.server.server_port,b.get('create') is True,b.get('drive') is True)})
                     google_connection.disconnect(DATA);return self.send(200,{'ok':True})
                 if action=='import':return self.send(200,google_sources.load(context,b,{}))
                 if action=='select-pages':return self.send(200,google_sources.select_pages(context,b['document'],b['pages']))

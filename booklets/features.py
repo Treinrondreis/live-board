@@ -72,4 +72,4 @@ def plan(b,objects):
             if count_pages(b,proposed)%4==0:break
         else:chosen=[]
         if chosen and count_pages(b,insert_fillers(sections,chosen))%4:chosen=[]
-    return dict(pages=pages,needed=needed,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected')],fillers=chosen,canFill=bool(chosen),sections=sections)
+    return dict(pages=pages,needed=needed,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected') and not (s.get('choice')=='document' and s.get('omitted'))],fillers=chosen,canFill=bool(chosen),sections=sections)
