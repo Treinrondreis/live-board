@@ -98,6 +98,13 @@ test('outbound and return slots share downloads but require independent page cho
  assert.equal(slots[2].selected.pages,2);assert(!slots[2].selected.reviewRequired);assert.equal(slots[4].selected.pages,3);assert.equal(slots[4].selected.reviewRequired,true);
  await f.exec('documentSlotPages(2)');f.exec('documentPagesRestore()');assert.equal(f.exec('documentPages.pages.length'),3);
 });
+test('ÖBB portal-only mails use a staged Drive PDF in the fixed document chapter',async()=>{
+ const ref='0726369981792179';const f=fixture({mail:{query:'1234A',references:[ref],messages:[{id:'obb-mail',reference:ref,latest:true,tickets:[],manualLinks:[{url:'https://shop.oebbtickets.at/en/ticket/postcheckout/example'}]}]},api:async(path,b)=>{
+  if(path==='/api/tickets/drive-search')return {items:[{id:'drive-obb',reference:ref,title:'Tickets OBB '+ref+'.pdf',updatedAt:'2026-10-11'}]};
+  if(path==='/api/tickets/drive-load')return {asset:'original-obb',pages:3};
+  if(path==='/api/tickets/inspect'&&b.asset==='original-obb')return {pages:[0,1,2].map(page=>({asset:'original-obb',page,travelDate:'2026-10-09',dateSource:'pdf',dateNeedsReview:false}))};
+ }});f.exec("draft.body.sections=[{choice:'document',documentKind:'obbTickets',title:'ÖBB tickets',options:[],selected:null,ticketMoment:1}]");await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[0].selected.pages,3);assert.equal(f.slots()[0].selected.originalPages.length,3);assert.equal(f.calls.find(c=>c.path==='/api/tickets/drive-load').b.query,ref);assert(!f.calls.some(c=>c.ticket));
+});
 
 test('distinct departure dates select moments with gaps, same-day tickets stay together and fixed chapters remain',async()=>{
  const f=fixture();f.exec(`draft.body.sections[2].ticketMoment=1;draft.body.sections.push({...structuredClone(draft.body.sections[2]),ticketMoment:2,title:'Terugreistickets'})`);

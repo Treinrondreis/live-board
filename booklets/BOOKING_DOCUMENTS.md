@@ -156,6 +156,20 @@ issue/redeem tickets; an invoice or VAT certificate cannot substitute for a tick
 Other carriers need an existing PDF attachment or supported direct PDF link;
 unsupported mail/portal variants use manual upload.
 
+Ticket PDFs staged by a ChatGPT task in Google Drive are another supported
+source. Name them `Tickets OBB 0726369981792179 2026-10-09.pdf` (substitute
+NS, MAV, DB or CD and the actual reference). Drive read access is required.
+The mail picker and automatic fixed chapters check Drive for missing PDF sources
+by the exact carrier reference; cancellation mails block this fallback.
+The separate "Tickets uit Google Drive zoeken" button also permits a manual
+booking-number search. Manual results must be inspected before adding them.
+Original PDF bytes are imported without re-rendering the tickets. Page selection,
+date review, MAV's first-page rule and zoom work as with email tickets. Exact
+duplicate filenames use the newest Drive version. Invoice/refund/tax files and
+other carriers or references are excluded, and download revalidates metadata.
+ÖBB portal fetching remains unsupported because server access was denied;
+the staged PDF route does not require server access to the ÖBB ticket portal.
+
 `ticketMoment` and `voucherMoment` are integers 0–99 (0 means all dates).
 1 is the earliest distinct departure/check-in date, 2 the next distinct date,
 and so on. Same-day tickets stay together even if they cover different trains.
