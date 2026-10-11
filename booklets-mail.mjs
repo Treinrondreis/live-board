@@ -4,13 +4,13 @@ import {fetchBookings} from './flora-sanity.mjs';
 import {readFlora} from './flora-store.mjs';
 import {safeTicketURL,decodeEntities,plainHTML} from './flora-mail-source.mjs';
 import {nsOption} from './flora-options.mjs';
+import {createCarrierMail,providerKey,safeCarrierPDF,referenceDates,isoDate,carrierReferences} from './booklets-carrier-mail.mjs';
 
 const sender='no-reply@confirmation.nsinternational.nl';
 const header=(m,n)=>(m.payload?.headers||[]).find(h=>h.name.toLowerCase()===n)?.value||'';
 const walk=p=>[p,...(p?.parts||[]).flatMap(walk)];
 export function bookingReferences(booking){
- const refs=new Set();
- for(const todo of booking.todos||[]){const value=String(todo.supplierBookingNumber||'').toUpperCase();for(const m of value.matchAll(/\b[A-Z0-9]{6,8}\b/g))if(/[A-Z]/.test(m[0]))refs.add(m[0]);}
+ const refs=new Set(carrierReferences(booking,'ns'));
  for(const m of String(booking.notes||'').toUpperCase().matchAll(/\b(?:DNR|NS(?:\s+INTERNATIONAL)?|BOEKINGSCODE)\s*[:=\-]?\s*([A-Z0-9]{6,8})\b/g))if(/[A-Z]/.test(m[1]))refs.add(m[1]);
  return [...refs];
 }
@@ -18,8 +18,10 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
  const tickets=new Map();let busy=false;
  const clean=()=>{for(const [key,item] of tickets)if(item.expires<clock())tickets.delete(key);};
  const store=item=>{clean();if(tickets.size>=500)throw Error('Te veel open ticketimports. Probeer over een halfuur opnieuw.');const id=randomBytes(24).toString('hex');tickets.set(id,{...item,expires:clock()+1800000});return id;};
+ const carrier=createCarrierMail({google,bookings,store,clock});
  return {
   async search(payload){
+   if(providerKey(payload.provider||'ns')!=='ns')return carrier.search(payload);
    const term=String(payload.query||'').trim().toUpperCase();
    if(!/^[A-Z0-9]{3,16}$/.test(term))throw Error('Vul een boekingsnummer of NS-referentie/DNR in, zonder spaties.');
    const deadline=clock()+90000;const checkTime=()=>{if(clock()>deadline)throw Error('Mails zoeken duurt te lang. Probeer één DNR tegelijk.');};
@@ -44,12 +46,14 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
    }
    messages.sort((a,b)=>b.date.localeCompare(a.date));const latest=new Set();
    for(const m of messages){const group=m.reference||m.id;m.latest=!latest.has(group);latest.add(group);m.selected=m.latest&&!!m.reference&&!m.cancelled&&m.tickets.length>0;}
-   return {provider:'NS International',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],messages};
+   return {provider:'NS International',providerKey:'ns',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],referenceDates:booking?referenceDates(booking,bookingReferences(booking)):[],travelDates:booking?[...new Set((booking.todos||[]).map(t=>isoDate(t.startDate)).filter(Boolean))]:[],messages};
   },
   async download(payload){
    clean();const item=tickets.get(payload.ticket);if(!item)throw Error('Deze ticketselectie is verlopen. Zoek de mails opnieuw.');if(busy){const e=Error('Er wordt al een ticket opgehaald. Probeer zo opnieuw.');e.status=429;throw e;}busy=true;
-   try {let u=safeTicketURL(item.link);let response;const signal=AbortSignal.timeout(25000);
-    for(let hop=0;hop<=3;hop++){response=await fetcher(u,{redirect:'manual',signal,headers:{Accept:'application/pdf'}});if(![301,302,303,307,308].includes(response.status))break;const location=response.headers.get('location');await response.body?.cancel();u=location&&safeTicketURL(new URL(location,u).href);if(!u||hop===3)throw Error('Niet ondersteunde ticketverwijzing.');}
+   try {
+    if(item.kind==='attachment'){const get=await google.reader();const body=item.data?{data:item.data}:item.attachmentId?await get(`messages/${item.mail}/attachments/${item.attachmentId}`):null;if(!body?.data||body.data.length>14*1024*1024)throw Error('Ticketbijlage ontbreekt of is groter dan 10 MB.');const bytes=Buffer.from(body.data,'base64url');if(bytes.length>10*1024*1024||bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Deze ticketbijlage is geen geldige PDF van maximaal 10 MB.');return bytes;}
+    const safe=link=>item.kind==='carrier-link'?safeCarrierPDF(link,item.provider):safeTicketURL(link);let u=safe(item.link);if(!u)throw Error('Niet ondersteunde ticketverwijzing.');let response;const signal=AbortSignal.timeout(25000);
+    for(let hop=0;hop<=3;hop++){response=await fetcher(u,{redirect:'manual',signal,headers:{Accept:'application/pdf'}});if(![301,302,303,307,308].includes(response.status))break;const location=response.headers.get('location');await response.body?.cancel();u=location&&safe(new URL(location,u).href);if(!u||hop===3)throw Error('Niet ondersteunde ticketverwijzing.');}
     if(!response.ok)throw Error('Ticket niet beschikbaar (HTTP '+response.status+').');const chunks=[];let size=0;
     for await(const chunk of response.body){size+=chunk.length;if(size>10*1024*1024){await response.body.cancel().catch(()=>{});throw Error('Ticket-PDF is groter dan 10 MB.');}chunks.push(chunk);}
     const bytes=Buffer.concat(chunks);if(bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Deze ticketknop levert geen PDF. Mogelijk is het ticket geannuleerd of verlopen.');return bytes;

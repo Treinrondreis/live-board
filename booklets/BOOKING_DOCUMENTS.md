@@ -1,7 +1,7 @@
 # Personal books from Sanity bookings
 
 Templates support `choice: "document"` slots with `documentKind` `schedule`,
-`nsTickets`, `voucher` or `letter`. Templates never contain selected customer
+`nsTickets`, `mavTickets`, `dbTickets`, `obbTickets`, `cdTickets`, `voucher` or `letter`. Templates never contain selected customer
 documents or a booking binding. Personal books bind to a stable exact Sanity
 document ID; duplicate booking numbers require explicit selection. Draft and
 published counterparts count as one booking. The latest draft is the current
@@ -16,7 +16,7 @@ booking invalidates all pending results. Each failure is reported on its own
 chapter and does not stop the remaining chapters.
 
 One linked letter is used automatically; several letters require selection.
-Only approved linked vouchers are imported, in Sanity link order; unapproved
+Only approved linked vouchers are imported, sorted by check-in date by default; unapproved
 vouchers are skipped and reported. Multiple vouchers retain every source digest through page
 editing. A missing linked voucher falls back to a unique recommended Drive
 voucher, which is loaded with `reviewRequired` and blocks PDF export until the
@@ -137,3 +137,43 @@ preview behind the existing authentication and asset/page validation. Opening,
 zooming and closing it do not modify the selection. Ordering/removal and PDF
 composition always operate on whole source pages; the thumbnail crop is visual
 only. Other document page pickers retain whole-page thumbnails and can zoom too.
+
+## Carrier ticket imports and dated selections
+
+All ticket retrievers share the large top-half thumbnails, full-page zoom and
+individual page controls. They read the selected booking's rail ToDo supplier
+references. Hotel references are excluded. MAV/DB/ÖBB/ČD validate carrier senders
+and exact labelled reference numbers, support PDF attachments and bounded direct
+PDF links to fixed carrier hosts. Invoice, refund and tax-receipt attachments are
+excluded. The latest cancellation blocks reuse of old tickets. Duplicate booking
+numbers require the exact Sanity booking ID. No Sanity documents are modified.
+
+MAV defaults to page 1 of each ticket PDF. The original PDF remains unchanged.
+ÖBB post-checkout links can be shown for manual use, but are never followed to
+issue/redeem tickets; an invoice or VAT certificate cannot substitute for a ticket.
+Other carriers need an existing PDF attachment or supported direct PDF link;
+unsupported mail/portal variants use manual upload.
+
+`ticketMoment` and `voucherMoment` are integers 0–99 (0 means all dates).
+1 is the earliest distinct departure/check-in date, 2 the next distinct date,
+and so on. Same-day tickets stay together even if they cover different trains.
+`sortByDate` defaults to true for ticket/voucher slots. Sorting happens within a
+chapter; template chapter order never changes. Different carrier imports have
+separate per-run caches; two slots for the same carrier share native source PDFs
+but retain independent page selections.
+
+Authenticated `/api/tickets/inspect` inspects labelled departure/validity dates
+in PDF text. Issue dates, birthdays and mail receipt dates are not travel dates.
+An exact reference's single ToDo startDate can fill a missing printed date.
+Conflicting dates, multiple departure dates on one page and undated continuation
+pages require confirmation. Check-in dates are read after Sanity variable expansion.
+Unrecognised/scanned dates remain editable. An explicitly accepted unknown date
+can be placed manually, but cannot identify a numbered moment.
+
+Snapshots retain `pageSources` and `originalPages` with native asset/page IDs,
+travelDate, dateSource and review flags. Manual date edits update both selected and
+original records, so restoring/filtering preserves the corrections. Changing a
+slot's moment requires a fresh page confirmation. Dates and original page bounds
+are validated on save; unresolved dates block export through reviewRequired.
+Missing moments do not silently use another date. Old snapshots without date
+metadata remain readable and acquire inspection metadata when their picker opens.

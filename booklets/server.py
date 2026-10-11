@@ -1,7 +1,7 @@
 """Local pilot. PDF originals and published exports are immutable. No AI services; optional read-only Google Docs connection."""
 import copy
 from pdf_geometry import display_meta, normalize_page
-import ticket_import
+import ticket_import,ticket_dates
 import booking_documents
 import field_background
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.9'
+APP_VERSION = '2026.10.11.10'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -203,6 +203,9 @@ def validate_body(kind,b,prepared=False):
                     for key,limit in [('numberX',90),('numberY',97)]:
                         if key in slot and (isinstance(slot[key],bool) or not isinstance(slot[key],(float,int)) or not 0<=slot[key]<=limit):raise ValueError('Ongeldige positie voor documentnummering.')
                     if slot.get('ticketPart','all') not in ('all','outbound','return'):raise ValueError('Kies heenreis, terugreis of alle tickets.')
+                    for key in ('ticketMoment','voucherMoment'):
+                        if key in slot and (type(slot[key]) is not int or not 0<=slot[key]<=99):raise ValueError('Kies een reismoment of verblijf tussen 1 en 99, of 0 voor alles.')
+                    if 'sortByDate' in slot and type(slot['sortByDate']) is not bool:raise ValueError('Kies wel of niet sorteren op datum.')
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
                     if slot.get('options'):raise ValueError('Een documentplek bevat geen bibliotheekkeuzes.')
                     if kind=='template' and slot.get('selected'):raise ValueError('Klantdocumenten horen alleen bij een persoonlijk boekje.')
@@ -216,6 +219,24 @@ def validate_body(kind,b,prepared=False):
             candidates=([*slot.get('options',[]),*([slot['selected']] if slot.get('selected') else [])] if slot.get('choice') else [slot])
             for candidate in candidates:
                 toc_info(candidate)
+                for key in ('pageSources','originalPages'):
+                    if key not in candidate:continue
+                    pages=candidate[key]
+                    if not isinstance(pages,list) or not 1<=len(pages)<=100 or any(not isinstance(p,dict) for p in pages):raise ValueError('Ongeldige oorspronkelijke documentpagina’s.')
+                    if key=='pageSources' and len(pages)!=candidate.get('pages'):raise ValueError('Het aantal bronpagina’s klopt niet.')
+                    for p in pages:
+                        source=asset(p.get('asset'))
+                        if type(p.get('page')) is not int or not 0<=p['page']<source['pages']:raise ValueError('Ongeldige oorspronkelijke documentpagina.')
+                        value=p.get('travelDate','')
+                        if not isinstance(value,str) or (value and ticket_dates.iso(value)!=value):raise ValueError('Ongeldige reisdatum.')
+                        for flag in ('dateNeedsReview','dateUnknownAccepted'):
+                            if flag in p and type(p[flag]) is not bool:raise ValueError('Ongeldige datumcontrole.')
+                        if key=='pageSources' and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and (p.get('dateNeedsReview') or (not value and not p.get('dateUnknownAccepted'))):candidate['reviewRequired']=True
+                if slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
+                    moment=slot.get('voucherMoment',0) if slot['documentKind']=='voucher' else slot.get('ticketMoment',0)
+                    if moment:
+                        dates=sorted({p.get('travelDate') for p in candidate.get('originalPages',candidate['pageSources']) if p.get('travelDate')})
+                        if moment>len(dates) or any(p.get('travelDate')!=dates[moment-1] for p in candidate['pageSources']):raise ValueError('De ticket/voucherpagina’s horen niet bij dit reismoment/verblijf.')
                 if candidate.get('sanityText'):
                     source=sanity_sources.settings(candidate['sanityText'])
                     if source['format']!=b.get('format','A4'):raise ValueError('Sanity-tekst past niet bij dit boekformaat.')
@@ -486,6 +507,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan accounts toevoegen.'})
                 user_create(b['name'],b['password']);return self.send(200,{'ok':True})
             if path=='/api/tickets/compose':return self.send(200,ticket_import.compose(SimpleNamespace(**globals()),b))
+            if path=='/api/tickets/inspect':return self.send(200,ticket_dates.inspect(SimpleNamespace(**globals()),b))
             if path=='/api/booking-documents/render':return self.send(200,booking_documents.render(SimpleNamespace(**globals()),b))
             if path=='/api/booking-documents/drive-search':return self.send(200,booking_documents.drive_search(SimpleNamespace(**globals()),b))
             if path=='/api/booking-documents/drive-load':return self.send(200,booking_documents.drive_load(SimpleNamespace(**globals()),b))

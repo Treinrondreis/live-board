@@ -4,7 +4,8 @@ from urllib.parse import urlencode
 import google_connection as connection
 import google_layout,sanity_sources,ticket_import,booking_letter_layout
 
-KINDS=('schedule','nsTickets','voucher','letter')
+TICKET_KINDS=('nsTickets','mavTickets','dbTickets','obbTickets','cdTickets')
+KINDS=('schedule',*TICKET_KINDS,'voucher','letter')
 
 def store(s,raw,title):
     reader,meta=s.inspect_pdf(raw);s.ensure_capacity(len(raw));ident=s.ident()
@@ -23,7 +24,7 @@ def render(s,payload):
         except (ValueError,TypeError):raise ValueError('Ongeldige originele Sanity-PDF.')
         warnings=doc.get('warnings',[])
         if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
-        return {**store(s,raw,doc.get('title','Sanity-document')),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc},'originalPdf':True}}
+        return {**store(s,raw,doc.get('title','Sanity-document')),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate') if k in doc},'originalPdf':True}}
     m,images=sanity_sources.model([doc],{'title':doc.get('title','Brief'),'columns':1})
     warnings=doc.get('warnings',[])
     if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
@@ -35,7 +36,7 @@ def render(s,payload):
         raw=booking_letter_layout.render(m,images,fmt,'voucher')
         layout=booking_letter_layout.VOUCHER_VERSION
         notice='Deze voucher is opnieuw opgemaakt vanuit Sanity-tekst in Treinrondreis-huisstijl. De paginaverdeling kan afwijken van de originele Sanity-PDF.'
-    return {**store(s,raw,m['title']),'warnings':[*warnings,notice],'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc},'layout':layout}}
+    return {**store(s,raw,m['title']),'warnings':[*warnings,notice],'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate') if k in doc},'layout':layout}}
 
 def drive_access(data):
     if not connection.status(data).get('canReadDrive'):raise ValueError('Koppel Google Drive met leestoegang voor bestaande bestanden, of upload zelf een PDF.')
