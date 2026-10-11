@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.6'
+APP_VERSION = '2026.10.11.7'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -159,6 +159,7 @@ def fields_validate(fields,meta):
         if not re.fullmatch(r'#[0-9a-fA-F]{6}',f.get('color','#172d35')): raise ValueError('Ongeldige tekstkleur.')
 def validate_body(kind,b,prepared=False):
     def toc_info(item):
+        if not isinstance(item.get('todoMatch',''),str) or len(item.get('todoMatch',''))>300:raise ValueError('ToDo-herkenning mag maximaal 300 tekens bevatten.')
         if not isinstance(item.get('tocTitle',''),str) or len(item.get('tocTitle',''))>300:raise ValueError('De titel voor de inhoudsopgave mag maximaal 300 tekens bevatten.')
     if kind=='choice':
         slot=b.get('slot',{})
@@ -196,6 +197,12 @@ def validate_body(kind,b,prepared=False):
             if slot.get('choice'):
                 if slot.get('choice') not in ('manual','route','document'):raise ValueError('Ongeldige keuzeplek.')
                 if slot.get('choice')=='document':
+                    toc_info(slot)
+                    if 'preferOriginalPdf' in slot and not isinstance(slot['preferOriginalPdf'],bool):raise ValueError('Kies de opmaak van het Sanity-document.')
+                    if 'pageNumbers' in slot and not isinstance(slot['pageNumbers'],bool):raise ValueError('Kies wel of geen paginanummers.')
+                    for key,limit in [('numberX',90),('numberY',97)]:
+                        if key in slot and (isinstance(slot[key],bool) or not isinstance(slot[key],(float,int)) or not 0<=slot[key]<=limit):raise ValueError('Ongeldige positie voor documentnummering.')
+                    if slot.get('ticketPart','all') not in ('all','outbound','return'):raise ValueError('Kies heenreis, terugreis of alle tickets.')
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
                     if slot.get('options'):raise ValueError('Een documentplek bevat geen bibliotheekkeuzes.')
                     if kind=='template' and slot.get('selected'):raise ValueError('Klantdocumenten horen alleen bij een persoonlijk boekje.')
@@ -208,6 +215,7 @@ def validate_body(kind,b,prepared=False):
                 if slot.get('choice')=='route' and slot.get('country') not in COUNTRIES:raise ValueError('Kies een land voor de routekeuze.')
             candidates=([*slot.get('options',[]),*([slot['selected']] if slot.get('selected') else [])] if slot.get('choice') else [slot])
             for candidate in candidates:
+                toc_info(candidate)
                 if candidate.get('sanityText'):
                     source=sanity_sources.settings(candidate['sanityText'])
                     if source['format']!=b.get('format','A4'):raise ValueError('Sanity-tekst past niet bij dit boekformaat.')
@@ -255,7 +263,7 @@ def make_export(book,options=None):
     b=refresh_blocks(b,objects);b=sanity_sources.refresh_export(SimpleNamespace(**globals()),b);book['body']=b
     validate_body('book',b)
     if any(slot.get('choice')=='document' and not slot.get('selected') and not slot.get('omitted') for slot in b.get('sections',[])):raise ValueError('Vul de ontbrekende boekingsdocumenten in of kies per document bewust Weglaten.')
-    if any((slot.get('selected') if slot.get('choice') else slot or {}).get('reviewRequired') for slot in b.get('sections',[]) if not slot.get('choice') or slot.get('selected')):raise ValueError('Controleer eerst de opgehaalde voucher: klant, hotel, datums en reserveringsnummer.')
+    if any((slot.get('selected') if slot.get('choice') else slot or {}).get('reviewRequired') for slot in b.get('sections',[]) if not slot.get('choice') or slot.get('selected')):raise ValueError('Controleer eerst de opgehaalde documenten: kies de juiste ticketpagina’s en controleer vouchers op klant, hotel, datums en reserveringsnummer.')
     google_warnings=google_sources.verify(b)
     preparation=plan(b,objects)
     if preparation['missing'] and not options.get('skipChoices'):raise ValueError('Bevestig eerst dat niet ingestelde keuzes mogen worden overgeslagen.')

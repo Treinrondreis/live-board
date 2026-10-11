@@ -64,7 +64,7 @@ def contents_plan(sections):
     for index,section in enumerate(sections):
         if section.get('tocHidden',False):continue
         title=section.get('tocTitle','').strip() or section['title']
-        p=Paragraph(escape(title),ParagraphStyle('toc',fontName='Booklet',fontSize=11,leading=15,textColor='#183c3c'))
+        p=Paragraph(escape(title),ParagraphStyle('toc',fontName='Booklet',fontSize=10.5,leading=16.8,textColor='#1A1A1A'))
         _,h=p.wrap(425,100000);height=h+15
         if height>640:raise ValueError('Een titel voor de inhoudsopgave is te lang.')
         if rows and used+height>640:pages.append(rows);rows=[];used=0
@@ -75,12 +75,12 @@ def contents_plan(sections):
 
 def render_contents(rows,starts,number,pagesize=(595.276,841.89)):
     out=io.BytesIO();c=canvas.Canvas(out,pagesize=(595.276,841.89))
-    c.setFillColor('#183c3c');c.setFont('Booklet-Bold',26)
+    c.setFillColor('#1A1A1A');c.setFont('Montserrat',26)
     c.drawString(54,768,'Inhoudsopgave' if number==0 else 'Inhoudsopgave (vervolg)')
     y=717
     for index,paragraph,h in rows:
-        paragraph.drawOn(c,54,y-h);c.setFont('Booklet',11)
-        c.drawRightString(541,y-11,str(starts[index]+1));y-=h+15
+        paragraph.drawOn(c,54,y-h);c.setFont('Booklet',10.5)
+        c.drawRightString(541,y-10.5,str(starts[index]+1));y-=h+15
     c.save();page=PdfReader(out).pages[0]
     if pagesize!=(595.276,841.89):page.scale_to(*pagesize)
     return page

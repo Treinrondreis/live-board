@@ -1,5 +1,5 @@
 """Private booking documents rendered into immutable personal PDF assets."""
-import json,re
+import base64,json,re
 from urllib.parse import urlencode
 import google_connection as connection
 import google_layout,sanity_sources,ticket_import
@@ -15,11 +15,19 @@ def store(s,raw,title):
 def render(s,payload):
     doc=payload.get('document',{});fmt=payload.get('format','A4')
     if fmt not in s.SIZES or doc.get('kind') not in ('letter','voucher') or not isinstance(doc.get('content'),list):raise ValueError('Ongeldig Sanity-boekingsdocument.')
-    if len(json.dumps(doc))>4*1024*1024:raise ValueError('Boekingsdocument te groot.')
+    if len(json.dumps({k:v for k,v in doc.items() if k!='originalPdf'}))>4*1024*1024:raise ValueError('Boekingsdocument te groot.')
+    if doc.get('originalPdf'):
+        encoded=doc['originalPdf']
+        if not isinstance(encoded,str) or len(encoded)>40*1024*1024:raise ValueError('Originele Sanity-PDF te groot.')
+        try:raw=base64.b64decode(encoded,validate=True)
+        except (ValueError,TypeError):raise ValueError('Ongeldige originele Sanity-PDF.')
+        warnings=doc.get('warnings',[])
+        if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
+        return {**store(s,raw,doc.get('title','Sanity-document')),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc},'originalPdf':True}}
     m,images=sanity_sources.model([doc],{'title':doc.get('title','Brief'),'columns':1})
     warnings=doc.get('warnings',[])
     if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
-    return {**store(s,google_layout.render(m,images,fmt,'route'),m['title']),'warnings':warnings,'bookingDocument':{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc}}
+    return {**store(s,google_layout.render(m,images,fmt,'route'),m['title']),'warnings':[*warnings,'Dit document is opnieuw opgemaakt vanuit Sanity-tekst. Upload de originele PDF met huisstijl om de oorspronkelijke opmaak en marges te behouden.'],'bookingDocument':{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc}}
 
 def drive_access(data):
     if not connection.status(data).get('canReadDrive'):raise ValueError('Koppel Google Drive met leestoegang voor bestaande bestanden, of upload zelf een PDF.')

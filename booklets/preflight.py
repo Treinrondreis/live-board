@@ -15,7 +15,7 @@ def check(s,body,objects,fill=False):
             else:missing.append(slot.get('title','Keuzepagina'))
             continue
         title=sec.get('title','Bouwsteen')
-        if sec.get('reviewRequired'):error(i,title,'Controleer deze voucher en bevestig klant, hotel, datums en reserveringsnummer.')
+        if sec.get('reviewRequired'):error(i,title,'Kies de ticketpagina’s voor dit hoofdstuk en bevestig de selectie.' if slot.get('documentKind')=='nsTickets' else 'Controleer deze voucher en bevestig klant, hotel, datums en reserveringsnummer.')
         try:
             s.validate_body('book',{'format':b.get('format','A4'),'sections':[sec]})
             meta=s.asset(sec['asset'])['meta'];values={**b.get('values',{}),**sec.get('values',{})}

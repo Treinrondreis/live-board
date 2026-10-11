@@ -48,6 +48,18 @@ export async function expandContent(content,booking,readReference,stack=[],budge
 }
 
 export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig}={}){
+ async function originalPdf(id){
+  const config=configuration();
+  // Fixed official renderer and a verified linked document ID. Never redirect credentials.
+  const url=`https://www.treinrondreis.nl/api/v2/doc/${encodeURIComponent(id)}.pdf?background=true`;
+  const response=await fetcher(url,{headers:{Authorization:'Bearer '+config.token},redirect:'error',signal:AbortSignal.timeout(45000)});
+  if([401,403].includes(response.status))throw Error('De originele PDF met huisstijl vereist toegang tot de Treinrondreis-documentexport. Upload de originele PDF zolang deze koppeling geen toegang heeft.');
+  if(!response.ok)throw Error('De originele Sanity-PDF kon niet worden opgehaald. Probeer opnieuw of upload de originele PDF.');
+  const chunks=[];let size=0;
+  for await(const chunk of response.body){size+=chunk.length;if(size>30*1024*1024)throw Error('De oorspronkelijke PDF is groter dan 30 MB.');chunks.push(chunk);}
+  const bytes=Buffer.concat(chunks);if(!bytes.subarray(0,1024).includes(Buffer.from('%PDF-')))throw Error('De documentexport gaf geen geldige PDF terug. Upload de originele PDF.');
+  return bytes.toString('base64');
+ }
  async function query(groq,params={},perspective='raw'){
   const c=configuration();if(!c.token)throw Error('De Sanity Viewer-koppeling is nog niet ingesteld in Seinhuis.');
   if(!/^[a-z0-9]+$/.test(c.project)||!/^[-a-z0-9]+$/.test(c.dataset))throw Error('Ongeldige Sanity-instellingen.');
@@ -64,12 +76,12 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
  }
  return {
   async search(p){const number=cleanNumber(p.number);const bookings=await query(`*[_type=="tourBooking" && index==$number] | order(_id asc)[0...101]{_id,index,firstName,lastName,dateDeparture,dateReturn,status,_updatedAt,trip->{title}}`,{number:Number(number)});const unique=current(bookings);if(bookings.length>100||unique.length>50)throw Error('Te veel boekingen gevonden voor dit nummer.');return {items:unique.map(b=>{const item=bookingSummary(b);item.sameNumberBookings=unique.length;item.number=String(p.number).trim().toUpperCase();item.values.boekingsnummer=item.number;return item;})};},
-  async documents(p){const b=await selected(p);return {booking:bookingSummary(b),items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
+  async documents(p){const b=await selected(p);return {booking:{...bookingSummary(b),todos:(b.todos||[]).slice(0,500).map(t=>({title:String(t.title||'').slice(0,2000),description:String(t.description||'').slice(0,4000)}))},items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
   async document(p){const b=await selected(p),doc=(b.docs||[]).find(d=>d?._id===p.documentId&&documentKind(d));if(!doc)throw Error('Dit document hoort niet bij de geselecteerde boeking.');if(documentKind(doc)==='voucher'&&doc.approved!==true)throw Error('Deze voucher is nog niet gecontroleerd in Sanity. Vink hem eerst aan in Sanity of kies een gecontroleerde PDF uit Google Drive.');
    const cache=new Map();const read=async id=>{if(cache.size>=60&&!cache.has(id))throw Error('De brief bevat te veel standaardteksten.');if(!cache.has(id))cache.set(id,await query('*[_type=="reusableText" && _id==$id][0]{_id,_type,_rev,content}',{id},'published'));return cache.get(id);};
    const warnings=[],options=documentKind(doc)==='voucher'?{onMissingReservation:()=>warnings.push(doc.title+': het reserveringsnummer kon niet worden ingevuld en is leeg gelaten. De voucher is wel gecontroleerd in Sanity.')}:{};
    const content=await expandContent(doc.content,b,read,[],undefined,options);
-   return {bookingId:b._id,documentId:doc._id,title:doc.title,kind:documentKind(doc),revision:doc._rev,approved:doc.approved===true,content,warnings:[...new Set(warnings)],digest:createHash('sha256').update(JSON.stringify([doc.title,content])).digest('hex'),loadedAt:new Date().toISOString()};
+   return {bookingId:b._id,documentId:doc._id,title:doc.title,kind:documentKind(doc),revision:doc._rev,approved:doc.approved===true,content,warnings:[...new Set(warnings)],digest:createHash('sha256').update(JSON.stringify([doc.title,content])).digest('hex'),loadedAt:new Date().toISOString(),...(p.originalPdf===true?{originalPdf:await originalPdf(doc._id)}:{})};
   }
  };
 }

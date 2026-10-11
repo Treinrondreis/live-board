@@ -11,7 +11,7 @@ class BookingDocumentTests(unittest.TestCase):
         warning='Het reserveringsnummer is leeg gelaten.'
         doc={'kind':'voucher','title':'Hotelvoucher','warnings':[warning],'content':[{'_type':'block','children':[{'_type':'span','text':'Hotelvoucher Premier Inn'}]}]}
         result=booking_documents.render(ctx,{'document':doc,'format':'A4'})
-        self.assertEqual(result['warnings'],[warning])
+        self.assertIn(warning,result['warnings']);self.assertTrue(any('opnieuw opgemaakt' in w for w in result['warnings']))
         self.assertNotIn(warning,PdfReader(s.DATA/'pdfs'/f"{result['asset']}.pdf").pages[0].extract_text())
         doc['warnings']=['x'*2001]
         self.assertRaisesRegex(ValueError,'documentwaarschuwingen',booking_documents.render,ctx,{'document':doc,'format':'A4'})

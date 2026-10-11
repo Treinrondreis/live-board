@@ -16,7 +16,7 @@ def pdf_format(meta):
                              or (abs(w-x-bleed)<1 and abs(h-y-bleed)<1)), 'Onbekend'))
     return formats[0] if formats and len(set(formats))==1 else 'Onbekend'
 def snapshot(o):
-    b=o['body'];return dict(block=o['id'],revision=o['revision'],title=o['title'],**{k:copy.deepcopy(b[k]) for k in ('asset','pages','fields','numberingConfigured','tocTitle','tocHidden','googleDoc','sanityText') if k in b},values={},recto=False)
+    b=o['body'];return dict(block=o['id'],revision=o['revision'],title=o['title'],**{k:copy.deepcopy(b[k]) for k in ('asset','pages','fields','numberingConfigured','tocTitle','tocHidden','googleDoc','sanityText','todoMatch') if k in b},values={},recto=False)
 def resolved(b):
     return [copy.deepcopy(s['selected'] if s.get('choice') else s) for s in b.get('sections',[]) if not s.get('choice') or s.get('selected')]
 
@@ -27,7 +27,7 @@ def refresh_blocks(body,objects):
         o=blocks.get(s.get('block'))
         if not o:return s
         fresh=snapshot(o)
-        fresh['values']=copy.deepcopy(s.get('values',{}));fresh['recto']=s.get('recto',False)
+        fresh['todoMatch']=s.get('todoMatch','') if s.get('todoMatchOverride') else o['body'].get('todoMatch','');fresh['todoMatchOverride']=bool(s.get('todoMatchOverride'));fresh['values']=copy.deepcopy(s.get('values',{}));fresh['recto']=s.get('recto',False)
         return fresh
     for i,s in enumerate(b.get('sections',[])):
         if s.get('choice'):

@@ -16,8 +16,8 @@ booking invalidates all pending results. Each failure is reported on its own
 chapter and does not stop the remaining chapters.
 
 One linked letter is used automatically; several letters require selection.
-All linked vouchers must be approved before the complete set is imported in
-Sanity link order. Multiple vouchers retain every source digest through page
+Only approved linked vouchers are imported, in Sanity link order; unapproved
+vouchers are skipped and reported. Multiple vouchers retain every source digest through page
 editing. A missing linked voucher falls back to a unique recommended Drive
 voucher, which is loaded with `reviewRequired` and blocks PDF export until the
 user reviews its pages and confirms the details. A unique recommended schedule
@@ -72,3 +72,37 @@ snapshots are refreshed explicitly through "Opnieuw ophalen".
 Tests: `node --test booklets-bookings.test.mjs booklets-mail.test.mjs`,
 `node booklets/test-booking-ui.cjs`, `node booklets/test-auto-booking-ui.cjs`,
 gateway tests and Python document tests.
+
+
+## Chapter settings and ToDo matching
+
+Every document slot has its own chapter name, TOC title/visibility and numbering
+settings. New letter, schedule and voucher slots default to numbered; NS slots
+are unnumbered. Existing slots keep their prior behavior until configured.
+Position percentages are editable with a first-page preview; there is no claim
+that an arbitrary ticket footer is empty. New TOC fields use Open Sans 10.5 pt,
+#1A1A1A; existing fields have an explicit recommended-style action. Legacy generated
+TOCs use Montserrat headings and the same Open Sans body color.
+
+Choice options can override a block's ToDo match text. Route blocks store a
+match phrase in their own metadata. The entire phrase must occur inside one
+ToDo, ignoring case and repeated whitespace. No fuzzy word matching. Exact
+booking selection supplies title/description only; ambiguous matches require a
+user choice. Manual overrides persist on retry. Refreshing a block preserves
+choice-local phrases while route phrases follow current library metadata.
+
+Separate NS slots can be marked outbound/return. They reuse the same downloaded
+source within one import, but require independent explicit page selections.
+An unchecked direction slot blocks export. Removed pages can be restored from
+original immutable assets, without erasing selections in another slot.
+
+The standard Sanity import requests the original document from the official
+fixed www.treinrondreis.nl/api/v2/doc/<verified-linked-id>.pdf renderer using
+background=true. The existing Sanity Viewer credential is sent only to that
+fixed first-party export endpoint, never redirects. Ownership and voucher
+approval are verified before requesting PDF bytes. Responses are bounded at
+30 MB and PDF signatures checked. If the renderer refuses access the import
+reports it and offers a manual original PDF upload; it does not silently rebuild
+the page. The Python import stores native PDF bytes unchanged. The legacy text
+renderer remains available for existing integrations and identifies its output
+as recreated text, rather than an original PDF.
