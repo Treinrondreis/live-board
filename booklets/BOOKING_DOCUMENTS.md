@@ -147,6 +147,8 @@ and exact labelled reference numbers, support PDF attachments and bounded direct
 PDF links to fixed carrier hosts. Invoice, refund and tax-receipt attachments are
 excluded. The latest cancellation blocks reuse of old tickets. Duplicate booking
 numbers require the exact Sanity booking ID. No Sanity documents are modified.
+Gmail queries search both compact Sanity numbers and ÖBB/ČD's grouped spelling;
+mail bodies containing spaced digits do not match a compact quoted phrase alone.
 
 MAV defaults to page 1 of each ticket PDF. The original PDF remains unchanged.
 ÖBB post-checkout links can be shown for manual use, but are never followed to
