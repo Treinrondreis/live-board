@@ -16,7 +16,11 @@ export function variableValue(field,booking){
  if(path[0]==='booking')return '';
  if(path.shift()!=='tourBooking'||path.some(k=>!/^\w+$/.test(k)||['__proto__','constructor','prototype'].includes(k)))throw Error('Niet ondersteund klantveld in de Sanity-brief. Upload de brief als PDF.');
  let value=booking;for(const key of path)value=value?.[key];
- if(value==null||value==='')throw Error('Een klantveld in de Sanity-brief ontbreekt: '+field+'. Controleer de brief in Sanity.');
+ if(value==null||value===''){
+  const reservation=String(field||'').match(/^tourBooking\.todos\.(\d+)\.supplierBookingNumber(?::.*)?$/);
+  if(reservation){const todo=booking.todos?.[Number(reservation[1])];throw Error('Het reserveringsnummer ontbreekt bij '+(todo?.title?'“'+todo.title+'”':'onderdeel '+(Number(reservation[1])+1))+' van deze boeking. Controleer het reserveringsnummer en het gekoppelde invulveld van dit document in Sanity.');}
+  throw Error('Een klantveld in het Sanity-document ontbreekt: '+field+'. Controleer de boekingsgegevens en het invulveld in Sanity.');
+ }
  if(typeof value==='object')throw Error('Niet ondersteund samengesteld klantveld in de Sanity-brief.');
  return String(value);
 }

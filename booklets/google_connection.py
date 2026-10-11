@@ -28,9 +28,28 @@ def request(url,data=None,token=None,limit=20*1024*1024):
             return raw
     except HTTPError as e:
         if e.code==401:raise ValueError('Google-aanmelding verlopen. Koppel Google opnieuw via de bibliotheek.') from None
-        if e.code in (403,404):raise ValueError('Geen toegang tot dit Google-document. Controleer de link, deelrechten en of de Google Docs API is ingeschakeld.') from None
+        if e.code in (403,404):raise ValueError(access_error(e,url)) from None
         raise ValueError('Google kon het document niet leveren. Probeer opnieuw of koppel Google opnieuw.') from None
     except (URLError,TimeoutError,OSError):raise ValueError('Google is niet bereikbaar. Controleer uw internetverbinding.') from None
+
+def access_error(error,url):
+    """Translate structured provider reasons without exposing its response or credentials."""
+    parsed=urlparse(url)
+    service='Google Drive' if parsed.hostname=='www.googleapis.com' and parsed.path.startswith('/drive/') else 'Google Docs' if parsed.hostname=='docs.googleapis.com' else 'Google'
+    reasons=set()
+    try:
+        payload=json.loads(error.read(65536)).get('error',{})
+        if isinstance(payload,dict):
+            for entry in payload.get('errors',[])+payload.get('details',[]):
+                if isinstance(entry,dict) and isinstance(entry.get('reason'),str):reasons.add(entry['reason'])
+    except (ValueError,TypeError,AttributeError,OSError):pass
+    if error.code==403 and reasons.intersection({'accessNotConfigured','SERVICE_DISABLED'}) and service!='Google':
+        return f'De {service} API is niet ingeschakeld voor de Google-koppeling van de Boekjesmaker. Schakel deze API in het bijbehorende Google Cloud-project in en probeer opnieuw. Uw Google-toestemming hoeft u hiervoor niet opnieuw te geven.'
+    if service=='Google Drive':
+        if error.code==404:return 'Dit bestand is niet gevonden in Google Drive of is niet toegankelijk voor het gekoppelde account. Controleer de link en de deelrechten.'
+        return 'Google Drive weigert toegang. Controleer of het gekoppelde Google-account dit bestand mag lezen en of Drive-leestoegang is gegeven via Google koppelen.'
+    if service=='Google Docs':return 'Geen toegang tot dit Google-document. Controleer of het document bestaat en gedeeld is met het gekoppelde Google-account.'
+    return 'Geen toegang tot deze Google-bron. Controleer de link en de deelrechten.'
 
 def protect(raw,decrypt=False):
     if os.environ.get('BOOKLETS_ENCRYPTION_KEY'):
