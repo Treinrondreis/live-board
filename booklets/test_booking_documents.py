@@ -43,6 +43,28 @@ class BookingDocumentTests(unittest.TestCase):
         for fmt in ('A4','A5'):
             r=booking_documents.render(ctx,{'document':doc,'format':fmt});pdf=PdfReader(s.DATA/'pdfs'/f"{r['asset']}.pdf");self.assertIn('Beste Test Reiziger',pdf.pages[0].extract_text());self.assertAlmostEqual(float(pdf.pages[0].mediabox.height),s.SIZES[fmt][1],places=2);self.assertEqual(r['bookingDocument']['bookingId'],'private.test')
         self.assertEqual(test_cloud.request('/api/booking-documents/render','POST',authorized=False)[0],401)
+    def test_house_letter_has_safe_margins_stationery_and_no_large_document_title(self):
+        import pdfplumber,io
+        doc={'kind':'letter','title':'Briefing: This is metadata only','content':[{'_type':'block','children':[{'_type':'span','text':'Test Reiziger\nStationsplein 1\n1234 AB Wenen','marks':[]}]},{'_type':'block','children':[{'_type':'span','text':'Beste Test Reiziger,','marks':[]}]},{'_type':'block','style':'h2','children':[{'_type':'span','text':'Reizen met de Nightjet','marks':[]}]},{'_type':'block','children':[{'_type':'span','text':'Uw reisgegevens staan hieronder.','marks':[]}]},{'_type':'pageBreak'},{'_type':'block','children':[{'_type':'span','text':'Tweede pagina van de brief.','marks':[]}]}]}
+        for fmt in ('A4','A5'):
+            result=booking_documents.render(ctx,{'document':doc,'format':fmt})
+            raw=(s.DATA/'pdfs'/f"{result['asset']}.pdf").read_bytes()
+            with pdfplumber.open(io.BytesIO(raw)) as pdf:
+                self.assertEqual(len(pdf.pages),2)
+                for page in pdf.pages:
+                    text=page.extract_text()
+                    self.assertIn('contact@treinrondreis.nl',text)
+                    self.assertIn('KvK: 86245007',text)
+                    self.assertNotIn(doc['title'],text)
+                    self.assertTrue(page.images)
+                words=pdf.pages[0].extract_words()
+                greeting=next(w for w in words if w['text']=='Beste')
+                self.assertGreaterEqual(greeting['x0'],76 if fmt=='A4' else 29)
+                self.assertGreater(greeting['top'],170 if fmt=='A4' else 125)
+                self.assertIn('Tweede pagina',pdf.pages[1].extract_text())
+            self.assertEqual(result['bookingDocument']['layout'],'treinrondreis-letter-1')
+            self.assertTrue(any('huisstijl' in w for w in result['warnings']))
+            self.assertFalse(any('opnieuw opgemaakt' in w for w in result['warnings']))
     def test_templates_never_save_customer_documents_and_export_never_skips_missing_slots(self):
         slots=[{'choice':'document','documentKind':k,'title':k,'options':[],'selected':None} for k in booking_documents.KINDS]
         s.validate_body('template',{'sections':slots,'format':'A4'})

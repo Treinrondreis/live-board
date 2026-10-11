@@ -106,3 +106,17 @@ reports it and offers a manual original PDF upload; it does not silently rebuild
 the page. The Python import stores native PDF bytes unchanged. The legacy text
 renderer remains available for existing integrations and identifies its output
 as recreated text, rather than an original PDF.
+
+## Booking letter house style
+
+New letter retrievers use the Sanity text renderer by default, with an embedded
+Treinrondreis logo, contact header, company footer, Open Sans 10 pt and 11 pt
+subheadings. A4 uses 27 mm side margins and reserves header/footer space; A5
+landscape uses narrower margins. The document title remains metadata, rather
+than a large printed "Briefing" heading. Address and greeting come from Sanity;
+images, bullet lists and explicit page breaks retain their original order.
+This is a house-style recreation, not an identical original Sanity PDF.
+Existing explicit original-PDF settings stay selectable; choose "Brief in
+Treinrondreis-huisstijl" and retrieve the letter again to switch an existing
+chapter. Source content, approval checks, immutable prior PDFs, and Sanity itself
+are unchanged.

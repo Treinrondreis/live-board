@@ -2,7 +2,7 @@
 import base64,json,re
 from urllib.parse import urlencode
 import google_connection as connection
-import google_layout,sanity_sources,ticket_import
+import google_layout,sanity_sources,ticket_import,booking_letter_layout
 
 KINDS=('schedule','nsTickets','voucher','letter')
 
@@ -27,7 +27,15 @@ def render(s,payload):
     m,images=sanity_sources.model([doc],{'title':doc.get('title','Brief'),'columns':1})
     warnings=doc.get('warnings',[])
     if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
-    return {**store(s,google_layout.render(m,images,fmt,'route'),m['title']),'warnings':[*warnings,'Dit document is opnieuw opgemaakt vanuit Sanity-tekst. Upload de originele PDF met huisstijl om de oorspronkelijke opmaak en marges te behouden.'],'bookingDocument':{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc}}
+    if doc['kind']=='letter':
+        raw=booking_letter_layout.render(m,images,fmt)
+        layout=booking_letter_layout.VERSION
+        notice='Deze brief is vanuit Sanity-tekst opgemaakt in Treinrondreis-huisstijl. De paginaverdeling kan afwijken van de originele Sanity-PDF.'
+    else:
+        raw=google_layout.render(m,images,fmt,'route')
+        layout='sanity-text'
+        notice='Dit document is opnieuw opgemaakt vanuit Sanity-tekst. Upload de originele PDF met huisstijl om de oorspronkelijke opmaak en marges te behouden.'
+    return {**store(s,raw,m['title']),'warnings':[*warnings,notice],'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc},'layout':layout}}
 
 def drive_access(data):
     if not connection.status(data).get('canReadDrive'):raise ValueError('Koppel Google Drive met leestoegang voor bestaande bestanden, of upload zelf een PDF.')

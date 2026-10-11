@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.7'
+APP_VERSION = '2026.10.11.8'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
