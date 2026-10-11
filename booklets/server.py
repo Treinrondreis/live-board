@@ -1,6 +1,7 @@
 """Local pilot. PDF originals and published exports are immutable. No AI services; optional read-only Google Docs connection."""
 import copy
 from pdf_geometry import display_meta, normalize_page
+import ticket_import
 import field_background
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 from types import SimpleNamespace
@@ -32,7 +33,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.1'
+APP_VERSION = '2026.10.11.2'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -461,6 +462,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/users':
                 if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan accounts toevoegen.'})
                 user_create(b['name'],b['password']);return self.send(200,{'ok':True})
+            if path=='/api/tickets/compose':return self.send(200,ticket_import.compose(SimpleNamespace(**globals()),b))
             if path.startswith('/api/sanity/'):
                 context=SimpleNamespace(**globals());action=path.rsplit('/',1)[-1]
                 if action=='search':return self.send(200,sanity_sources.search(b))
