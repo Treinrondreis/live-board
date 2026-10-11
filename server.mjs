@@ -1,3 +1,4 @@
+import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
 import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
 import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
@@ -1070,11 +1071,11 @@ const pageRoutes={
 };
 
 const appStations=[...(config.ndov?.stations||[]).map(s=>({id:'nl-'+s.code.toLowerCase(),name:s.name,country:'NL',page:s.page})),
- ...[[swissStations,'CH'],[norwegianStations,'NO'],[belgianStations,'BE'],[rfiStations,'IT'],[frenchStations,'FR'],[spanishStations,'ES'],[swedishStations,'SE']].flatMap(([registry,country])=>Object.entries(registry).map(([page,s])=>({id:page,name:s.name,country:s.country||country,page}))),
+ ...[[swissStations,'CH'],[norwegianStations,'NO'],[belgianStations,'BE'],[rfiStations,'IT'],[frenchStations,'FR'],[spanishStations,'ES'],[swedishStations,'SE'],[oebbStations,'AT']].flatMap(([registry,country])=>Object.entries(registry).map(([page,s])=>({id:page,name:s.name,country:s.country||country,page}))),
  ...(config.collectors||[]).filter(s=>!(config.ndov?.stations||[]).some(n=>n.name===s.name)).map(s=>({id:s.id,name:s.name,country:/Wien|Innsbruck/.test(s.name)?'AT':/Basel/.test(s.name)?'CH':'DE',db:true}))];
 const handleTreinreiziger=createTreinreizigerHandler({stations:[...new Map(appStations.map(s=>[s.name,s])).values()],getBoard:s=>{
  if(s.db)return {source:'DB Timetables',departures:{all:stationUpcomingDepartures(s.name)}};
- const page=s.page;return internationalPayload(page,Object.hasOwn(swedishStations,page)?swedishPayload(page):Object.hasOwn(frenchStations,page)?frenchPayload(page):Object.hasOwn(spanishStations,page)?null:Object.hasOwn(rfiStations,page)?italianEmbedPayload(page):Object.hasOwn(swissStations,page)?swissPayload(page):Object.hasOwn(norwegianStations,page)?norwegianPayload(page):Object.hasOwn(belgianStations,page)?belgianPayload(page):stationPagePayload(page));
+ const page=s.page;return internationalPayload(page,Object.hasOwn(oebbStations,page)?oebbPayload(page):Object.hasOwn(swedishStations,page)?swedishPayload(page):Object.hasOwn(frenchStations,page)?frenchPayload(page):Object.hasOwn(spanishStations,page)?null:Object.hasOwn(rfiStations,page)?italianEmbedPayload(page):Object.hasOwn(swissStations,page)?swissPayload(page):Object.hasOwn(norwegianStations,page)?norwegianPayload(page):Object.hasOwn(belgianStations,page)?belgianPayload(page):stationPagePayload(page));
 }});
 
 const server=http.createServer(async(req,res)=>{
@@ -1190,7 +1191,9 @@ const server=http.createServer(async(req,res)=>{
     if(url.pathname==="/api/international/status")return sendJson(res,200,internationalState);
     const copyPage=url.pathname.match(/^\/api\/views\/([a-z0-9-]+)\/?$/)?.[1];
     if(copyPage&&boardSource(copyPage)&&boardSource(copyPage)!==copyPage)return sendJson(res,200,duplicatePayload(copyPage));
+    if(url.pathname==='/api/oebb/status')return sendJson(res,200,oebbState);
     const belgianPage=url.pathname.match(/^\/api\/views\/([a-z0-9-]+)\/?$/)?.[1];
+    if(belgianPage&&Object.hasOwn(oebbStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,oebbPayload(belgianPage)));
     if(belgianPage&&Object.hasOwn(swedishStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,swedishPayload(belgianPage)));
     if(belgianPage&&(Object.hasOwn(frenchStations,belgianPage)||Object.hasOwn(spanishStations,belgianPage)))return sendJson(res,200,applyBoardSettings(belgianPage,internationalPayload(belgianPage,Object.hasOwn(frenchStations,belgianPage)?frenchPayload(belgianPage):null)));
     if(belgianPage&&Object.hasOwn(rfiStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,italianEmbedPayload(belgianPage)));
@@ -1237,9 +1240,9 @@ startDayReports(()=>{
  const italyRows=recent(italyState.lastScanAt)?italyState.trains.filter(r=>r.station==='Milano Centrale').map(r=>({...r,source:'ViaggiaTreno'})):[];
  return [...dbRows,...italyRows].filter(r=>!r.plannedTimestamp||r.plannedTimestamp<=now+3*3600000||r.cancelled||Number(r.delay)>=10);
 });
-await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations,frenchStations,spanishStations,swedishStations,matchDirection:stationDirectionMatches,getPayload:page=>
- internationalPayload(page,Object.hasOwn(swedishStations,page)?swedishPayload(page):Object.hasOwn(frenchStations,page)?frenchPayload(page):Object.hasOwn(spanishStations,page)?null:Object.hasOwn(rfiStations,page)?italianEmbedPayload(page):Object.hasOwn(swissStations,page)?swissPayload(page):Object.hasOwn(norwegianStations,page)?norwegianPayload(page):Object.hasOwn(belgianStations,page)?belgianPayload(page):stationPagePayload(page))});
-await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
+await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations,frenchStations,spanishStations,swedishStations,oebbStations,matchDirection:stationDirectionMatches,getPayload:page=>
+ internationalPayload(page,Object.hasOwn(oebbStations,page)?oebbPayload(page):Object.hasOwn(swedishStations,page)?swedishPayload(page):Object.hasOwn(frenchStations,page)?frenchPayload(page):Object.hasOwn(spanishStations,page)?null:Object.hasOwn(rfiStations,page)?italianEmbedPayload(page):Object.hasOwn(swissStations,page)?swissPayload(page):Object.hasOwn(norwegianStations,page)?norwegianPayload(page):Object.hasOwn(belgianStations,page)?belgianPayload(page):stationPagePayload(page))});
+await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreOebb(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
 for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>Date.now()-86400000)ndovRows.set(row.id,row);
 server.listen(PORT,async()=>{
   startFlora();
@@ -1249,6 +1252,7 @@ server.listen(PORT,async()=>{
   startEntur();
   startRfi();
   startSweden();
+  startOebb();
   startFrance();
   startInternational();
   startSwiss();
