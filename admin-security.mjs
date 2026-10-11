@@ -46,7 +46,7 @@ export async function handleAdminSecurity(req,res,url){
  const path=url.pathname;
  if(['/stationschef','/stationschef/','/seinhuis','/seinhuis/','/seinhuis/beveiliging','/seinhuis/beveiliging/'].includes(path)){
   headers(res);res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(await readFile(new URL('./admin-security.html',import.meta.url)));return true;
+  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end((await readFile(new URL('./admin-security.html',import.meta.url),'utf8')).replaceAll('/brand-icons/seinhuis',path.startsWith('/stationschef')?'/brand-icons/stationschef':'/brand-icons/seinhuis'));return true;
  }
  if(['/admin-security.js','/admin-security.css'].includes(path)){headers(res);res.writeHead(200,{'Content-Type':path.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8'});res.end(await readFile(new URL('.'+path,import.meta.url)));return true;}
  if(!path.startsWith('/api/admin-security/'))return false;
