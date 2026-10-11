@@ -4,7 +4,7 @@ import {deleteBoardSettings,readBoardSettings,writeBoardSettings,insertBoardSett
 import {swissDirections,matchesSwissDirection} from './swiss-directions.mjs';
 let catalog={},saved=new Map(),provider,legacyMatch;
 const attempts=new Map(),cookieName='treinbord_beheer';
-export const defaultAppearance={design:'standard',accent:'#e5303c',text:'#252525',background:'#ffffff',alternate:'#faf8f5',buttonStart:'#1c6e92',buttonEnd:'#669620',font:'treinrondreis',width:1050,density:'normal',fullOpen:false,defaultTab:'all',showUpdated:true};
+export const defaultAppearance={design:'standard',accent:'#e5303c',text:'#252525',background:'#ffffff',alternate:'#faf8f5',buttonStart:'#1c6e92',buttonEnd:'#669620',font:'treinrondreis',width:1050,density:'normal',fullOpen:false,defaultTab:'all',showUpdated:true,showFullButton:true,showSource:true};
 export async function initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations={},frenchStations={},spanishStations={},swedishStations={},oebbStations={},getPayload,matchDirection}){
  provider=getPayload;legacyMatch=matchDirection;
  catalog={...Object.fromEntries(Object.entries(config.stationPages||{}).map(([id,p])=>[id,{id,name:p.station||p.title,country:p.country||'DE',engine:'standard',title:p.title,directions:p.quickDirections||[]}]))};
@@ -66,7 +66,7 @@ export function validateBoardSettings(page,input){
  for(const key of ['accent','text','background','alternate','buttonStart','buttonEnd'])if(/^#[a-f\d]{6}$/i.test(a[key]||''))result.appearance[key]=a[key];
  result.appearance.font=['treinrondreis','system','arial','verdana'].includes(a.font)?a.font:'treinrondreis';
  result.appearance.width=Math.min(1800,Math.max(600,Number(a.width)||1050));result.appearance.density=['compact','normal','roomy'].includes(a.density)?a.density:'normal';
- result.appearance.fullOpen=a.fullOpen===true;result.appearance.showUpdated=a.showUpdated!==false;result.appearance.defaultTab=['all','fernverkehr','regional'].includes(a.defaultTab)?a.defaultTab:'all';
+ result.appearance.showFullButton=a.showFullButton!==false;result.appearance.showSource=a.showSource!==false;result.appearance.fullOpen=a.fullOpen===true;result.appearance.showUpdated=a.showUpdated!==false;result.appearance.defaultTab=['all','fernverkehr','regional'].includes(a.defaultTab)?a.defaultTab:'all';
  return result;
 }
 function matches(page,row,d){

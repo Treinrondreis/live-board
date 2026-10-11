@@ -173,9 +173,9 @@ function applyAppearance(p){
  document.body.dataset.boardDesign=['db','trenitalia','uk','sncf','treinreiziger'].includes(a.design)?a.design:'standard';
  const fonts={treinrondreis:['"Open Sans",Arial,sans-serif','Montserrat,"Open Sans",sans-serif'],system:['system-ui,sans-serif','system-ui,sans-serif'],arial:['Arial,sans-serif','Arial,sans-serif'],verdana:['Verdana,sans-serif','Verdana,sans-serif']},font=fonts[a.font]||fonts.treinrondreis;
  root.style.setProperty('--board-font',font[0]);root.style.setProperty('--board-heading-font',font[1]);root.style.setProperty('--board-row-padding',({compact:3,normal:6,roomy:12}[a.density]||6)+'px');
- document.querySelector('.live').hidden=a.showUpdated===false;
+ document.querySelector('.live').hidden=a.showUpdated===false;toggleFull.hidden=a.showFullButton===false;document.querySelector('.board-sources').hidden=a.showSource===false;
  let foot=document.getElementById('custom-footer');if(!foot){foot=document.createElement('p');foot.id='custom-footer';board.insertBefore(foot,document.querySelector('.board-sources'));}foot.textContent=settings.footer||'';foot.hidden=!settings.footer;
  const key=JSON.stringify([a.defaultTab,a.fullOpen,settings.enabled,!p.quick?.length]);if(key!==appearanceKey){appearanceKey=key;activeTab=a.defaultTab||'all';fullEl.hidden=settings.enabled===false||!(a.fullOpen||!p.quick?.length);document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===activeTab));}
- document.querySelector('[data-tab="all"]').hidden=false;toggleFull.hidden=settings.enabled===false;toggleFull.textContent=fullEl.hidden?'Toon compleet vertrekbord':'Verberg compleet vertrekbord';
+ document.querySelector('[data-tab="all"]').hidden=false;toggleFull.hidden=settings.enabled===false||a.showFullButton===false;toggleFull.textContent=fullEl.hidden?'Toon compleet vertrekbord':'Verberg compleet vertrekbord';
 }
 window.addEventListener('message',event=>{if(event.source===window.parent&&event.origin===location.origin&&event.data?.type==='treinbord:preview'&&event.data.payload){previewPayload=event.data.payload;void refresh();}});

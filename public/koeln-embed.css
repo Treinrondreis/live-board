@@ -143,3 +143,5 @@ body[data-custom-board][data-board-design=treinreiziger] .board-head{padding:16p
 body[data-custom-board][data-board-design=treinreiziger] .full-row{min-height:48px}
 @media(max-width:560px){body[data-custom-board][data-board-design=treinreiziger] h2{font-size:21px}}
 body[data-custom-board][data-board-design=treinreiziger] .primary{color:#fff!important}
+
+.board-sources[hidden]{display:none;}
