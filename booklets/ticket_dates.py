@@ -37,7 +37,14 @@ def labelled_date(text,provider,allowed=()):
                 anchor=next(iter(values));year=int(anchor[:4])+(1 if anchor[5:7]=='12' and month==1 else 0)
                 result=iso(f'{year}-{month:02}-{day:02}')
                 if result:return result,'pdf-timetable',False
-        if len(values)==1:return next(iter(values)),'pdf-validity',False
+        if len(values)==1:
+            value=next(iter(values))
+            for m in validity:
+                tail=text[m.end():].split('\n',1)[0][:100]
+                for other in re.findall(DATE,tail):
+                    end=iso(other)
+                    if end and abs((date.fromisoformat(end)-date.fromisoformat(value)).days)>1:return value,'pdf-validity-range',True
+            return value,'pdf-validity',False
         if len(values)>1:return '','ambiguous',True
     return '','unknown',True
 

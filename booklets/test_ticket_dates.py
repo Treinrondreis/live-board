@@ -15,6 +15,8 @@ class TicketDateTests(unittest.TestCase):
         self.assertEqual(ticket_dates.labelled_date('First day of validity: 09.10.2026','cd'),('2026-10-09','pdf-validity',False))
         self.assertEqual(ticket_dates.labelled_date('Gültig ab: 31.12.2026\n01.01. 20:10 Wien Hbf -> Amsterdam','ns'),('2027-01-01','pdf-timetable',False))
         self.assertEqual(ticket_dates.labelled_date('Check-in: 10-10-2026\nCheck-out: 13-10-2026','voucher'),('2026-10-10','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Geldig van: 07.10.2026 - 16.10.2026','ns'),('2026-10-07','pdf-validity-range',True))
+        self.assertEqual(ticket_dates.labelled_date('Geldig van: 07.10.2026 - 08.10.2026','ns'),('2026-10-07','pdf-validity',False))
     def upload(self,texts):
         stream=io.BytesIO();cv=canvas.Canvas(stream,pagesize=s.SIZES['A4'])
         for text in texts:
