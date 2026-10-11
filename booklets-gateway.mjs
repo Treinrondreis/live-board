@@ -1,3 +1,4 @@
+import {bookletsMail} from './booklets-mail.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import {Transform} from 'node:stream';
@@ -5,7 +6,7 @@ import {adminAuthenticated} from './admin-security.mjs';
 
 export const BOOKLETS_PREFIX='/seinhuis/boekjesmaker';
 const MAX_UPLOAD=50*1024*1024;
-export function createBookletsGateway({authenticate=adminAuthenticated, configuration=()=>({upstream:process.env.BOOKLETS_INTERNAL_URL,secret:process.env.BOOKLETS_GATEWAY_SECRET,origin:process.env.BOOKLETS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'})}={}) {
+export function createBookletsGateway({authenticate=adminAuthenticated, mail=bookletsMail, configuration=()=>({upstream:process.env.BOOKLETS_INTERNAL_URL,secret:process.env.BOOKLETS_GATEWAY_SECRET,origin:process.env.BOOKLETS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'})}={}) {
   return async function handleBooklets(req,res,url) {
     const prefix=BOOKLETS_PREFIX;
     if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
@@ -30,6 +31,19 @@ export function createBookletsGateway({authenticate=adminAuthenticated, configur
     const length=Number(req.headers['content-length']||0);
     if(!Number.isSafeInteger(length)||length<0||length>MAX_UPLOAD)return fail(413,'Maximaal 50 MB per upload.');
     if(req.method==='POST'&&!req.headers['content-length'])return fail(411,'De uploadlengte ontbreekt.');
+    if(url.pathname.startsWith(prefix+'/api/mail-tickets/')){
+      if(req.method!=='POST')return fail(405,'Gebruik POST voor ticketimport.');
+      if(length>32768)return fail(413,'Ticketzoekopdracht te groot.');
+      try{
+        const parts=[];let received=0;for await(const chunk of req){received+=chunk.length;if(received>32768)throw Error('Ticketzoekopdracht te groot.');parts.push(chunk);}
+        let body;try{body=JSON.parse(Buffer.concat(parts).toString('utf8'));}catch{throw Error('Ongeldige ticketzoekopdracht.');}
+        if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Ongeldige ticketzoekopdracht.');
+        const action=url.pathname.split('/').at(-1);
+        if(action==='search'){const result=await mail.search(body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}
+        if(action==='download'){const bytes=await mail.download(body);res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':bytes.length});res.end(bytes);return true;}
+        return fail(404,'Ticketactie niet gevonden.');
+      }catch(error){return fail(error.status===429?429:400,error.message||'Ticketimport mislukt.');}
+    }
     if(!config.upstream||!config.secret||config.secret.length<32)return fail(503,'De online boekjesmaker wordt nog ingericht.');
     let target;
     try{target=new URL(config.upstream);if(!['http:','https:'].includes(target.protocol)||target.username||target.password)throw Error();}catch{return fail(503,'De boekjesmaker is tijdelijk niet beschikbaar.');}
