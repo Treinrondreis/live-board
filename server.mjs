@@ -1052,6 +1052,7 @@ async function startNdov(){
 }
 
 const pageRoutes={
+  '/embed':'/embed/noorwegen.html','/embed/':'/embed/noorwegen.html',
   '/dagverslagen':'/day-reports.html','/dagverslagen/':'/day-reports.html',
   '/aansluitarchief':'/connections-archive.html','/aansluitarchief/':'/connections-archive.html',
   '/aansluitbord':'/connections.html','/aansluitbord/':'/connections.html',
