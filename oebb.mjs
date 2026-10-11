@@ -17,7 +17,7 @@ export async function scanOebb(){if(busy)return;busy=true;try{
  oebbState.status='ready';oebbState.error=null;oebbState.lastSuccessAt=new Date().toISOString();
  }catch(e){oebbState.status='error';oebbState.error=e.message;}finally{busy=false;}}
 export async function restoreOebb(){for(const page of Object.keys(oebbStations)){const saved=await loadBoardCache('OEBB:'+page);if(saved)cache.set(page,saved);}}
-export function startOebb(){void scanOebb();setInterval(()=>void scanOebb(),120000).unref();}
+export function startOebb(){void scanOebb();setInterval(()=>void scanOebb(),180000).unref();}
 export function oebbPayload(page,now=Date.now()){
  if(!oebbStations[page])return null;const saved=cache.get(page),stale=!saved||now-saved.at>360000;
  const rows=(saved?.rows||[]).filter(r=>r.expectedTimestamp>=now-60000).map(r=>stale?{...r,hasRealtime:false,delay:0,expectedTimestamp:r.plannedTimestamp,currentTime:r.plannedTime,currentTrack:'',track:r.plannedTrack||'—',status:r.cancelled?'Geannuleerd':''}:r).sort((a,b)=>a.plannedTimestamp-b.plannedTimestamp);
