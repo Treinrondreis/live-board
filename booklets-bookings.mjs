@@ -10,7 +10,7 @@ function current(rows){const by=new Map();for(const row of rows||[]){const id=ro
 export function bookingSummary(b){return {id:b._id,number:String(b.index),name:[b.firstName,b.lastName].filter(Boolean).join(' '),departure:b.dateDeparture||'',returnDate:b.dateReturn||'',trip:b.trip?.title||'',values:{klantvoornaam:b.firstName||'',klantachternaam:b.lastName||'',vertrekdatum:date(b.dateDeparture),terugkomstdatum:date(b.dateReturn),reisnaam:b.trip?.title||'',boekingsnummer:String(b.index)}};}
 export function documentKind(d){if(d._type!=='doc'||d.template!=='doc')return '';if(/^brief(?:ing)?\s*:/i.test(d.title||''))return 'letter';if(/voucher/i.test(d.title||''))return 'voucher';return '';}
 
-export function variableValue(field,booking){
+export function variableValue(field,booking,options={}){
  const path=String(field||'').split(':')[0].split('.');
  // A tourBooking and an ordinary booking are distinct contexts in Sanity letters.
  if(path[0]==='booking')return '';
@@ -18,21 +18,21 @@ export function variableValue(field,booking){
  let value=booking;for(const key of path)value=value?.[key];
  if(value==null||value===''){
   const reservation=String(field||'').match(/^tourBooking\.todos\.(\d+)\.supplierBookingNumber(?::.*)?$/);
-  if(reservation){const todo=booking.todos?.[Number(reservation[1])];throw Error('Het reserveringsnummer ontbreekt bij '+(todo?.title?'“'+todo.title+'”':'onderdeel '+(Number(reservation[1])+1))+' van deze boeking. Controleer het reserveringsnummer en het gekoppelde invulveld van dit document in Sanity.');}
+  if(reservation){if(options.onMissingReservation){options.onMissingReservation();return '';}const todo=booking.todos?.[Number(reservation[1])];throw Error('Het reserveringsnummer ontbreekt bij '+(todo?.title?'“'+todo.title+'”':'onderdeel '+(Number(reservation[1])+1))+' van deze boeking. Controleer het reserveringsnummer en het gekoppelde invulveld van dit document in Sanity.');}
   throw Error('Een klantveld in het Sanity-document ontbreekt: '+field+'. Controleer de boekingsgegevens en het invulveld in Sanity.');
  }
  if(typeof value==='object')throw Error('Niet ondersteund samengesteld klantveld in de Sanity-brief.');
  return String(value);
 }
 
-export async function expandContent(content,booking,readReference,stack=[],budget={count:0,deadline:Date.now()+90000}){
+export async function expandContent(content,booking,readReference,stack=[],budget={count:0,deadline:Date.now()+90000},options={}){
  const out=[];for(const original of content||[]){
   if(Date.now()>budget.deadline)throw Error('De Sanity-brief ophalen duurt te lang. Probeer opnieuw.');
   if(++budget.count>2000)throw Error('De Sanity-brief bevat te veel onderdelen.');
   if(original._type==='reference'){
    const id=original._ref;if(!idPattern.test(id||'')||id.startsWith('drafts.')||stack.includes(id)||stack.length>=8)throw Error('Ongeldige of circulaire standaardtekst in de brief.');
    const doc=await readReference(id);if(!doc||doc._type!=='reusableText')throw Error('Een standaardtekst in de brief is niet meer gepubliceerd.');
-   out.push(...await expandContent(doc.content,booking,readReference,[...stack,id],budget));continue;
+   out.push(...await expandContent(doc.content,booking,readReference,[...stack,id],budget,options));continue;
   }
   const b=structuredClone(original);
   if(b._type==='table'){
@@ -40,7 +40,7 @@ export async function expandContent(content,booking,readReference,stack=[],budge
   }
   if(b._type==='block'){
    const defs=new Map((b.markDefs||[]).filter(d=>d._type==='variable').map(d=>[d._key,d]));
-   for(const span of b.children||[]){const variables=(span.marks||[]).filter(m=>defs.has(m));if(variables.length>1)throw Error('Een tekst bevat meerdere klantvelden. Controleer de brief in Sanity.');if(variables.length){span.text=variableValue(defs.get(variables[0]).field,booking);span.marks=(span.marks||[]).filter(m=>!defs.has(m));}}
+   for(const span of b.children||[]){const variables=(span.marks||[]).filter(m=>defs.has(m));if(variables.length>1)throw Error('Een tekst bevat meerdere klantvelden. Controleer de brief in Sanity.');if(variables.length){span.text=variableValue(defs.get(variables[0]).field,booking,options);span.marks=(span.marks||[]).filter(m=>!defs.has(m));}}
    b.markDefs=(b.markDefs||[]).filter(d=>d._type!=='variable');
   }
   out.push(b);
@@ -67,8 +67,9 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
   async documents(p){const b=await selected(p);return {booking:bookingSummary(b),items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
   async document(p){const b=await selected(p),doc=(b.docs||[]).find(d=>d?._id===p.documentId&&documentKind(d));if(!doc)throw Error('Dit document hoort niet bij de geselecteerde boeking.');if(documentKind(doc)==='voucher'&&doc.approved!==true)throw Error('Deze voucher is nog niet gecontroleerd in Sanity. Vink hem eerst aan in Sanity of kies een gecontroleerde PDF uit Google Drive.');
    const cache=new Map();const read=async id=>{if(cache.size>=60&&!cache.has(id))throw Error('De brief bevat te veel standaardteksten.');if(!cache.has(id))cache.set(id,await query('*[_type=="reusableText" && _id==$id][0]{_id,_type,_rev,content}',{id},'published'));return cache.get(id);};
-   const content=await expandContent(doc.content,b,read);
-   return {bookingId:b._id,documentId:doc._id,title:doc.title,kind:documentKind(doc),revision:doc._rev,approved:doc.approved===true,content,digest:createHash('sha256').update(JSON.stringify([doc.title,content])).digest('hex'),loadedAt:new Date().toISOString()};
+   const warnings=[],options=documentKind(doc)==='voucher'?{onMissingReservation:()=>warnings.push(doc.title+': het reserveringsnummer kon niet worden ingevuld en is leeg gelaten. De voucher is wel gecontroleerd in Sanity.')}:{};
+   const content=await expandContent(doc.content,b,read,[],undefined,options);
+   return {bookingId:b._id,documentId:doc._id,title:doc.title,kind:documentKind(doc),revision:doc._rev,approved:doc.approved===true,content,warnings:[...new Set(warnings)],digest:createHash('sha256').update(JSON.stringify([doc.title,content])).digest('hex'),loadedAt:new Date().toISOString()};
   }
  };
 }

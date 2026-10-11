@@ -36,15 +36,21 @@ def access_error(error,url):
     """Translate structured provider reasons without exposing its response or credentials."""
     parsed=urlparse(url)
     service='Google Drive' if parsed.hostname=='www.googleapis.com' and parsed.path.startswith('/drive/') else 'Google Docs' if parsed.hostname=='docs.googleapis.com' else 'Google'
-    reasons=set()
+    reasons=set();project=''
     try:
         payload=json.loads(error.read(65536)).get('error',{})
         if isinstance(payload,dict):
             for entry in payload.get('errors',[])+payload.get('details',[]):
-                if isinstance(entry,dict) and isinstance(entry.get('reason'),str):reasons.add(entry['reason'])
+                if isinstance(entry,dict) and isinstance(entry.get('reason'),str):
+                    reasons.add(entry['reason'])
+                    if entry['reason']=='SERVICE_DISABLED':
+                        metadata=entry.get('metadata',{})
+                        consumer=metadata.get('consumer','') if isinstance(metadata,dict) else ''
+                        if isinstance(consumer,str) and re.fullmatch(r'projects/\d{1,20}',consumer):project=consumer.split('/')[1]
     except (ValueError,TypeError,AttributeError,OSError):pass
     if error.code==403 and reasons.intersection({'accessNotConfigured','SERVICE_DISABLED'}) and service!='Google':
-        return f'De {service} API is niet ingeschakeld voor de Google-koppeling van de Boekjesmaker. Schakel deze API in het bijbehorende Google Cloud-project in en probeer opnieuw. Uw Google-toestemming hoeft u hiervoor niet opnieuw te geven.'
+        location=f'Google Cloud-project {project}' if project else 'het bijbehorende Google Cloud-project'
+        return f'De {service} API is niet ingeschakeld voor de Google-koppeling van de Boekjesmaker. Schakel deze API in {location} in en probeer opnieuw. Uw Google-toestemming hoeft u hiervoor niet opnieuw te geven.'
     if service=='Google Drive':
         if error.code==404:return 'Dit bestand is niet gevonden in Google Drive of is niet toegankelijk voor het gekoppelde account. Controleer de link en de deelrechten.'
         return 'Google Drive weigert toegang. Controleer of het gekoppelde Google-account dit bestand mag lezen en of Drive-leestoegang is gegeven via Google koppelen.'

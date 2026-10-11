@@ -17,7 +17,9 @@ def render(s,payload):
     if fmt not in s.SIZES or doc.get('kind') not in ('letter','voucher') or not isinstance(doc.get('content'),list):raise ValueError('Ongeldig Sanity-boekingsdocument.')
     if len(json.dumps(doc))>4*1024*1024:raise ValueError('Boekingsdocument te groot.')
     m,images=sanity_sources.model([doc],{'title':doc.get('title','Brief'),'columns':1})
-    return {**store(s,google_layout.render(m,images,fmt,'route'),m['title']),'bookingDocument':{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc}}
+    warnings=doc.get('warnings',[])
+    if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
+    return {**store(s,google_layout.render(m,images,fmt,'route'),m['title']),'warnings':warnings,'bookingDocument':{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc}}
 
 def drive_access(data):
     if not connection.status(data).get('canReadDrive'):raise ValueError('Koppel Google Drive met leestoegang voor bestaande bestanden, of upload zelf een PDF.')

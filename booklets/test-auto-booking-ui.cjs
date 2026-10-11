@@ -38,7 +38,7 @@ test('retry preserves edited documents and deliberately omitted places',async()=
 });
 test('ambiguous letters, Drive files and unapproved vouchers require a choice while other chapters continue',async()=>{
  const f=fixture({items:[{id:'a',kind:'letter'},{id:'b',kind:'letter'},{id:'v',kind:'voucher',approved:false}],driveItems:[{id:'a',recommended:true},{id:'b',recommended:true}]});
- await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[0].issue,/Meerdere Sanity-brieven/);assert.match(f.slots()[1].issue,/Meerdere reisschema/);assert.match(f.slots()[3].issue,/Niet alle vouchers/);assert(f.slots()[2].selected);
+ await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[0].issue,/Meerdere Sanity-brieven/);assert.match(f.slots()[1].issue,/Meerdere reisschema/);assert.match(f.slots()[3].issue,/Geen gecontroleerde Sanity-vouchers/);assert(f.slots()[2].selected);
  assert(!f.calls.some(c=>c.path==='/api/booking-data/document'||c.path==='/api/booking-documents/drive-load'));
 });
 test('duplicate booking numbers never pick a Drive customer document automatically',async()=>{
@@ -74,4 +74,17 @@ test('reordering and removing individual voucher pages preserves every source an
  f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;assert.equal(f.slots()[3].selected.pages,3);assert.equal(f.slots()[3].selected.bookingDocuments.length,2);
  assert.deepEqual(f.composed.at(-1).pages.map(p=>p.page),[1,0,3]);await f.exec('checkBookingDocumentSources()');
  for(const id of ['voucher1','voucher2'])assert(f.calls.some(c=>c.path==='/api/booking-data/document'&&c.b.documentId===id));
+});
+
+
+test('unapproved vouchers are skipped while approved vouchers load with their missing-field warnings',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'},{id:'voucher-unapproved',kind:'voucher',approved:false},{id:'voucher1',kind:'voucher',approved:true}],api:async(path,b)=>{if(path==='/api/booking-documents/render'&&b.document.documentId==='voucher1')return {asset:'voucher1',pages:2,format:b.format,bookingDocument:b.document,warnings:['Reserveringsnummer is leeg gelaten.']};}});
+ await f.exec('autoFillBookingDocuments()');const voucher=f.slots()[3];assert(voucher.selected);assert.equal(voucher.issue,undefined);assert.deepEqual(Array.from(voucher.selected.bookingDocuments,d=>d.documentId),['voucher1']);assert(!f.calls.some(c=>c.path==='/api/booking-data/document'&&c.b.documentId==='voucher-unapproved'));
+ assert.equal(voucher.selected.warnings.length,2);assert.match(f.node('#modal').innerHTML,/ongecontroleerde voucher is overgeslagen/);assert.match(f.node('#modal').innerHTML,/Reserveringsnummer is leeg gelaten/);
+ f.exec('documentSlotPages(3);documentPageRemove(1);documentPagesSave({disabled:false})');await f.ctx.lastRun;assert.equal(voucher.selected.warnings.length,2);assert.equal(voucher.selected.pages,1);
+});
+
+test('a voucher whose approval is withdrawn during import cannot be inserted',async()=>{
+ const f=fixture({api:async(path,b)=>{if(path==='/api/booking-data/document'&&b.documentId==='voucher1')return {bookingId:b.bookingId,documentId:b.documentId,kind:'voucher',approved:false};}});
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/niet meer gecontroleerd/);assert(!f.calls.some(c=>c.path==='/api/booking-documents/render'&&c.b.document.documentId==='voucher1'));
 });

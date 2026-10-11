@@ -31,6 +31,12 @@ class GoogleErrorTests(unittest.TestCase):
             self.assertNotIn('API',message)
             self.assertNotIn('Google Docs',message)
 
+    def test_disabled_api_identifies_only_the_validated_project_number(self):
+        for consumer in ('projects/123456789012','projects/secret-token'):
+            message=self.failure('https://www.googleapis.com/drive/v3/files',403,{'error':{'details':[{'reason':'SERVICE_DISABLED','metadata':{'consumer':consumer,'extra':'private-provider-message'}}]}})
+            if consumer.endswith('123456789012'):self.assertIn('Google Cloud-project 123456789012',message)
+            else:self.assertNotIn('projects/',message)
+
     def test_malformed_provider_responses_preserve_a_useful_access_message(self):
         for body in (b'not json',b'[]',b'{"error":{"errors":null}}'):
             self.assertIn('Google Drive',self.failure('https://www.googleapis.com/drive/v3/files',403,body))

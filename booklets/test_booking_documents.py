@@ -7,6 +7,14 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_import_warnings_are_preserved_outside_the_voucher_pdf(self):
+        warning='Het reserveringsnummer is leeg gelaten.'
+        doc={'kind':'voucher','title':'Hotelvoucher','warnings':[warning],'content':[{'_type':'block','children':[{'_type':'span','text':'Hotelvoucher Premier Inn'}]}]}
+        result=booking_documents.render(ctx,{'document':doc,'format':'A4'})
+        self.assertEqual(result['warnings'],[warning])
+        self.assertNotIn(warning,PdfReader(s.DATA/'pdfs'/f"{result['asset']}.pdf").pages[0].extract_text())
+        doc['warnings']=['x'*2001]
+        self.assertRaisesRegex(ValueError,'documentwaarschuwingen',booking_documents.render,ctx,{'document':doc,'format':'A4'})
     def test_unreviewed_drive_voucher_blocks_pdf_generation(self):
         doc={'kind':'voucher','title':'Voucher','content':[{'_type':'block','children':[{'_type':'span','text':'Voucher'}]}]}
         result=booking_documents.render(ctx,{'document':doc,'format':'A4'})
