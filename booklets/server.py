@@ -1,6 +1,7 @@
 """Local pilot. PDF originals and published exports are immutable. No AI services; optional read-only Google Docs connection."""
 import copy
 from pdf_geometry import display_meta, normalize_page
+import field_background
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp
@@ -31,7 +32,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.10.1'
+APP_VERSION = '2026.10.11.1'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -145,6 +146,7 @@ def fields_validate(fields,meta):
         if f.get('font','Open Sans') not in ('Open Sans','Montserrat'):raise ValueError('Onbekend lettertype.')
         if f.get('align','left') not in ('left','center','right'):raise ValueError('Ongeldige tekstuitlijning.')
         field_keys(f)
+        field_background.validate(f)
         if f.get('type')=='prefilled' and (not isinstance(f.get('template',''),str) or len(f.get('template',''))>20000):raise ValueError('Standaardtekst mag maximaal 20.000 tekens bevatten.')
         n=int(f['page'])
         if not 0<=n<len(meta): raise ValueError('Ongeldige veldpagina.')
@@ -280,6 +282,7 @@ def make_export(book,options=None):
                         dynamic.append((len(writer.pages),f,s['title']));continue
                     value=field_text(f,{**b.get('values',{}),**s.get('values',{})},s['title'])
                     if not value: continue
+                    field_background.draw(cv,f,w,h)
                     size=float(f.get('size',11)); fw=w*float(f['w'])/100; fh=h*float(f['h'])/100
                     if f.get('type') in ('text','prefilled'):
                         items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else {**b.get('values',{}),**s.get('values',{})},fw,size,f.get('color','#172d35'),TOKEN,font_name(f),f.get('align','left'))
@@ -305,6 +308,7 @@ def make_export(book,options=None):
         size=float(f.get('size',11));font=font_name(f);color=f.get('color','#183c3c')
         out=io.BytesIO();cv=canvas.Canvas(out,pagesize=(w,h))
         if f['type']=='contents':
+            field_background.draw(cv,f,w,h)
             if fw<size*5:raise ValueError(f'Inhoudsopgaveveld is te smal bij {title}. Vergroot de breedte.')
             rows=contents_field_layout(sections,starts,fw,size,color,font)
             if sum(height+size*.5 for _,height,_ in rows)>fh:raise ValueError(f'Inhoudsopgave past niet in het veld bij {title}. Vergroot het veld of verklein de lettergrootte.')
