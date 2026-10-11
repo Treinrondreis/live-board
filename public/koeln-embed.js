@@ -2,6 +2,7 @@ const stationPageId=location.pathname.match(/^\/embed\/([a-z0-9-]+)\/?$/)?.[1]||
 document.title="Vertrektijden";
 document.querySelector(".board-head h2").textContent="Vertrektijden";
 let data=null,activeTab="fernverkehr",previewPayload=null,appearanceKey=null;
+let fullLimit=30,requestSequence=0;
 const expandedDirections=new Set();
 const quickEl=document.getElementById("quick");
 const fullEl=document.getElementById("full-board");
@@ -84,6 +85,7 @@ function renderQuick(){
   }
 }
 function renderFull(){
+  const more=document.getElementById("more-departures");more.hidden=!(data?.pagination?.hasMore);more.textContent="Meer vertrekken tonen ("+(data?.pagination?.shown||0)+" van "+(data?.pagination?.total||0)+")";
   const rows=data?.departures?.[activeTab]||[];
   fullRowsEl.innerHTML=rows.length?rows.map(t=>`<div class="full-row">
     <div class="time">${esc(t.plannedTime||t.time||"--:--")}</div>
@@ -96,17 +98,21 @@ function renderFull(){
 toggleFull.addEventListener("click",()=>{
   fullEl.hidden=!fullEl.hidden;
   toggleFull.textContent=fullEl.hidden?"Toon compleet vertrekbord":"Verberg compleet vertrekbord";
-  if(!fullEl.hidden)renderFull();
+  if(!fullEl.hidden){fullLimit=30;void refresh();}
 });
 document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{
   activeTab=btn.dataset.tab;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===btn));
-  renderFull();
+  fullLimit=30;void refresh();
 }));
+document.getElementById("more-departures").onclick=()=>{fullLimit+=30;void refresh();};
 async function refresh(){
+  const sequence=++requestSequence;
+  const full=!fullEl.hidden;
   try{
-    const r=await fetch(`/api/views/${stationPageId}`,{cache:"no-store"});
+    const r=await fetch(`/api/views/${stationPageId}?embed=${full?"full":"quick"}&tab=${activeTab}&limit=${fullLimit}`,{cache:"no-store"});
     const p=previewPayload||await r.json();
+    if(sequence!==requestSequence)return;
     if(!r.ok)throw new Error(p.error||`HTTP ${r.status}`);
     document.title=p.title||"Vertrektijden";
     document.querySelector(".board-head h2").textContent=document.title;
@@ -125,7 +131,7 @@ async function refresh(){
     for(const [source,label,url] of [['TRAFIKVERKET','Trafikverket (CC0)','https://data.trafikverket.se/'],['RENFE','Renfe (CC BY 4.0)','https://data.renfe.com/'],['EUROSTAR','Eurostar (Licence Ouverte 2.0)','https://www.data.gouv.fr/datasets/eurostar-gtfs-plan-de-transport-et-temps-reel']]){if(p.source?.includes(source)&&!document.getElementById(source+'-source')){const a=document.createElement('a');a.id=source+'-source';a.href=url;a.textContent='Bron: '+label;document.querySelector('.board-sources').appendChild(a);}}
     const sources=document.querySelector('.board-sources');if(!sources.children.length&&p.source){const label=document.createElement('span');label.textContent='Bron: '+p.source;sources.appendChild(label);}
     let notice=document.getElementById('station-notice');if(p.notice&&!notice){notice=document.createElement('p');notice.id='station-notice';document.querySelector('.board').insertBefore(notice,document.querySelector('.board-sources'));}if(notice){notice.textContent=p.notice||'';notice.hidden=!p.notice;}
-    applyAppearance(p);data=p;renderQuick();if(!fullEl.hidden)renderFull();
+    applyAppearance(p);data=p;renderQuick();if(!fullEl.hidden){if(!p.departures&&!previewPayload){void refresh();return;}renderFull();}
     const d=p.lastScanAt?new Date(p.lastScanAt):null;
     scanStatus.textContent=d&&!Number.isNaN(d.getTime())
       ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit"}).format(d)}`

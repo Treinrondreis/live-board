@@ -1,3 +1,4 @@
+import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
 import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
 import {handleAdminHub} from './admin-hub.mjs';
@@ -88,7 +89,7 @@ function loadDotEnv(filename){
     if(!(key in process.env))process.env[key]=value;
   }
 }
-function sendJson(res,status,obj){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(obj));}
+function sendJson(res,status,obj){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(res.embedQuery?embedPayload(obj,res.embedQuery):obj));}
 function sendFile(res,filename){
   const types={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".svg":"image/svg+xml"};
   fs.readFile(filename,(err,data)=>{
@@ -1079,6 +1080,7 @@ const handleTreinreiziger=createTreinreizigerHandler({stations:[...new Map(appSt
 const server=http.createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,`http://${req.headers.host}`);
+    if(url.pathname.startsWith('/api/views/'))res.embedQuery=url.searchParams;
     if(await handleExpedia(req,res,url))return;
     if(await handleFlora(req,res,url))return;
     if(await handleBooklets(req,res,url))return;
