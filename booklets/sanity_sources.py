@@ -47,6 +47,15 @@ def model(documents,cfg):
         blocks.append({'type':'text','html':html.escape((doc.get('title') or 'Tekst')),'plain':(doc.get('title') or 'Tekst'),'heading':True})
         counters={}
         for b in doc.get('content') or []:
+            if b.get('_type')=='table':
+                rows=b.get('rows')
+                if not isinstance(rows,list) or not 1<=len(rows)<=200:raise ValueError('Ongeldige tabel in het Sanity-document.')
+                converted=[]
+                for row in rows:
+                    cells=row.get('cells') if isinstance(row,dict) else None
+                    if not isinstance(cells,list) or not 1<=len(cells)<=8 or any(not isinstance(c,str) for c in cells):raise ValueError('Ongeldige tabelcel in het Sanity-document.')
+                    converted.append([[{'type':'text','html':html.escape(c).replace('\n','<br/>'),'plain':c}] for c in cells])
+                blocks.append({'type':'table','rows':converted});continue
             if b.get('_type')=='pageBreak':
                 blocks.append({'type':'pageBreak'});continue
             if b.get('_type')=='image':
@@ -86,7 +95,7 @@ def model(documents,cfg):
                 if b['listItem']=='number':counters[level]=counters.get(level,0)+1;bullet=str(counters[level])+'.'
                 else:bullet='•'
             else:counters={}
-            blocks.append({'type':'text','html':''.join(parts),'plain':''.join(plain),'heading':str(b.get('style','normal')).startswith('h'),'bullet':bullet,'bulletLevel':max(1,min(5,int(b.get('level',1))))})
+            blocks.append({'type':'text','html':''.join(parts),'plain':''.join(plain),'heading':str(b.get('style','normal')).startswith('h'),'sourceStyle':b.get('style','normal'),'bullet':bullet,'bulletLevel':max(1,min(5,int(b.get('level',1))))})
     title=cfg['title'] or ((documents[0].get('title') or 'Sanity-tekst') if len(documents)==1 else 'Reisinformatie')
     # A single document's title is already printed as the page title.
     if len(documents)==1:blocks=blocks[1:]

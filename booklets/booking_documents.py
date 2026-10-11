@@ -32,9 +32,9 @@ def render(s,payload):
         layout=booking_letter_layout.VERSION
         notice='Deze brief is vanuit Sanity-tekst opgemaakt in Treinrondreis-huisstijl. De paginaverdeling kan afwijken van de originele Sanity-PDF.'
     else:
-        raw=google_layout.render(m,images,fmt,'route')
-        layout='sanity-text'
-        notice='Dit document is opnieuw opgemaakt vanuit Sanity-tekst. Upload de originele PDF met huisstijl om de oorspronkelijke opmaak en marges te behouden.'
+        raw=booking_letter_layout.render(m,images,fmt,'voucher')
+        layout=booking_letter_layout.VOUCHER_VERSION
+        notice='Deze voucher is opnieuw opgemaakt vanuit Sanity-tekst in Treinrondreis-huisstijl. De paginaverdeling kan afwijken van de originele Sanity-PDF.'
     return {**store(s,raw,m['title']),'warnings':[*warnings,notice],'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt') if k in doc},'layout':layout}}
 
 def drive_access(data):

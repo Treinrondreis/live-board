@@ -120,3 +120,20 @@ Existing explicit original-PDF settings stay selectable; choose "Brief in
 Treinrondreis-huisstijl" and retrieve the letter again to switch an existing
 chapter. Source content, approval checks, immutable prior PDFs, and Sanity itself
 are unchanged.
+
+## Voucher house style and ticket page inspection
+
+New voucher retrievers also default to the recreated house style. The gateway
+retains voucher tables as structured rows after read-only variable expansion;
+the PDF displays bold labels beside their original values, without table borders.
+The letterhead, hotel headings, address and contact footer follow the letter
+style. Approval, missing-field warnings and booking ownership remain enforced.
+Existing explicit original-PDF settings can be switched via the retriever settings
+and reimporting; original uploads continue to retain their native PDF bytes.
+
+Both NS ticket page pickers display a larger top-half thumbnail. The separate
+full-page inspection dialog supports 50–300% zoom, using a cached 2200-pixel
+preview behind the existing authentication and asset/page validation. Opening,
+zooming and closing it do not modify the selection. Ordering/removal and PDF
+composition always operate on whole source pages; the thumbnail crop is visual
+only. Other document page pickers retain whole-page thumbnails and can zoom too.

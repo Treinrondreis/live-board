@@ -7,6 +7,22 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_house_voucher_preserves_table_values_and_brand_in_both_formats(self):
+        import pdfplumber,io
+        doc={'kind':'voucher','title':'Hotel voucher: Test Hotel','content':[{'_type':'block','style':'h3','children':[{'_type':'span','text':'Hotelvoucher'}]},{'_type':'block','style':'h2','children':[{'_type':'span','text':'Test Hotel Wien'}]},{'_type':'table','rows':[{'cells':['Gereserveerd op naam','Test Reiziger']},{'cells':['Check-in','20-11-2026 - Vanaf 15:00 uur']},{'cells':['Kamers','1x Standaardkamer']}]}]}
+        for fmt in ('A4','A5'):
+            r=booking_documents.render(ctx,{'document':doc,'format':fmt})
+            with pdfplumber.open(io.BytesIO((s.DATA/'pdfs'/f"{r['asset']}.pdf").read_bytes())) as pdf:
+                page=pdf.pages[0];text=page.extract_text()
+                for value in ('Hotelvoucher','Test Hotel Wien','Test Reiziger','20-11-2026','1x Standaardkamer','contact@treinrondreis.nl'):self.assertIn(value,text)
+                self.assertTrue(page.images)
+                words=page.extract_words();label=next(w for w in words if w['text']=='Gereserveerd');value=next(w for w in words if w['text']=='Reiziger')
+                self.assertGreater(value['x0'],label['x0']+120)
+                self.assertAlmostEqual(value['top'],label['top'],delta=1)
+                self.assertFalse(page.lines)
+            self.assertEqual(r['bookingDocument']['layout'],'treinrondreis-voucher-1')
+        doc['content'][-1]['rows'][0]['cells'][0]={'bad':True}
+        self.assertRaisesRegex(ValueError,'tabelcel',booking_documents.render,ctx,{'document':doc,'format':'A4'})
     def test_import_warnings_are_preserved_outside_the_voucher_pdf(self):
         warning='Het reserveringsnummer is leeg gelaten.'
         doc={'kind':'voucher','title':'Hotelvoucher','warnings':[warning],'content':[{'_type':'block','children':[{'_type':'span','text':'Hotelvoucher Premier Inn'}]}]}

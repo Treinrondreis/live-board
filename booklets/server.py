@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.8'
+APP_VERSION = '2026.10.11.9'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -448,11 +448,12 @@ class Handler(BaseHTTPRequestHandler):
             if kind=='asset':return self.send(200,p.read_bytes(),'application/pdf')
             page=int(page or 0)
             if not 0<=page<a['pages']:raise ValueError('Pagina bestaat niet.')
-            preview=DATA/'previews'/f'{i}-{page}.png'
+            detailed=parse_qs(urlparse(self.path).query).get('detail')==['1']
+            preview=DATA/'previews'/f'{i}-{page}{"-detail" if detailed else ""}.png'
             with LOCK:
                 if not preview.exists():
                     ensure_capacity(20*1024*1024)
-                    subprocess.run([str(POPPLER),'-f',str(page+1),'-l',str(page+1),'-scale-to','950','-singlefile','-png',str(p),str(preview.with_suffix(''))],check=True,timeout=40,creationflags=0x08000000 if os.name=='nt' else 0)
+                    subprocess.run([str(POPPLER),'-f',str(page+1),'-l',str(page+1),'-scale-to','2200' if detailed else '950','-singlefile','-png',str(p),str(preview.with_suffix(''))],check=True,timeout=40,creationflags=0x08000000 if os.name=='nt' else 0)
             return self.send(200,preview.read_bytes(),'image/png')
         self.send(404,{'error':'Niet gevonden.'})
     def do_POST(self):

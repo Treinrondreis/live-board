@@ -7,10 +7,12 @@ from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, 
 from features import SIZES
 
 VERSION='treinrondreis-letter-1'
+VOUCHER_VERSION='treinrondreis-voucher-1'
 LOGO=Path(__file__).parent/'brand'/'treinrondreis-logo.png'
 CONTACT=('Treinrondreis.nl','Grondherendijk 41 a/b','3082 DG Rotterdam','010 - 2613043','contact@treinrondreis.nl')
 
-def render(model,images,fmt):
+def render(model,images,fmt,kind='letter'):
+    voucher=kind=='voucher'
     width,height=SIZES[fmt]
     margin,top,bottom=(76.5,136,68) if fmt=='A4' else (30,87,56)
     usable=width-2*margin
@@ -19,6 +21,7 @@ def render(model,images,fmt):
     normal=ParagraphStyle('letter',fontName='Booklet',fontSize=10,leading=14.5 if fmt=='A4' else 13.5,textColor=color,spaceAfter=8 if fmt=='A4' else 6,allowWidows=0,allowOrphans=0)
     heading=ParagraphStyle('letter-heading',parent=normal,fontName='Booklet-Bold',fontSize=11,leading=15.95 if fmt=='A4' else 15,spaceBefore=10 if fmt=='A4' else 6,spaceAfter=5 if fmt=='A4' else 4,keepWithNext=True)
     address=ParagraphStyle('letter-address',parent=normal,spaceAfter=24,keepWithNext=True)
+    hotel_heading=ParagraphStyle('voucher-hotel',parent=heading,fontSize=12,leading=17,spaceBefore=4)
     blocks=model['blocks']
     # The address comes from the document itself; never invent or duplicate customer fields.
     first_address=bool(len(blocks)>1 and blocks[0]['type']=='text' and not blocks[0].get('heading') and '<br/>' in blocks[0]['html'] and blocks[1]['type']=='text' and blocks[1].get('plain','').lstrip().startswith(('Beste ','Geachte ','Dear ')))
@@ -32,6 +35,7 @@ def render(model,images,fmt):
             elif b['type']=='text':
                 is_heading=b.get('heading') or (not b.get('bullet') and len(b.get('plain',''))<120 and re.fullmatch(r'(?:\s*<b>.*?</b>\s*)+',b['html'],re.S))
                 style=address if first_address and b is blocks[0] else heading if is_heading else normal
+                if voucher and b.get('sourceStyle')=='h2':style=hotel_heading
                 if b.get('bullet'):
                     indent=12*b.get('bulletLevel',1)
                     style=ParagraphStyle('letter-list',parent=style,leftIndent=indent,bulletIndent=indent-12,bulletFontName='Booklet',bulletFontSize=10,spaceAfter=4)
@@ -49,9 +53,18 @@ def render(model,images,fmt):
             elif b['type']=='table':
                 columns=max((len(row) for row in b['rows']),default=0)
                 if not 1<=columns<=8:raise ValueError('Een tabel in de brief moet één tot acht kolommen hebben.')
-                rows=[[flows(cell,w/columns-12,depth+1) for cell in row]+['']*(columns-len(row)) for row in b['rows']]
-                table=Table(rows,colWidths=[w/columns]*columns,hAlign='LEFT',repeatRows=1)
-                table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.4,'#bbbbbb'),('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6)]))
+                widths=[min(150,w*.38),w-min(150,w*.38)] if voucher and columns==2 else [w/columns]*columns
+                rows=[]
+                for row in b['rows']:
+                    cells=[]
+                    for col,cell in enumerate(row):
+                        if voucher and col==0:cell=[{**item,'html':'<b>'+item['html']+'</b>'} if item['type']=='text' else item for item in cell]
+                        cells.append(flows(cell,widths[col]-8,depth+1))
+                    rows.append(cells+['']*(columns-len(row)))
+                table=Table(rows,colWidths=widths,hAlign='LEFT',repeatRows=0 if voucher else 1)
+                commands=[('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0 if voucher else 6),('RIGHTPADDING',(0,0),(-1,-1),8 if voucher else 6)]
+                if not voucher:commands.append(('GRID',(0,0),(-1,-1),.4,'#bbbbbb'))
+                table.setStyle(TableStyle(commands))
                 result.extend([table,Spacer(1,10)])
             else:raise ValueError('Niet ondersteund onderdeel in de brief.')
         return result

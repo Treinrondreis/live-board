@@ -15,7 +15,8 @@ import google_connection
 
 def request(path,method='GET',body=b'',authorized=True):
     status=[]
-    env={'PATH_INFO':path,'QUERY_STRING':'','REQUEST_METHOD':method,'CONTENT_LENGTH':str(len(body)),'wsgi.input':io.BytesIO(body)}
+    path,_,query=path.partition('?')
+    env={'PATH_INFO':path,'QUERY_STRING':query,'REQUEST_METHOD':method,'CONTENT_LENGTH':str(len(body)),'wsgi.input':io.BytesIO(body)}
     if authorized:env['HTTP_X_BOOKLETS_GATEWAY']=os.environ['BOOKLETS_GATEWAY_SECRET']
     result=cloud.application(env,lambda code,headers:status.extend([int(code.split()[0]),dict(headers)]))
     try:raw=b''.join(result)
@@ -71,6 +72,14 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(asset['format'],'A5')
         status,_,raw=request('/files/preview/'+asset['id']+'/0')
         self.assertEqual(status,200,raw[:100]);self.assertTrue(raw.startswith(b'\x89PNG'))
+        from PIL import Image
+        self.assertEqual(max(Image.open(io.BytesIO(raw)).size),950)
+        zoom_url='/files/preview/'+asset['id']+'/0?detail=1'
+        status,_,detailed=request(zoom_url)
+        self.assertEqual(status,200);self.assertEqual(max(Image.open(io.BytesIO(detailed)).size),2200)
+        self.assertEqual(request(zoom_url)[2],detailed)
+        self.assertEqual(request(zoom_url,authorized=False)[0],401)
+        self.assertEqual(request('/files/preview/'+asset['id']+'/99?detail=1')[0],400)
         body={'format':'A5','sections':[{'asset':asset['id'],'pages':1,'fields':[],'title':'Test route','values':{}}]}
         status,_,raw=request('/api/save','POST',json.dumps({'kind':'book','title':'Testboekje','body':body}).encode())
         self.assertEqual(status,200,raw);saved=json.loads(raw)

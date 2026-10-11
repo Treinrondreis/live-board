@@ -36,6 +36,7 @@ export async function expandContent(content,booking,readReference,stack=[],budge
   }
   const b=structuredClone(original);
   if(b._type==='table'){
+   if(options.preserveTables){if(!Array.isArray(b.rows)||b.rows.length>200||b.rows.some(row=>!Array.isArray(row.cells)||row.cells.length<1||row.cells.length>8||row.cells.some(c=>typeof c!=='string')))throw Error('Niet ondersteunde tabel in het Sanity-document.');out.push(b);continue;}
    for(const row of b.rows||[]){if(!Array.isArray(row.cells)||row.cells.some(c=>typeof c!=='string'))throw Error('Niet ondersteunde tabel in de Sanity-brief. Upload de brief als PDF.');out.push({_type:'block',style:'normal',markDefs:[],children:[{_type:'span',text:row.cells.join(' — '),marks:[]}]});}continue;
   }
   if(b._type==='block'){
@@ -79,7 +80,7 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
   async documents(p){const b=await selected(p);return {booking:{...bookingSummary(b),todos:(b.todos||[]).slice(0,500).map(t=>({title:String(t.title||'').slice(0,2000),description:String(t.description||'').slice(0,4000)}))},items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
   async document(p){const b=await selected(p),doc=(b.docs||[]).find(d=>d?._id===p.documentId&&documentKind(d));if(!doc)throw Error('Dit document hoort niet bij de geselecteerde boeking.');if(documentKind(doc)==='voucher'&&doc.approved!==true)throw Error('Deze voucher is nog niet gecontroleerd in Sanity. Vink hem eerst aan in Sanity of kies een gecontroleerde PDF uit Google Drive.');
    const cache=new Map();const read=async id=>{if(cache.size>=60&&!cache.has(id))throw Error('De brief bevat te veel standaardteksten.');if(!cache.has(id))cache.set(id,await query('*[_type=="reusableText" && _id==$id][0]{_id,_type,_rev,content}',{id},'published'));return cache.get(id);};
-   const warnings=[],options=documentKind(doc)==='voucher'?{onMissingReservation:()=>warnings.push(doc.title+': het reserveringsnummer kon niet worden ingevuld en is leeg gelaten. De voucher is wel gecontroleerd in Sanity.')}:{};
+   const warnings=[],options=documentKind(doc)==='voucher'?{preserveTables:true,onMissingReservation:()=>warnings.push(doc.title+': het reserveringsnummer kon niet worden ingevuld en is leeg gelaten. De voucher is wel gecontroleerd in Sanity.')}:{};
    const content=await expandContent(doc.content,b,read,[],undefined,options);
    return {bookingId:b._id,documentId:doc._id,title:doc.title,kind:documentKind(doc),revision:doc._rev,approved:doc.approved===true,content,warnings:[...new Set(warnings)],digest:createHash('sha256').update(JSON.stringify([doc.title,content])).digest('hex'),loadedAt:new Date().toISOString(),...(p.originalPdf===true?{originalPdf:await originalPdf(doc._id)}:{})};
   }
