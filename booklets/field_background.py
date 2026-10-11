@@ -2,12 +2,19 @@
 import math, re
 
 def validate(field):
+    if type(field.get('centerFullWidth',False)) is not bool:raise ValueError('Ongeldige instelling voor tekstcentrering.')
     color=field.get('backgroundColor')
     if color is None or color=='':return
     if not isinstance(color,str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',color):raise ValueError('Ongeldige achtergrondkleur.')
     opacity=field.get('backgroundOpacity',.5)
     if isinstance(opacity,bool) or not isinstance(opacity,(int,float)) or not math.isfinite(opacity) or not 0<=opacity<=1:raise ValueError('Achtergronddekking moet tussen 0 en 100% liggen.')
     if type(field.get('backgroundFullWidth',False)) is not bool:raise ValueError('Ongeldige instelling voor achtergrondbreedte.')
+
+def text_geometry(field,page_width):
+    """Keep legacy text boxes unless full-width backing and centering are both chosen."""
+    if field.get('backgroundColor') and field.get('backgroundFullWidth') and field.get('centerFullWidth') and field.get('type') not in ('contents','pageNumber'):
+        return 0,page_width,'center'
+    return page_width*float(field['x'])/100,page_width*float(field['w'])/100,field.get('align','left')
 
 def draw(cv,field,page_width,page_height):
     validate(field)

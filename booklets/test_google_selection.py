@@ -42,4 +42,27 @@ class GoogleSelectionTests(unittest.TestCase):
         self.cache['a'*32][0]['digest']='v2'
         self.assertEqual(self.load(full['googleDoc'])['pages'],3)
 
+    def test_a4_layout_update_invalidates_cached_pdf_and_protects_selection(self):
+        self.source['format']='A4'
+        with patch.object(google_sources.google_layout,'A4_ROUTE_VERSION',''):
+            full=self.load();chosen=google_sources.select_pages(self.app,full,[0,2])
+        self.assertNotEqual(self.load(full['googleDoc'])['asset'],full['asset'])
+        self.assertRaisesRegex(ValueError,'paginaselectie',self.load,chosen['googleDoc'])
+        self.assertEqual(self.app.asset(chosen['asset'])['pages'],2)
+
+    def test_a4_route_render_has_25mm_margins_including_maps(self):
+        import pdfplumber
+        from reportlab.lib.units import mm
+        from PIL import Image
+        picture=io.BytesIO();Image.new('RGB',(400,200),'blue').save(picture,format='PNG')
+        model={'title':'Route naar het hotel','tabCount':1,'blocks':[{'type':'text','plain':'Adres: Stationsplein 1','html':'Adres: Stationsplein 1'},{'type':'text','plain':'Loop vanaf het station naar het hotel.','html':'Loop vanaf het station naar het hotel.'},{'type':'image','key':'map','width':400,'height':200}]}
+        raw=google_sources.google_layout.render(model,{'map':picture.getvalue()},'A4','route')
+        with pdfplumber.open(io.BytesIO(raw)) as pdf:
+            for page in pdf.pages:
+                for item in [*page.extract_words(),*page.images]:
+                    self.assertGreaterEqual(item['x0'],25*mm-.01)
+                    self.assertLessEqual(item['x1'],page.width-25*mm+.01)
+                    self.assertGreaterEqual(item['top'],25*mm-.01)
+                    self.assertLessEqual(item['bottom'],page.height-25*mm+.01)
+
 if __name__=='__main__':unittest.main()

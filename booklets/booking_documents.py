@@ -15,6 +15,8 @@ def store(s,raw,title):
 
 def render(s,payload):
     doc=payload.get('document',{});fmt=payload.get('format','A4')
+    requested_layout=payload.get('letterLayout','text')
+    if requested_layout not in ('text','columns'):raise ValueError('Kies één of twee kolommen voor de brief.')
     if fmt not in s.SIZES or doc.get('kind') not in ('letter','voucher') or not isinstance(doc.get('content'),list):raise ValueError('Ongeldig Sanity-boekingsdocument.')
     if len(json.dumps({k:v for k,v in doc.items() if k!='originalPdf'}))>4*1024*1024:raise ValueError('Boekingsdocument te groot.')
     if doc.get('originalPdf'):
@@ -29,14 +31,23 @@ def render(s,payload):
     warnings=doc.get('warnings',[])
     if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
     if doc['kind']=='letter':
-        raw=booking_letter_layout.render(m,images,fmt)
-        layout=booking_letter_layout.VERSION
+        raw=booking_letter_layout.render(m,images,fmt,layout=requested_layout)
+        layout=booking_letter_layout.COLUMNS_VERSION if requested_layout=='columns' else booking_letter_layout.VERSION
         notice='Deze brief is vanuit Sanity-tekst opgemaakt in Treinrondreis-huisstijl. De paginaverdeling kan afwijken van de originele Sanity-PDF.'
     else:
         raw=booking_letter_layout.render(m,images,fmt,'voucher')
         layout=booking_letter_layout.VOUCHER_VERSION
         notice='Deze voucher is opnieuw opgemaakt vanuit Sanity-tekst in Treinrondreis-huisstijl. De paginaverdeling kan afwijken van de originele Sanity-PDF.'
     return {**store(s,raw,m['title']),'warnings':[*warnings,notice],'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate') if k in doc},'layout':layout}}
+
+def check_slot_layout(slot):
+    if slot.get('documentKind')!='letter' or not slot.get('selected'):return
+    section=slot['selected'];sources=section.get('bookingDocuments') or ([section['bookingDocument']] if section.get('bookingDocument') else [])
+    expected=booking_letter_layout.COLUMNS_VERSION if slot.get('letterLayout')=='columns' else booking_letter_layout.VERSION
+    for source in sources:
+        actual=source.get('layout') or booking_letter_layout.VERSION
+        matches=source.get('originalPdf') if slot.get('preferOriginalPdf') else not source.get('originalPdf') and actual==expected
+        if not matches:raise ValueError('De briefopmaak is gewijzigd. Haal de brief opnieuw op en controleer de nieuwe pagina’s. De bestaande PDF blijft bewaard.')
 
 def drive_access(data):
     if not connection.status(data).get('canReadDrive'):raise ValueError('Koppel Google Drive met leestoegang voor bestaande bestanden, of upload zelf een PDF.')

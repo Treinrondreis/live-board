@@ -8,7 +8,7 @@ function fixture(options={}){
  ctx.api=async(path,b)=>{calls.push({path,b:structuredClone(b)});if(options.api){const r=await options.api(path,b);if(r!==undefined)return r;}
   if(path==='/api/booking-data/documents')return {items:options.items||[{id:'letter',kind:'letter'},{id:'voucher1',kind:'voucher',approved:true},{id:'voucher2',kind:'voucher',approved:true}]};
   if(path==='/api/booking-data/document')return {bookingId:b.bookingId,documentId:b.documentId,kind:b.documentId.startsWith('voucher')?'voucher':'letter',approved:true,digest:'current'};
-  if(path==='/api/booking-documents/render')return {asset:b.document.documentId,pages:2,format:b.format,bookingDocument:b.document};
+  if(path==='/api/booking-documents/render')return {asset:b.document.documentId,pages:2,format:b.format,bookingDocument:{...b.document,layout:b.document.kind==='letter'?(b.letterLayout==='columns'?'treinrondreis-letter-columns-1':'treinrondreis-letter-1'):'treinrondreis-voucher-1'}};
   if(path==='/api/booking-documents/drive-search')return {items:options.driveItems||[{id:'drive',recommended:true}]};
   if(path==='/api/booking-documents/drive-load')return {asset:'drive',pages:2,driveDocument:{id:b.id}};
   if(path==='/api/mail-tickets/search')return options.mail||{references:['ABCDEF','GHIJKL'],messages:[{id:'new',reference:'ABCDEF',latest:true,tickets:[{id:'a',title:'A'},{id:'b',title:'B'}]},{id:'old',reference:'ABCDEF',latest:false,tickets:[{id:'old',title:'OLD'}]},{id:'other',reference:'GHIJKL',latest:true,tickets:[{id:'c',title:'C'}]},{id:'foreign',reference:'ZZZZZZ',latest:true,tickets:[{id:'foreign',title:'FOREIGN'}]}]};
@@ -98,6 +98,7 @@ test('outbound and return slots share downloads but require independent page cho
  assert.equal(slots[2].selected.pages,2);assert(!slots[2].selected.reviewRequired);assert.equal(slots[4].selected.pages,3);assert.equal(slots[4].selected.reviewRequired,true);
  await f.exec('documentSlotPages(2)');f.exec('documentPagesRestore()');assert.equal(f.exec('documentPages.pages.length'),3);
 });
+test('column preference is passed to automatic letter rendering and accepted by export source checks',async()=>{const f=fixture();f.exec(`draft.body.sections[0].letterLayout='columns'`);await f.exec('autoFillBookingDocuments()');const call=f.calls.find(c=>c.path==='/api/booking-documents/render'&&c.b.document.kind==='letter');assert.equal(call.b.letterLayout,'columns');assert.equal(f.slots()[0].selected.bookingDocuments[0].layout,'treinrondreis-letter-columns-1');await f.exec('checkBookingDocumentSources()');});
 test('ÖBB portal-only mails use a staged Drive PDF in the fixed document chapter',async()=>{
  const ref='0726369981792179';const f=fixture({mail:{query:'1234A',references:[ref],messages:[{id:'obb-mail',reference:ref,latest:true,tickets:[],manualLinks:[{url:'https://shop.oebbtickets.at/en/ticket/postcheckout/example'}]}]},api:async(path,b)=>{
   if(path==='/api/tickets/drive-search')return {items:[{id:'drive-obb',reference:ref,title:'Tickets OBB '+ref+'.pdf',updatedAt:'2026-10-11'}]};

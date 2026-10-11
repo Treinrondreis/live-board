@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.11'
+APP_VERSION = '2026.10.12.1'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -199,6 +199,7 @@ def validate_body(kind,b,prepared=False):
                 if slot.get('choice')=='document':
                     toc_info(slot)
                     if 'preferOriginalPdf' in slot and not isinstance(slot['preferOriginalPdf'],bool):raise ValueError('Kies de opmaak van het Sanity-document.')
+                    if slot.get('letterLayout','text') not in ('text','columns'):raise ValueError('Kies één of twee kolommen voor de brief.')
                     if 'pageNumbers' in slot and not isinstance(slot['pageNumbers'],bool):raise ValueError('Kies wel of geen paginanummers.')
                     for key,limit in [('numberX',90),('numberY',97)]:
                         if key in slot and (isinstance(slot[key],bool) or not isinstance(slot[key],(float,int)) or not 0<=slot[key]<=limit):raise ValueError('Ongeldige positie voor documentnummering.')
@@ -259,14 +260,14 @@ def check_layout(body,values):
     meta=asset(body['asset'])['meta'];results=[]
     for f in body.get('fields',[]):
         size=float(f.get('size',11));m=meta[int(f['page'])]
-        width=m['width']*float(f['w'])/100;available=m['height']*float(f['h'])/100
+        _,width,align=field_background.text_geometry(f,m['width']);available=m['height']*float(f['h'])/100
         sample={key:str(values.get(key,f.get('template','') if f.get('type')=='prefilled' else '')).strip() or '['+key+']' for key in field_keys(f)}
         example_keys=[key for key in sample if not str(values.get(key,'')).strip()]
         if f.get('type') in ('contents','pageNumber'):
             results.append({'name':f['key'],'page':int(f['page'])+1,'fits':True,'dynamic':True,'font':f.get('font','Open Sans'),'size':size,'exampleKeys':[]});continue
         value=field_text(f,sample,'voorbeeld')
         if f.get('type') in ('text','prefilled'):
-            items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else sample,width,size,f.get('color','#183c3c'),TOKEN,font_name(f),f.get('align','left'))
+            items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else sample,width,size,f.get('color','#183c3c'),TOKEN,font_name(f),align)
             needed=sum(h for _,h in items);width_ok=True
         else:
             lines=value.splitlines();needed=len(lines)*size*1.5
@@ -283,6 +284,7 @@ def make_export(book,options=None):
     if options.get('libraryStamp') is not None and options['libraryStamp']!=library_stamp(objects):raise ValueError('De bibliotheek is gewijzigd tijdens de controle. Maak de PDF opnieuw om de nieuwste pagina’s te controleren.')
     b=refresh_blocks(b,objects);b=sanity_sources.refresh_export(SimpleNamespace(**globals()),b);book['body']=b
     validate_body('book',b)
+    for slot in b.get('sections',[]):booking_documents.check_slot_layout(slot)
     if any(slot.get('choice')=='document' and not slot.get('selected') and not slot.get('omitted') for slot in b.get('sections',[])):raise ValueError('Vul de ontbrekende boekingsdocumenten in of kies per document bewust Weglaten.')
     if any((slot.get('selected') if slot.get('choice') else slot or {}).get('reviewRequired') for slot in b.get('sections',[]) if not slot.get('choice') or slot.get('selected')):raise ValueError('Controleer eerst de opgehaalde documenten: kies de juiste ticketpagina’s en controleer vouchers op klant, hotel, datums en reserveringsnummer.')
     google_warnings=google_sources.verify(b)
@@ -327,21 +329,21 @@ def make_export(book,options=None):
                     value=field_text(f,{**b.get('values',{}),**s.get('values',{})},s['title'])
                     if not value: continue
                     field_background.draw(cv,f,w,h)
-                    size=float(f.get('size',11)); fw=w*float(f['w'])/100; fh=h*float(f['h'])/100
+                    size=float(f.get('size',11));x,fw,align=field_background.text_geometry(f,w);fh=h*float(f['h'])/100
                     if f.get('type') in ('text','prefilled'):
-                        items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else {**b.get('values',{}),**s.get('values',{})},fw,size,f.get('color','#172d35'),TOKEN,font_name(f),f.get('align','left'))
+                        items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else {**b.get('values',{}),**s.get('values',{})},fw,size,f.get('color','#172d35'),TOKEN,font_name(f),align)
                         required_height=sum(height for _,height in items)
                         if required_height>fh:raise ValueError(f"Het tekstblok bij {s['title']} is te laag: ingesteld {float(f['h']):g}%, nodig ongeveer {required_height/h*100:.1f}% bij de huidige breedte en lettergrootte. Vergroot Hoogte % in Bouwsteen beheren, of verkort de tekst. Neem daarna de nieuwe bouwsteenversie over in dit boekje.")
-                        draw_rich(cv,items,w*float(f['x'])/100,h*(1-float(f['y'])/100),fw)
+                        draw_rich(cv,items,x,h*(1-float(f['y'])/100),fw)
                         continue
                     lines=wrap_text(value,fw,size) if f.get('type')=='text' else value.splitlines(); lineheight=size*1.5
                     if len(lines)*lineheight>fh or any(pdfmetrics.stringWidth(line,font_name(f),size)>fw for line in lines): raise ValueError(f"Tekst past niet in ‘{f['key']}’ bij {s['title']}. Verkort de tekst of vergroot het veld.")
                     if any(ord(char)>0xFFFF for char in value): raise ValueError('Emoji’s worden in deze proef nog niet ondersteund.')
                     cv.setFont(font_name(f),size);cv.setFillColor(f.get('color','#172d35'))
-                    x=w*float(f['x'])/100; y=h*(1-float(f['y'])/100)-size
+                    y=h*(1-float(f['y'])/100)-size
                     for line in lines:
-                        if f.get('align')=='center':cv.drawCentredString(x+fw/2,y,line)
-                        elif f.get('align')=='right':cv.drawRightString(x+fw,y,line)
+                        if align=='center':cv.drawCentredString(x+fw/2,y,line)
+                        elif align=='right':cv.drawRightString(x+fw,y,line)
                         else:cv.drawString(x,y,line)
                         y-=lineheight
                 cv.showPage();cv.save();source.merge_page(PdfReader(stream).pages[0])

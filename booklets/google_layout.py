@@ -2,10 +2,15 @@
 import hashlib, html, io, json, re
 from PIL import Image as PILImage
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
 from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Image, Table, TableStyle, KeepTogether, PageBreak
 from features import SIZES
 
 LAYOUT_VERSION='2026.09.27.2-compact-routes'
+A4_ROUTE_VERSION='2026.10.12-25mm'
+
+def render_version(fmt,layout):
+    return A4_ROUTE_VERSION if fmt=='A4' and layout=='route' else ''
 
 def normalize(doc,fetch_image):
     tabs=[]
@@ -85,11 +90,12 @@ def normalize(doc,fetch_image):
     return model,images
 
 def render(model,images,fmt,layout):
-    W,H=SIZES[fmt];margin=28;gap=24;width=W-2*margin
+    W,H=SIZES[fmt];margin=25*mm if fmt=='A4' and layout=='route' else 28;gap=24;width=W-2*margin
+    bottom=margin if fmt=='A4' and layout=='route' else 42
     title=Paragraph(html.escape(model['title']),ParagraphStyle('title',fontName='Montserrat',fontSize=model.get('titleSize',22),leading=model.get('titleLeading',28),textColor='#000000'))
     _,th=title.wrap(width,H);top=margin+th+8
     if th>90:raise ValueError('De documenttitel is te lang. Gebruik een kortere titel in Google Docs.')
-    avail=H-top-42
+    avail=H-top-bottom
     def para(b):
         size=b.get('renderSize',model.get('headingSize',10.5) if b.get('heading') else model.get('bodySize',10.5))
         style=ParagraphStyle('body',fontName='Booklet-Bold' if b.get('heading') else 'Booklet',fontSize=size,leading=size*model.get("lineSpacing",1.6),textColor='#000000',spaceAfter=b.get('spaceAfter',7),spaceBefore=7 if b.get('heading') else 0,keepWithNext=b.get('heading',False))
@@ -111,15 +117,15 @@ def render(model,images,fmt,layout):
                 t=Table(rows,colWidths=[w/n]*n,hAlign='LEFT',repeatRows=1)
                 t.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.4,'#bbbbbb'),('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6)]));result.extend([t,Spacer(1,10)])
         return result
-    buf=io.BytesIO();doc=BaseDocTemplate(buf,pagesize=(W,H),leftMargin=margin,rightMargin=margin,topMargin=top,bottomMargin=42,title=model['title'],author='Treinrondreis')
+    buf=io.BytesIO();doc=BaseDocTemplate(buf,pagesize=(W,H),leftMargin=margin,rightMargin=margin,topMargin=top,bottomMargin=bottom,title=model['title'],author='Treinrondreis')
     def heading(c,d):title.drawOn(c,margin,H-margin-th)
     blocks=model['blocks']
     if layout=='text':
         cw=(width-gap)/2
-        frames=[Frame(margin,42,cw,avail,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0),Frame(margin+cw+gap,42,cw,avail,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)]
+        frames=[Frame(margin,bottom,cw,avail,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0),Frame(margin+cw+gap,bottom,cw,avail,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)]
         story=flows(blocks,cw)
     else:
-        frames=[Frame(margin,42,width,avail,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)]
+        frames=[Frame(margin,bottom,width,avail,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)]
         story=[];texts=[b for b in blocks if b['type']=='text'];pics=[b for b in blocks if b['type']=='image']
         # Route layout is limited to one tab and paragraph/image documents.
         if model['tabCount']>1 or any(b['type']=='table' for b in blocks):story=flows(blocks,width)

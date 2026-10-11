@@ -19,7 +19,7 @@ def load(s,source,cache):
         doc=connection.fetch_document(s.DATA,cfg['url'])
         cache[key]=google_layout.normalize(doc,connection.fetch_image)
     model,images=cache[key]
-    digest=hashlib.sha256((model['digest']+json.dumps(cfg,sort_keys=True)).encode()).hexdigest()
+    digest=hashlib.sha256((model['digest']+json.dumps(cfg,sort_keys=True)+google_layout.render_version(cfg['format'],cfg['layout'])).encode()).hexdigest()
     selection=source.get('selectedPages')
     if selection is not None and digest!=source.get('sourceDigest'):
         raise ValueError('De Google-bron of pagina-indeling is gewijzigd. Controleer de paginaselectie via Nu vernieuwen / pagina’s kiezen bij de bouwsteen, of Pagina’s kiezen / vernieuwen bij het eenmalige reisschema. De opgeslagen selectie blijft behouden.')

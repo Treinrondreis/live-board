@@ -7,6 +7,44 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_columns_flow_keep_content_inside_25mm_and_only_first_title(self):
+        import pdfplumber,io
+        from reportlab.lib.units import mm
+        doc={'kind':'letter','title':'Briefing metadata','content':[{'_type':'block','style':'h2' if n%5==0 else 'normal','children':[{'_type':'span','text':f'Onderdeel {n:03d}. '+('Praktische informatie over uw treinreis en verblijf in Wenen. '*4),'marks':[]}]} for n in range(50)]}
+        r=booking_documents.render(ctx,{'document':doc,'format':'A4','letterLayout':'columns'})
+        self.assertEqual(r['bookingDocument']['layout'],'treinrondreis-letter-columns-1')
+        with pdfplumber.open(io.BytesIO((s.DATA/'pdfs'/f"{r['asset']}.pdf").read_bytes())) as pdf:
+            self.assertGreaterEqual(len(pdf.pages),3)
+            for n,page in enumerate(pdf.pages):
+                words=page.extract_words();text=page.extract_text()
+                self.assertEqual('Belangrijke Informatie' in text,n==0)
+                self.assertNotIn('Briefing metadata',text)
+                self.assertNotIn('contact@treinrondreis.nl',text)
+                self.assertEqual(len(page.images),1)
+                for word in words:
+                    self.assertGreaterEqual(word['x0'],25*mm-.01)
+                    self.assertLessEqual(word['x1'],page.width-25*mm+.01)
+                    self.assertGreaterEqual(word['top'],25*mm-.01)
+                    self.assertLessEqual(word['bottom'],page.height-25*mm-25)
+                logo=page.images[0]
+                self.assertAlmostEqual(logo['x0'],25*mm,places=2)
+                self.assertAlmostEqual(logo['bottom'],page.height-25*mm,places=2)
+            first=pdf.pages[0].extract_words()
+            self.assertTrue(any(w['x0']>pdf.pages[0].width/2 for w in first))
+            complete=' '.join(p.extract_text() for p in pdf.pages)
+            for n in range(50):self.assertIn(f'{n:03d}.',complete)
+            self.assertTrue(all('Montserrat' in c['fontname'] for c in pdf.pages[0].chars if c['top']<100))
+
+    def test_layout_change_requires_new_import_but_preserves_uploaded_pdf(self):
+        doc={'kind':'letter','content':[{'_type':'block','children':[{'_type':'span','text':'Beste reiziger'}]}]}
+        r=booking_documents.render(ctx,{'document':doc,'format':'A4'})
+        slot={'choice':'document','documentKind':'letter','letterLayout':'columns','selected':{'asset':r['asset'],'pages':r['pages'],'fields':[],'bookingDocument':r['bookingDocument']}}
+        self.assertRaisesRegex(ValueError,'opnieuw op',booking_documents.check_slot_layout,slot)
+        report=s.preflight.check(s,{'format':'A4','sections':[slot]},[])
+        self.assertTrue(any('briefopmaak' in e['message'] for e in report['errors']))
+        slot['letterLayout']='text';booking_documents.check_slot_layout(slot)
+        del slot['selected']['bookingDocument'];slot['letterLayout']='columns';booking_documents.check_slot_layout(slot)
+
     def test_house_voucher_preserves_table_values_and_brand_in_both_formats(self):
         import pdfplumber,io
         doc={'kind':'voucher','title':'Hotel voucher: Test Hotel','content':[{'_type':'block','style':'h3','children':[{'_type':'span','text':'Hotelvoucher'}]},{'_type':'block','style':'h2','children':[{'_type':'span','text':'Test Hotel Wien'}]},{'_type':'table','rows':[{'cells':['Gereserveerd op naam','Test Reiziger']},{'cells':['Check-in','20-11-2026 - Vanaf 15:00 uur']},{'cells':['Kamers','1x Standaardkamer']}]}]}
