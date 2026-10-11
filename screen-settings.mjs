@@ -13,12 +13,19 @@ export async function initScreenSettings(config,sourceStations={},provider=()=>[
  getObservations=provider;
  stations=[...new Set([...(config.stations||[]),...(config.collectors||[])].map(s=>s.name))].sort();
  stationsBySource={DB:stations,NDOV:(config.ndov?.stations||[]).map(s=>s.name),OJP:[],NMBS:[],...sourceStations};
- defaults={name:'Hoofdscherm',italy:true,connections:true,connectionIds:null,pinCancelled:true,maxPinned:4,minDelay:20,rows:8,seconds:10,trains:[...new Set((config.stations||[]).flatMap(s=>s.trainNumbers||[]).map(String))].map(number=>({number,source:'DB',stations:[]}))};
+ defaults={stationRules:[],name:'Hoofdscherm',italy:true,connections:true,connectionIds:null,pinCancelled:true,maxPinned:4,minDelay:20,rows:8,seconds:10,trains:[...new Set((config.stations||[]).flatMap(s=>s.trainNumbers||[]).map(String))].map(number=>({number,source:'DB',stations:[]}))};
  for(const row of await readBoardSettings())if(row.page.startsWith(prefix))saved.set(row.page.slice(prefix.length),row);
 }
 export function screenSettings(id='0'){return saved.get(id)?.settings||(id==='0'?defaults:null);}
 export function screenTrainNumbers(){return [...new Set([defaults,...[...saved.values()].map(r=>r.settings)].filter(Boolean).flatMap(s=>s.trains.filter(t=>t.source==='DB').map(t=>t.number)))];}
-export function screenTrainMatches(row,settings){return settings.trains.some(t=>t.number===String(row.number)&&t.source===screenSource(row)&&(!t.stations.length||t.stations.includes(row.observedAt||row.station)));}
+export function screenTrainMatches(row,settings){
+ const source=screenSource(row),station=row.observedAt||row.station,number=String(row.number);
+ const rule=(settings.stationRules||[]).find(t=>t.source===source&&t.station===station);
+ if(rule)return !rule.excludedNumbers.includes(String(Number(number)));
+ return settings.trains.some(t=>t.number===number&&t.source===source&&(!t.stations.length||t.stations.includes(station)));
+}
+export function screenCollectAllAtStation(station){return [defaults,...[...saved.values()].map(r=>r.settings)].filter(Boolean).some(s=>(s.stationRules||[]).some(r=>r.source==='DB'&&r.station===station));}
+export function screenHasSource(settings,source){return settings.trains.some(t=>t.source===source)||(settings.stationRules||[]).some(t=>t.source===source);}
 export function validateScreenSettings(input){
  const fail=m=>{throw Object.assign(Error(m),{status:400});};
  if(!input||typeof input!=='object'||Array.isArray(input))fail('Ongeldige instellingen.');
@@ -28,6 +35,9 @@ export function validateScreenSettings(input){
  if(!Array.isArray(input.trains)||input.trains.length>200)fail('Gebruik maximaal 200 treinen.');
  result.trains=input.trains.map(t=>{if(!t||!/^\d{1,6}$/.test(t.number)||!Object.hasOwn(screenSources,t.source)||!Array.isArray(t.stations)||t.stations.some(s=>!stationsBySource[t.source].includes(s)))fail('Controleer het treinnummer, de bron en de stations die bij deze bron horen.');return {number:String(t.number),source:t.source,stations:[...new Set(t.stations)],...(t.nightRoute?{nightRoute:validateNightRoute(t.nightRoute)}:{})};});
  if(new Set(result.trains.map(screenTrainKey)).size!==result.trains.length)fail('Voeg ieder treinnummer per bron één keer toe.');
+ const rules=input.stationRules||[];if(!Array.isArray(rules)||rules.length>200)fail('Gebruik maximaal 200 stationskeuzes.');
+ result.stationRules=rules.map(r=>{if(!r||!Object.hasOwn(screenSources,r.source)||!stationsBySource[r.source].includes(r.station)||!Array.isArray(r.excludedNumbers)||r.excludedNumbers.length>200||r.excludedNumbers.some(n=>!/^\d{1,6}$/.test(String(n))))fail('Controleer de bron, het station en de uitgesloten treinnummers.');return {source:r.source,station:r.station,excludedNumbers:[...new Set(r.excludedNumbers.map(n=>String(Number(n))))]};});
+ if(new Set(result.stationRules.map(r=>r.source+'|'+r.station)).size!==result.stationRules.length)fail('Kies ieder station per bron één keer.');
  if(input.connectionIds!==null&&(!Array.isArray(input.connectionIds)||input.connectionIds.length>100||input.connectionIds.some(id=>typeof id!=='string'||!/^[a-z0-9-]{1,90}$/.test(id))))fail('Ongeldige aansluitingen.');
  result.connectionIds=input.connectionIds===null?null:[...new Set(input.connectionIds)];return result;
 }

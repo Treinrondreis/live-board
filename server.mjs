@@ -9,7 +9,7 @@ import {handlePlatformAdmin} from './platform-admin.mjs';
 import {handleTreinhuisAccess} from './treinhuis-access.mjs';
 import {nightRule,runDay,observedDay} from './night-routes.mjs';
 import {attachBoardBookings} from './board-bookings.mjs';
-import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenTrainMatches,screenTrainKey} from './screen-settings.mjs';
+import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey} from './screen-settings.mjs';
 import {handleConnectionAdmin} from './connections-admin.mjs';
 import {handleAppCms} from './app-cms.mjs';
 import {startDayReports,handleDayReports} from './day-reports.mjs';
@@ -457,7 +457,7 @@ function screenBoardTrains(now=Date.now(),settings=null){
   const categories=new Set((config.allowedCategories||[]).map(c=>String(c).toUpperCase()));
   const ndovFresh=ndovStatus().fresh;
   const liveNl=[...ndovRows.values()].map(r=>ndovFresh?r:{...r,hasRealtime:false,delay:0,status:'',expectedTimestamp:r.plannedTimestamp,currentTime:r.plannedTime});
-  const extra=settings?[...(settings.trains.some(t=>t.source==='OJP')?Object.keys(swissStations).flatMap(page=>swissPayload(page,now,true)):[]),...(settings.trains.some(t=>t.source==='NMBS')?belgianScreenRows(now):[])]:[];
+  const extra=settings?[...(screenHasSource(settings,'OJP')?Object.keys(swissStations).flatMap(page=>swissPayload(page,now,true)):[]),...(screenHasSource(settings,'NMBS')?belgianScreenRows(now):[])]:[];
   const rows=dedupeRows([...extra,...dbState.trains.flatMap(r=>r.mergedServices||[r]),...Object.values(collectorState.byStation).flat(),...liveNl.map(r=>({...r,hasChangedTime:r.currentTime!==r.plannedTime}))],true);
   const groups=new Map();
   for(const r of rows){if((settings?!screenTrainMatches(r,settings):(!numbers.has(String(r.number))||(categories.size&&!categories.has(String(r.category).toUpperCase()))))||!visibleOnBoard(r,now)||r.departed)continue;
@@ -492,7 +492,7 @@ async function performScan(){
         const selectedRows=rowsForSelector(fetched.stops,fetched.station,boardSelectors[0]?{...boardSelectors[0],trainNumbers:globalSelector.trainNumbers}:globalSelector);
         boardRows.push(...selectedRows);
 
-        const cRows=[...selectedRows,...rowsForSelector(fetched.stops,fetched.station,{trainNumbers:screenTrainNumbers(),allEvents:true})];
+        const cRows=[...selectedRows,...rowsForSelector(fetched.stops,fetched.station,{trainNumbers:screenCollectAllAtStation(name)?[]:screenTrainNumbers(),allEvents:true})];
         const connectionArrivals=connectionArrivalSelector(name,fetched.stops);
         if(connectionArrivals)collectorRows.push(...rowsForSelector(fetched.stops,fetched.station,connectionArrivals));
         for(const cfg of collectorSelectors){
