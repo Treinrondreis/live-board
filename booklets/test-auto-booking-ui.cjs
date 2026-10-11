@@ -88,3 +88,12 @@ test('a voucher whose approval is withdrawn during import cannot be inserted',as
  const f=fixture({api:async(path,b)=>{if(path==='/api/booking-data/document'&&b.documentId==='voucher1')return {bookingId:b.bookingId,documentId:b.documentId,kind:'voucher',approved:false};}});
  await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/niet meer gecontroleerd/);assert(!f.calls.some(c=>c.path==='/api/booking-documents/render'&&c.b.document.documentId==='voucher1'));
 });
+
+test('outbound and return slots share downloads but require independent page choices',async()=>{
+ const f=fixture();f.exec(`draft.body.sections[2].ticketPart='outbound';draft.body.sections.push({...structuredClone(draft.body.sections[2]),ticketPart:'return',title:'Terugreis ophalen'})`);
+ await f.exec('autoFillBookingDocuments()');const slots=f.slots();assert.equal(slots[2].selected.reviewRequired,true);assert.equal(slots[4].selected.reviewRequired,true);
+ assert.equal(f.calls.filter(c=>c.path==='/api/upload?title=A').length,1);
+ f.exec('documentSlotPages(2);documentPageRemove(2);documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ assert.equal(slots[2].selected.pages,2);assert(!slots[2].selected.reviewRequired);assert.equal(slots[4].selected.pages,3);assert.equal(slots[4].selected.reviewRequired,true);
+ f.exec('documentSlotPages(2);documentPagesRestore()');assert.equal(f.exec('documentPages.pages.length'),3);
+});
