@@ -117,3 +117,9 @@ export async function recordAppStationAdded(station){
  const sql='INSERT INTO app_station_usage(station,additions) VALUES($1,1) ON CONFLICT(station) DO UPDATE SET additions=app_station_usage.additions+1';
  if(db.pool)await db.pool.query(sql,[station]);else db.sqlite.prepare(sql.replace('$1','?')).run(station);
 }
+
+export async function deleteBoardSettings(page,revision){
+ const sql="DELETE FROM board_settings WHERE page=$1 AND revision=$2 AND payload LIKE '%\"sourcePage\"%' RETURNING page";
+ const row=db.pool?(await db.pool.query(sql,[page,revision])).rows[0]:db.sqlite.prepare(sql.replace(/\$\d/g,'?')).get(page,revision);
+ if(!row){const e=Error('Dit bord is ondertussen gewijzigd. Herlaad de pagina voordat je het verwijdert.');e.status=409;throw e;}
+}

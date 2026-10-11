@@ -1,6 +1,6 @@
 import {createHmac,timingSafeEqual,randomBytes} from 'node:crypto';
 import {securityStatus,adminAuthenticated,handleAdminSecurity} from './admin-security.mjs';
-import {readBoardSettings,writeBoardSettings,insertBoardSettings,readBoardLayouts,createBoardLayout} from './board-cache.mjs';
+import {deleteBoardSettings,readBoardSettings,writeBoardSettings,insertBoardSettings,readBoardLayouts,createBoardLayout} from './board-cache.mjs';
 import {swissDirections,matchesSwissDirection} from './swiss-directions.mjs';
 let catalog={},saved=new Map(),provider,legacyMatch;
 const attempts=new Map(),cookieName='treinbord_beheer';
@@ -31,6 +31,10 @@ export const standardLayouts=[
 export function boardSource(page){return Object.hasOwn(catalog,page)?catalog[page].sourcePage||page:null;}
 export function duplicatePayload(page){return applyBoardSettings(page,provider(boardSource(page)));}
 function boardInfo(c){return {...c,directions:undefined,revision:saved.get(c.id)?.revision||0,updatedAt:saved.get(c.id)?.updatedAt||null,settings:saved.get(c.id)?.settings||defaultBoardSettings(c.id),defaults:defaultBoardSettings(c.id)};}
+export async function deleteBoard(page,revision){
+ if(!catalog[page]?.sourcePage)throw Error('Alleen gekopieerde borden kunnen worden verwijderd.');
+ await deleteBoardSettings(page,revision);saved.delete(page);delete catalog[page];
+}
 export async function duplicateBoard(page,input){
  const source=boardSource(page);if(!source)throw Error('Onbekend bord');
  const settings=validateBoardSettings(page,input||saved.get(page)?.settings||defaultBoardSettings(page));settings.sourcePage=source;
@@ -125,6 +129,7 @@ export async function handleBoardAdmin(req,res,url){
    reply(res,200,{layout:await createBoardLayout('custom-'+randomBytes(12).toString('hex'),name,appearance)});return true;
   }
   if(req.method==='GET'&&action==='boards'){reply(res,200,{boards:Object.values(catalog).map(boardInfo)});return true;}
+  if(req.method==='POST'&&action==='delete'){const input=await body(req);await deleteBoard(String(input.page||''),Number(input.revision));reply(res,200,{ok:true});return true;}
   if(req.method==='POST'&&action==='duplicate'){const input=await body(req);reply(res,200,{board:await duplicateBoard(String(input.page||''),input.settings)});return true;}
   if(req.method==='POST'&&['save','preview'].includes(action)){
    const input=await body(req),page=String(input.page||''),settings=validateBoardSettings(page,input.settings);
