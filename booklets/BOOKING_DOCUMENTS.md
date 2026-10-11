@@ -7,6 +7,24 @@ document ID; duplicate booking numbers require explicit selection. Draft and
 published counterparts count as one booking. The latest draft is the current
 staff working version.
 
+The chapters are shown as "Brief ophalen", "Reisschema ophalen", "NS-tickets
+ophalen" and "Vouchers ophalen". Choosing the exact customer booking starts a
+sequential import into all empty, non-omitted slots. Existing slots in templates
+work without migration. Already selected documents and edited page order are
+preserved on retry and on refreshing the same booking. Stopping or changing the
+booking invalidates all pending results. Each failure is reported on its own
+chapter and does not stop the remaining chapters.
+
+One linked letter is used automatically; several letters require selection.
+All linked vouchers must be approved before the complete set is imported in
+Sanity link order. Multiple vouchers retain every source digest through page
+editing. A missing linked voucher falls back to a unique recommended Drive
+voucher, which is loaded with `reviewRequired` and blocks PDF export until the
+user reviews its pages and confirms the details. A unique recommended schedule
+is imported from Drive. Duplicate booking numbers and multiple recommended
+Drive files always require a user choice; modification date alone is not enough
+to choose among different documents.
+
 Customer values are `klantvoornaam`, `klantachternaam`, `vertrekdatum`,
 `terugkomstdatum`, `reisnaam` and `boekingsnummer`. Existing text placeholders
 use these values. Changing the binding clears all document slots. Imports guard
@@ -30,14 +48,18 @@ manual uploads require the user to check customer, hotel, dates and reference.
 
 Drive lookup requires explicit OAuth `drive.readonly` consent on the existing
 Google connection and the Drive API enabled. Existing Docs and PDF files are
-searched by booking number, with filename boundary checks; the user chooses the
-document. Schedule keywords include `reisschema` and `tijdlijn`, found in the
+searched by booking number, with filename boundary checks. Schedule keywords
+include `reisschema` and `tijdlijn`, found in the
 existing Drive naming. No file is moved, edited or deleted. Existing Docs are
 exported to PDF, then selected pages are fitted to the book format. Native PDF
 text and barcodes remain vectors; source PDFs remain untouched.
 
 NS slots reuse email import, newest email per DNR, all ticket buttons and page
-selection. A duplicated numeric booking lookup without an exact document ID is
+selection. Automatic imports use only the exact booking's stored references.
+Every reference needs a latest, non-cancelled email with ticket buttons. Unknown
+references, cancelled latest messages and partial download failures require
+manual resolution and never insert incomplete ticket sets. A duplicated numeric
+booking lookup without an exact document ID is
 rejected. Missing document slots block PDF generation even if ordinary library
 choices are skipped. Users may explicitly omit individual documents.
 
@@ -48,4 +70,5 @@ the saved selection. Existing printed PDFs remain immutable. Drive and ticket
 snapshots are refreshed explicitly through "Opnieuw ophalen".
 
 Tests: `node --test booklets-bookings.test.mjs booklets-mail.test.mjs`,
-`node booklets/test-booking-ui.cjs`, gateway tests and Python document tests.
+`node booklets/test-booking-ui.cjs`, `node booklets/test-auto-booking-ui.cjs`,
+gateway tests and Python document tests.

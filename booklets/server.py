@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.11.3'
+APP_VERSION = '2026.10.11.4'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -199,7 +199,12 @@ def validate_body(kind,b,prepared=False):
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
                     if slot.get('options'):raise ValueError('Een documentplek bevat geen bibliotheekkeuzes.')
                     if kind=='template' and slot.get('selected'):raise ValueError('Klantdocumenten horen alleen bij een persoonlijk boekje.')
-                    if slot.get('selected') and slot['selected'].get('bookingDocument') and slot['selected']['bookingDocument'].get('bookingId')!=b.get('sanityBooking',{}).get('id'):raise ValueError('Dit klantdocument hoort bij een andere Sanity-boeking.')
+                    if slot.get('selected'):
+                        selected=slot['selected'];sources=selected.get('bookingDocuments',[]) or []
+                        if not isinstance(sources,list) or len(sources)>100 or any(not isinstance(d,dict) for d in sources):raise ValueError('Ongeldige documentbronnen.')
+                        if selected.get('bookingDocument'):sources=[*sources,selected['bookingDocument']]
+                        if any(not isinstance(d,dict) for d in sources):raise ValueError('Ongeldige documentbron.')
+                        if any(d.get('bookingId')!=b.get('sanityBooking',{}).get('id') for d in sources):raise ValueError('Dit klantdocument hoort bij een andere Sanity-boeking.')
                 if slot.get('choice')=='route' and slot.get('country') not in COUNTRIES:raise ValueError('Kies een land voor de routekeuze.')
             candidates=([*slot.get('options',[]),*([slot['selected']] if slot.get('selected') else [])] if slot.get('choice') else [slot])
             for candidate in candidates:
@@ -250,6 +255,7 @@ def make_export(book,options=None):
     b=refresh_blocks(b,objects);b=sanity_sources.refresh_export(SimpleNamespace(**globals()),b);book['body']=b
     validate_body('book',b)
     if any(slot.get('choice')=='document' and not slot.get('selected') and not slot.get('omitted') for slot in b.get('sections',[])):raise ValueError('Vul de ontbrekende boekingsdocumenten in of kies per document bewust Weglaten.')
+    if any((slot.get('selected') if slot.get('choice') else slot or {}).get('reviewRequired') for slot in b.get('sections',[]) if not slot.get('choice') or slot.get('selected')):raise ValueError('Controleer eerst de opgehaalde voucher: klant, hotel, datums en reserveringsnummer.')
     google_warnings=google_sources.verify(b)
     preparation=plan(b,objects)
     if preparation['missing'] and not options.get('skipChoices'):raise ValueError('Bevestig eerst dat niet ingestelde keuzes mogen worden overgeslagen.')

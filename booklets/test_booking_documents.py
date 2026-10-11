@@ -7,6 +7,24 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_unreviewed_drive_voucher_blocks_pdf_generation(self):
+        doc={'kind':'voucher','title':'Voucher','content':[{'_type':'block','children':[{'_type':'span','text':'Voucher'}]}]}
+        result=booking_documents.render(ctx,{'document':doc,'format':'A4'})
+        selected={'asset':result['asset'],'pages':result['pages'],'title':'Vouchers','fields':[],'reviewRequired':True}
+        body={'format':'A4','sections':[{'choice':'document','documentKind':'voucher','selected':selected}]}
+        self.assertRaisesRegex(ValueError,'Controleer eerst',s.make_export,{'id':'test','body':body},{'skipChoices':True,'allowUneven':True,'dryRun':True})
+        report=s.preflight.check(s,body,[])
+        self.assertTrue(any('Controleer deze voucher' in e['message'] for e in report['errors']))
+    def test_multiple_voucher_sources_must_all_belong_to_the_selected_booking(self):
+        doc={'kind':'voucher','title':'Voucher','content':[{'_type':'block','children':[{'_type':'span','text':'Voucher'}]}]}
+        result=booking_documents.render(ctx,{'document':doc,'format':'A4'})
+        selected={'asset':result['asset'],'pages':result['pages'],'oneOff':True,'fields':[],'bookingDocuments':[{'bookingId':'private.customer','documentId':'v1'},{'bookingId':'private.customer','documentId':'v2'}]}
+        body={'format':'A4','sanityBooking':{'id':'private.customer'},'sections':[{'choice':'document','documentKind':'voucher','selected':selected}]}
+        s.validate_body('book',body)
+        selected['bookingDocuments'][1]['bookingId']='private.other'
+        self.assertRaisesRegex(ValueError,'andere Sanity-boeking',s.validate_body,'book',body)
+        selected['bookingDocuments']='not-a-source-list'
+        self.assertRaisesRegex(ValueError,'documentbronnen',s.validate_body,'book',body)
     def test_explicit_sanity_page_break_preserves_both_sides(self):
         def text(value):return {'_type':'block','style':'normal','children':[{'_type':'span','text':value,'marks':[]}]}
         doc={'kind':'letter','title':'Brief','content':[text('FIRST PAGE'),{'_type':'pageBreak'},text('SECOND PAGE')]}
