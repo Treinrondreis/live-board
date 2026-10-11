@@ -7,6 +7,11 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_explicit_sanity_page_break_preserves_both_sides(self):
+        def text(value):return {'_type':'block','style':'normal','children':[{'_type':'span','text':value,'marks':[]}]}
+        doc={'kind':'letter','title':'Brief','content':[text('FIRST PAGE'),{'_type':'pageBreak'},text('SECOND PAGE')]}
+        r=booking_documents.render(ctx,{'document':doc,'format':'A4'});pdf=PdfReader(s.DATA/'pdfs'/f"{r['asset']}.pdf")
+        self.assertEqual(len(pdf.pages),2);self.assertIn('FIRST PAGE',pdf.pages[0].extract_text());self.assertIn('SECOND PAGE',pdf.pages[1].extract_text())
     def test_letter_layout_in_both_formats_and_private_api(self):
         doc={'kind':'letter','bookingId':'private.test','documentId':'private.letter','title':'Brief','digest':'test','content':[{'_type':'block','style':'normal','children':[{'_type':'span','text':'Beste Test Reiziger,','marks':[]}]}]}
         for fmt in ('A4','A5'):

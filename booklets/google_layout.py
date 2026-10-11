@@ -2,7 +2,7 @@
 import hashlib, html, io, json, re
 from PIL import Image as PILImage
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Image, Table, TableStyle, KeepTogether
+from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Image, Table, TableStyle, KeepTogether, PageBreak
 from features import SIZES
 
 LAYOUT_VERSION='2026.09.27.2-compact-routes'
@@ -101,6 +101,7 @@ def render(model,images,fmt,layout):
         result=[]
         for b in blocks:
             if b['type']=='text':result.append(para(b))
+            elif b['type']=='pageBreak':result.append(PageBreak())
             elif b['type']=='image':result.extend([picture(b,w,avail-12),Spacer(1,10)])
             else:
                 n=max((len(r) for r in b['rows']),default=0)

@@ -9,7 +9,7 @@ from features import norm
 
 PROJECT=os.environ.get('BOOKLETS_SANITY_PROJECT_ID','il9cyh3m')
 DATASET=os.environ.get('BOOKLETS_SANITY_DATASET','production')
-VERSION='sanity-layout-1'
+VERSION='sanity-layout-2-page-breaks'
 RENDERED=OrderedDict()
 
 def request(url,limit=8*1024*1024):
@@ -47,6 +47,8 @@ def model(documents,cfg):
         blocks.append({'type':'text','html':html.escape((doc.get('title') or 'Tekst')),'plain':(doc.get('title') or 'Tekst'),'heading':True})
         counters={}
         for b in doc.get('content') or []:
+            if b.get('_type')=='pageBreak':
+                blocks.append({'type':'pageBreak'});continue
             if b.get('_type')=='image':
                 ref=(b.get('asset') or {}).get('_ref','')
                 match=re.fullmatch(r'image-([a-f0-9]+)-(\d+)x(\d+)-(jpg|jpeg|png|webp)',ref)
