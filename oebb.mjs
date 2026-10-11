@@ -1,7 +1,7 @@
 import {createClient} from 'hafas-client';
 import {profile} from 'hafas-client/p/oebb/index.js';
 import {saveBoardCache,loadBoardCache} from './board-cache.mjs';
-export const oebbStations={'wien-oebb':{name:'Wien Hbf',stop:'8103000',country:'AT'}};
+export const oebbStations={'wien-oebb':{name:'Wien Hbf',stop:'8103000',country:'AT'},'salzburg-oebb':{name:'Salzburg Hbf',stop:'8100002',country:'AT'},'innsbruck-oebb':{name:'Innsbruck Hbf',stop:'8100108',country:'AT'},'graz-oebb':{name:'Graz Hbf',stop:'8100173',country:'AT'}};
 export const oebbState={status:'starting',lastSuccessAt:null,error:null};
 const cache=new Map(),clock=t=>new Intl.DateTimeFormat('nl-NL',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit'}).format(t);
 const client=createClient({...profile,transformReq:(ctx,req)=>({...profile.transformReq?.(ctx,req)||req,signal:AbortSignal.timeout(25000)})},'Treinrondreis departure boards');let busy=false;
