@@ -6,7 +6,7 @@ import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 from types import SimpleNamespace
-from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition
+from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
 import base64, hashlib, hmac, io, json, os, re, secrets, socket, sqlite3, subprocess, threading, time, uuid
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.6'
+APP_VERSION = '2026.10.12.7'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -202,6 +202,7 @@ def validate_body(kind,b,prepared=False):
                 if slot.get('choice') not in ('manual','route','document'):raise ValueError('Ongeldige keuzeplek.')
                 if slot.get('choice')=='document':
                     toc_info(slot)
+                    if 'omitted' in slot and (type(slot['omitted']) is not bool or kind=='template' and slot['omitted']):raise ValueError('Overslaan / niet van toepassing geldt alleen voor een persoonlijk boekje.')
                     if 'todoCondition' in slot and (not isinstance(slot['todoCondition'],str) or len(slot['todoCondition'])>300):raise ValueError('Gebruik maximaal 300 tekens voor de ToDo-voorwaarde.')
                     if 'todoConditionState' in slot:
                         state=slot['todoConditionState']
@@ -296,9 +297,9 @@ def make_export(book,options=None):
     if any(document_condition(slot,b) is None for slot in b.get('sections',[])):raise ValueError('Controleer eerst de ToDo-voorwaarden van de documentophalers.')
     active_slots=[slot for slot in b.get('sections',[]) if document_condition(slot,b) is not False]
     for slot in active_slots:booking_documents.check_slot_layout(slot)
-    if any(slot.get('choice')=='document' and not slot.get('selected') and not slot.get('omitted') for slot in active_slots):raise ValueError('Vul de ontbrekende boekingsdocumenten in of kies per document bewust Weglaten.')
+    if any(slot.get('choice')=='document' and not slot.get('selected') and not slot.get('omitted') for slot in active_slots):raise ValueError('Vul de ontbrekende boekingsdocumenten in of kies per document Overslaan / niet van toepassing.')
     if any((slot.get('selected') if slot.get('choice') else slot or {}).get('reviewRequired') for slot in active_slots if not slot.get('choice') or slot.get('selected')):raise ValueError('Controleer eerst de opgehaalde documenten: kies de juiste ticketpagina’s en controleer vouchers op klant, hotel, datums en reserveringsnummer.')
-    google_warnings=google_sources.verify(b)
+    google_warnings=[*google_sources.verify(b),*omitted_document_warnings(b)]
     preparation=plan(b,objects)
     if preparation['missing'] and not options.get('skipChoices'):raise ValueError('Bevestig eerst dat niet ingestelde keuzes mogen worden overgeslagen.')
     sections=preparation['sections']

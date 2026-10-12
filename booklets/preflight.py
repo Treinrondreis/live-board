@@ -1,11 +1,11 @@
 """Collect all user-fixable field errors before rendering, without writing exports."""
 import io
-from features import document_condition
+from features import document_condition,omitted_document_warnings
 
 def check(s,body,objects,fill=False):
     b=s.refresh_blocks(body,objects);errors=[];missing=[]
     try:b=s.sanity_sources.refresh_export(s,b)
-    except ValueError as e:return {'pages':0,'needed':0,'missing':[],'canFill':False,'fillers':[],'libraryStamp':s.library_stamp(objects),'errors':[{'section':None,'title':'Sanity-bron','message':str(e)}]}
+    except ValueError as e:return {'pages':0,'needed':0,'missing':[],'canFill':False,'fillers':[],'warnings':omitted_document_warnings(b),'libraryStamp':s.library_stamp(objects),'errors':[{'section':None,'title':'Sanity-bron','message':str(e)}]}
     def error(index,title,message):errors.append({'section':index,'title':title,'message':str(message)})
     if not b.get('sections'):error(None,'Boekje','Voeg eerst een bouwsteen toe.')
     for i,slot in enumerate(b.get('sections',[])):
@@ -15,7 +15,7 @@ def check(s,body,objects,fill=False):
         sec=slot.get('selected') if slot.get('choice') else slot
         if not sec:
             if slot.get('choice')=='document':
-                if not slot.get('omitted'):error(i,slot.get('title','Document'),'Haal dit boekingsdocument op, upload een PDF of kies bewust Weglaten.')
+                if not slot.get('omitted'):error(i,slot.get('title','Document'),'Haal dit boekingsdocument op, upload een PDF of kies Overslaan / niet van toepassing.')
             else:missing.append(slot.get('title','Keuzepagina'))
             continue
         title=sec.get('title','Bouwsteen')
@@ -38,7 +38,7 @@ def check(s,body,objects,fill=False):
                     if not fits:error(i,title,'Pagina '+str(f['page']+1)+': tekst past niet in “'+f['key']+'”.')
                 except (ValueError,KeyError,TypeError) as e:error(i,title,e)
         except (ValueError,KeyError,TypeError) as e:error(i,title,e)
-    result={'pages':0,'needed':0,'missing':missing,'canFill':False,'fillers':[],'libraryStamp':s.library_stamp(objects),'errors':errors}
+    result={'pages':0,'needed':0,'missing':missing,'canFill':False,'fillers':[],'warnings':omitted_document_warnings(b),'libraryStamp':s.library_stamp(objects),'errors':errors}
     try:result.update(s.plan(b,objects))
     except ValueError as e:
         if not errors:error(None,'Boekje',e)

@@ -20,11 +20,15 @@ def snapshot(o):
 
 def document_condition(slot,body):
     """True: required, False: skipped, None: condition still needs checking."""
+    if slot.get('choice')=='document' and slot.get('omitted') is True:return False
     if slot.get('choice')!='document' or not str(slot.get('todoCondition','')).strip():return True
     state=slot.get('todoConditionState') or {}
     booking_id=(body.get('sanityBooking') or {}).get('id')
     if not booking_id or state.get('bookingId')!=booking_id or state.get('text')!=slot['todoCondition'] or type(state.get('matches')) is not bool:return None
     return state['matches']
+
+def omitted_document_warnings(body):
+    return ['Bewust overgeslagen / niet van toepassing: '+str(slot.get('title') or 'Document')+'. Dit document is niet opgenomen in het boekje.' for slot in body.get('sections',[]) if slot.get('choice')=='document' and slot.get('omitted') is True]
 def resolved(b):
     sections=[]
     for slot in b.get('sections',[]):
