@@ -7,12 +7,23 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_column_letter_line_distance_is_165_percent_and_old_selection_requires_refresh(self):
+        import pdfplumber,io
+        doc={'kind':'letter','content':[{'_type':'block','children':[{'_type':'span','text':'Praktische informatie over uw treinreis en verblijf in Wenen. '*8}]}]}
+        r=booking_documents.render(ctx,{'document':doc,'format':'A4','letterLayout':'columns'})
+        with pdfplumber.open(io.BytesIO((s.DATA/'pdfs'/f"{r['asset']}.pdf").read_bytes())) as pdf:
+            lines=sorted(set(round(w['top'],3) for w in pdf.pages[0].extract_words() if w['top']>110 and w['x0']<pdf.pages[0].width/2))
+            self.assertGreater(len(lines),3)
+            for first,second in zip(lines,lines[1:]):self.assertAlmostEqual(second-first,16.5,places=2)
+        old={'documentKind':'letter','letterLayout':'columns','selected':{'bookingDocument':{'layout':'treinrondreis-letter-columns-1'}}}
+        self.assertRaisesRegex(ValueError,'opnieuw op',booking_documents.check_slot_layout,old)
+
     def test_columns_flow_keep_content_inside_25mm_and_only_first_title(self):
         import pdfplumber,io
         from reportlab.lib.units import mm
         doc={'kind':'letter','title':'Briefing metadata','content':[{'_type':'block','style':'h2' if n%5==0 else 'normal','children':[{'_type':'span','text':f'Onderdeel {n:03d}. '+('Praktische informatie over uw treinreis en verblijf in Wenen. '*4),'marks':[]}]} for n in range(50)]}
         r=booking_documents.render(ctx,{'document':doc,'format':'A4','letterLayout':'columns'})
-        self.assertEqual(r['bookingDocument']['layout'],'treinrondreis-letter-columns-1')
+        self.assertEqual(r['bookingDocument']['layout'],'treinrondreis-letter-columns-2')
         with pdfplumber.open(io.BytesIO((s.DATA/'pdfs'/f"{r['asset']}.pdf").read_bytes())) as pdf:
             self.assertGreaterEqual(len(pdf.pages),3)
             for n,page in enumerate(pdf.pages):

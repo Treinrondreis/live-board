@@ -9,7 +9,7 @@ from features import SIZES
 
 VERSION='treinrondreis-letter-1'
 VOUCHER_VERSION='treinrondreis-voucher-1'
-COLUMNS_VERSION='treinrondreis-letter-columns-1'
+COLUMNS_VERSION='treinrondreis-letter-columns-2'
 LOGO=Path(__file__).parent/'brand'/'treinrondreis-logo.png'
 CONTACT=('Treinrondreis.nl','Grondherendijk 41 a/b','3082 DG Rotterdam','010 - 2613043','contact@treinrondreis.nl')
 
@@ -22,8 +22,8 @@ def render(model,images,fmt,kind='letter',layout='text'):
     usable=width-2*margin
     available=height-top-bottom
     color='#000000' if columns else '#1A1A1A'
-    normal=ParagraphStyle('letter',fontName='Booklet',fontSize=10,leading=14.5 if fmt=='A4' else 13.5,textColor=color,spaceAfter=8 if fmt=='A4' else 6,allowWidows=0,allowOrphans=0)
-    heading=ParagraphStyle('letter-heading',parent=normal,fontName='Booklet-Bold',fontSize=11,leading=15.95 if fmt=='A4' else 15,spaceBefore=10 if fmt=='A4' else 6,spaceAfter=5 if fmt=='A4' else 4,keepWithNext=True)
+    normal=ParagraphStyle('letter',fontName='Booklet',fontSize=10,leading=16.5 if columns else 14.5 if fmt=='A4' else 13.5,textColor=color,spaceAfter=8 if fmt=='A4' else 6,allowWidows=0,allowOrphans=0)
+    heading=ParagraphStyle('letter-heading',parent=normal,fontName='Booklet-Bold',fontSize=11,leading=18.15 if columns else 15.95 if fmt=='A4' else 15,spaceBefore=10 if fmt=='A4' else 6,spaceAfter=5 if fmt=='A4' else 4,keepWithNext=True)
     address=ParagraphStyle('letter-address',parent=normal,spaceAfter=24,keepWithNext=True)
     hotel_heading=ParagraphStyle('voucher-hotel',parent=heading,fontSize=12,leading=17,spaceBefore=4)
     blocks=model['blocks']
