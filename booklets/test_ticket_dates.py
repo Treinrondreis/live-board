@@ -40,6 +40,12 @@ class TicketDateTests(unittest.TestCase):
         r=ticket_dates.inspect(SimpleNamespace(**vars(s)),{'asset':a['id'],'provider':'ns','suggestedDates':['2026-10-10']})
         self.assertEqual(r['pages'][0]['dateSource'],'sanity-todo');self.assertFalse(r['pages'][0]['dateNeedsReview'])
         self.assertEqual(r['pages'][1]['travelDate'],'');self.assertTrue(r['pages'][1]['dateNeedsReview'])
+    def test_shared_reference_with_two_departure_dates_does_not_flag_matching_pdf_dates(self):
+        a,_=self.upload(['Departure: 11.11.2026','Departure: 14.11.2026','Departure: 15.11.2026'])
+        r=ticket_dates.inspect(SimpleNamespace(**vars(s)),{'asset':a['id'],'provider':'ns','suggestedDates':['2026-11-11','2026-11-14']})
+        self.assertEqual([p['travelDate'] for p in r['pages']],['2026-11-11','2026-11-14','2026-11-15'])
+        self.assertEqual([p['dateNeedsReview'] for p in r['pages']],[False,False,True])
+        self.assertEqual(r['pages'][2]['dateSource'],'pdf-conflict')
     def test_saved_selection_checks_source_bounds_moment_and_review_before_export(self):
         a,_=self.upload(['Departure: 10.10.2026','Departure: 16.10.2026'])
         import ticket_import
