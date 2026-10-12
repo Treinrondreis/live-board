@@ -2,7 +2,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),{te
 const source=fs.readFileSync(__dirname+'/index.html','utf8').split('<script>')[2].split('</script>')[0].replace(/init\(\)\.catch\(e=>\{[^\n]+/,'');
 function fixture(){
  const nodes=new Map(),node=s=>{if(!nodes.has(s))nodes.set(s,{value:'',innerHTML:'',style:{},showModal(){},close(){}});return nodes.get(s);};
- const ctx=vm.createContext({document:{querySelector:node},window:{addEventListener(){}},structuredClone,console,clearTimeout,setTimeout,AbortSignal});vm.runInContext(source,ctx);
+ const ctx=vm.createContext({document:{querySelector:node,querySelectorAll:()=>[{value:'ns'}]},window:{addEventListener(){}},structuredClone,console,clearTimeout,setTimeout,AbortSignal});vm.runInContext(source,ctx);node('#slotTicketSourceMode').value='all';
  const exec=s=>vm.runInContext(s,ctx);exec(`state={objects:[]};draft={kind:'book',body:{format:'A4',values:{},sanityBooking:{id:'customer'},sections:[{choice:'document',documentKind:'nsTickets',title:'Nightjet',ticketMoment:2,selected:null},{choice:'document',documentKind:'nsTickets',title:'Aansluiting naar huis',ticketMoment:3,todoCondition:'CORA2',selected:null}]}}`);
  ctx.todos=[];ctx.api=async()=>({booking:{todos:ctx.todos},items:[]});ctx.renderDraft=()=>{};ctx.bookingDocumentsOverview=()=>{};ctx.autoLoadProgress=()=>{};
  ctx.loaded=[];ctx.autoTicketDocument=async(p,slot)=>{ctx.loaded.push(slot.title);slot.selected={title:slot.title,asset:'test',pages:1};};

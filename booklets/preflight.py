@@ -8,8 +8,12 @@ def check(s,body,objects,fill=False):
     try:b=s.sanity_sources.refresh_export(s,b)
     except ValueError as e:return {'pages':0,'needed':0,'missing':[],'canFill':False,'fillers':[],'warnings':omitted_document_warnings(b),'libraryStamp':s.library_stamp(objects),'errors':[{'section':None,'title':'Sanity-bron','message':str(e)}]}
     def error(index,title,message):errors.append({'section':index,'title':title,'message':str(message)})
+    preparation=None
+    try:preparation=s.plan(b,objects)
+    except ValueError:pass
     if not b.get('sections'):error(None,'Boekje','Voeg eerst een bouwsteen toe.')
     for i,slot in enumerate(b.get('sections',[])):
+        if fill and preparation and i in preparation.get('droppedFillerIndices',[]):continue
         condition=document_condition(slot,b)
         if condition is False:continue
         if condition is None:error(i,slot.get('title','Document'),'Controleer eerst de ToDo-voorwaarde van deze documentophaler.');continue
@@ -39,13 +43,13 @@ def check(s,body,objects,fill=False):
                     if not fits:error(i,title,'Pagina '+str(f['page']+1)+': tekst past niet in “'+f['key']+'”.')
                 except (ValueError,KeyError,TypeError) as e:error(i,title,e)
         except (ValueError,KeyError,TypeError) as e:error(i,title,e)
-    result={'pages':0,'needed':0,'missing':missing,'canFill':False,'fillers':[],'warnings':omitted_document_warnings(b)+document_duplicates.warnings(s,b),'libraryStamp':s.library_stamp(objects),'errors':errors}
-    try:result.update(s.plan(b,objects))
+    result={'pages':0,'needed':0,'missing':missing,'canFill':False,'fillers':[],'fillRequested':fill,'warnings':omitted_document_warnings(b)+document_duplicates.warnings(s,b),'libraryStamp':s.library_stamp(objects),'errors':errors}
+    try:result.update(preparation or s.plan(b,objects))
     except ValueError as e:
         if not errors:error(None,'Boekje',e)
     if not errors:
         try:
-            report=s.make_export({'id':'preview','title':'Controle','body':b},{'skipChoices':True,'allowUneven':True,'fill':fill,'dryRun':True,'libraryStamp':result['libraryStamp']})
+            report=s.make_export({'id':'preview','title':'Controle','body':b},{'skipChoices':True,'allowUneven':True,'fill':fill and result['canFill'],'dryRun':True,'libraryStamp':result['libraryStamp']})
             result['checkedPages']=report['report']['pages']
         except (ValueError,KeyError,TypeError) as e:error(None,'PDF-controle',e)
     return result

@@ -131,7 +131,7 @@ class BookingDocumentTests(unittest.TestCase):
             self.assertTrue(any('huisstijl' in w for w in result['warnings']))
             self.assertFalse(any('opnieuw opgemaakt' in w for w in result['warnings']))
     def test_templates_never_save_customer_documents_and_export_never_skips_missing_slots(self):
-        slots=[{'choice':'document','documentKind':k,'title':k,'options':[],'selected':None} for k in booking_documents.KINDS]
+        slots=[{'choice':'document','documentKind':k,'title':k,'options':[],'selected':None,**({'ticketSources':['ns','db']} if k=='combinedTickets' else {})} for k in booking_documents.KINDS]
         s.validate_body('template',{'sections':slots,'format':'A4'})
         self.assertRaisesRegex(ValueError,'ontbrekende',s.make_export,{'id':'test','body':{'sections':slots,'format':'A4'}},{'skipChoices':True,'allowUneven':True,'dryRun':True})
         slots[0]['selected']={'asset':'anything'}

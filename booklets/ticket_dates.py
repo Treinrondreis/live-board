@@ -62,10 +62,22 @@ def inspect(s,payload):
         value,source,review=labelled_date(text,provider,allowed)
         if not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested:review=True;source='pdf-conflict'
-        pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review})
+        pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.
     dates={p['travelDate'] for p in pages if p['travelDate']}
     if len(dates)==1:
         for p in pages:
             if not p['travelDate'] and p['dateSource']=='unknown':p.update(travelDate=next(iter(dates)),dateSource='pdf-continuation',dateNeedsReview=True)
     return {'pages':pages}
+
+def journey_details(text):
+    """Only explicit standalone headings and departure labels are ordering hints."""
+    reservation=r'(?:seat reservation|reservation only|reservation ticket|sitzplatzreservierung|reservierung|helyjegy|helybiztos[ií]t[aá]s|m[ií]stenka)'
+    ticket=r'(?:e[ -]?ticket|online[ -]?ticket|fahrkarte|j[ií]zdenka|menetjegy|ticket)'
+    heading=lambda pattern:bool(re.search(r'^\s*'+pattern+r'\s*[:\-]?\s*$',text,re.I|re.M))
+    role='reservation' if heading(reservation) else 'ticket' if heading(ticket) else 'unknown'
+    times=set(re.findall(r'(?:departure(?: time)?|abfahrt|vertrektijd|odjezd)\s*[:：]?\s*(?:'+DATE+r'\s+)?([0-2]\d:[0-5]\d)',text,re.I))
+    mav=re.search(r'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*'+DATE+r'\s+([0-2]\d:[0-5]\d)',text,re.I)
+    if mav:times.add(mav[1])
+    times={t for t in times if int(t[:2])<24}
+    return {'documentRole':role,'departureTime':next(iter(times)) if len(times)==1 else ''}

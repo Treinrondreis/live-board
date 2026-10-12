@@ -134,6 +134,30 @@ booklet issue. Published PDFs are immutable and stored alongside their snapshots
 
 ## Tests
 
+### Ticketbronnen en vulpagina’s in de reis
+
+Een ticketophaler kan `ticketSources` bevatten (ns, mav, db, obb, cd).
+`ticketSourceMode=all` combineert beschikbare bronnen; `fallback` stopt bij de
+eerste bron die een complete set oplevert. Minstens één bron is nodig, aanvullende
+bronnen zonder ToDo-referentie mogen leeg blijven. Mislukte aanvullende imports
+geven een waarschuwing; een mislukte herimport vervangt geen bestaande selectie.
+Elke bron blijft afzonderlijk herleidbaar in `ticketImport.providers` en de
+oorspronkelijke pagina’s blijven beschikbaar. MAV gebruikt één pagina per PDF.
+Expliciete vertrekdatums/tijden en documentkoppen sturen de sortering; onbekende
+volgorde geeft een korte waarschuwing en behoudt de volgorde van de bronnen.
+
+`tripFiller` is een instelling op een hoofdstukplek in een sjabloon of boekje,
+voor één vaste PDF-pagina. Bij de export is aanpassen naar een veelvoud van vier
+optioneel. De pagina wordt op zijn eigen plek behouden of weggelaten, inclusief
+de gevolgen voor inhoudsopgave en rechterpagina’s. `fillerRequiredDays` telt
+vertrek- en einddatum inclusief; onbekende reisduur behoudt de pagina met melding.
+`fillerPriority` 1 betekent liefst behouden, 99 betekent eerder weglaten.
+Een begrensde zoekactie kiest zo weinig mogelijk weglatingen; als geen passende
+combinatie gevonden wordt, blijven de bestaande algemene vulpagina’s beschikbaar.
+De opgeslagen samenstelling en eerdere PDF’s worden niet aangepast.
+
+## Testcommando’s
+
 From repository root: npm run check:syntax, npm test, npm run test:browser.
 From booklets: python test_cloud.py and python test_migration.py.
 Validate private access, owner vs KM member, cross-origin rejection, upload,

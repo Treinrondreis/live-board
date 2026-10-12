@@ -6,6 +6,7 @@ import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 import export_history,document_duplicates
+import trip_fillers
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
 import base64, hashlib, hmac, io, json, os, re, secrets, socket, sqlite3, subprocess, threading, time, uuid
@@ -35,7 +36,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.9'
+APP_VERSION = '2026.10.12.10'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -209,6 +210,7 @@ def validate_body(kind,b,prepared=False):
         if len(b.get('sections',[]))>100: raise ValueError('Maximaal 100 bouwstenen.')
         if b.get('format','A4') not in SIZES:raise ValueError('Kies A4 of A5.')
         for slot in b.get('sections',[]):
+            trip_fillers.settings(slot)
             toc_info(slot)
             if kind=='template' and slot.get('oneOff'):raise ValueError('Eenmalige PDF’s horen alleen bij een persoonlijk boekje.')
             if slot.get('choice'):
@@ -230,6 +232,11 @@ def validate_body(kind,b,prepared=False):
                         if key in slot and (type(slot[key]) is not int or not 0<=slot[key]<=99):raise ValueError('Kies een reismoment of verblijf tussen 1 en 99, of 0 voor alles.')
                     if 'sortByDate' in slot and type(slot['sortByDate']) is not bool:raise ValueError('Kies wel of niet sorteren op datum.')
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
+                    if 'ticketSources' in slot:
+                        sources=slot['ticketSources']
+                        if not isinstance(sources,list) or not 1<=len(sources)<=5 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot vijf verschillende ticketbronnen.')
+                    if slot.get('documentKind')=='combinedTickets' and not slot.get('ticketSources'):raise ValueError('Kies minstens één ticketbron.')
+                    if slot.get('ticketSourceMode','all') not in ('all','fallback'):raise ValueError('Kies combineren of de eerste beschikbare ticketbron.')
                     if slot.get('options'):raise ValueError('Een documentplek bevat geen bibliotheekkeuzes.')
                     if kind=='template' and slot.get('selected'):raise ValueError('Klantdocumenten horen alleen bij een persoonlijk boekje.')
                     if slot.get('selected'):
@@ -254,6 +261,8 @@ def validate_body(kind,b,prepared=False):
                         if not isinstance(value,str) or (value and ticket_dates.iso(value)!=value):raise ValueError('Ongeldige reisdatum.')
                         for flag in ('dateNeedsReview','dateUnknownAccepted'):
                             if flag in p and type(p[flag]) is not bool:raise ValueError('Ongeldige datumcontrole.')
+                        if p.get('documentRole','unknown') not in ('ticket','reservation','unknown'):raise ValueError('Ongeldig documenttype voor ticketsortering.')
+                        if p.get('departureTime') and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',str(p['departureTime'])):raise ValueError('Ongeldige vertrektijd.')
                         if key=='pageSources' and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and (p.get('dateNeedsReview') or (not value and not p.get('dateUnknownAccepted'))):candidate['reviewRequired']=True
                 if slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
                     moment=slot.get('voucherMoment',0) if slot['documentKind']=='voucher' else slot.get('ticketMoment',0)
@@ -319,8 +328,11 @@ def make_export(book,options=None):
     for chapter_index,section in enumerate(sections):section['_digitalChapter']=chapter_index
     if preparation['needed'] and options.get('fill'):
         if not preparation['canFill']:raise ValueError('Stel eerst passende vulpagina’s in voor dit formaat.')
-        sections=insert_fillers(sections,preparation['fillers'])
+        sections=preparation['adjustedSections']
+        if preparation['fillers']:sections=insert_fillers(sections,preparation['fillers'])
+        google_warnings.extend('Vulpagina niet opgenomen voor een veelvoud van vier: '+title+'.' for title in preparation['droppedFillers'])
     elif preparation['needed'] and not options.get('allowUneven'):raise ValueError('Bevestig eerst het aantal pagina’s dat niet deelbaar is door vier.')
+    google_warnings.extend(preparation['fillerWarnings'])
     b['sections']=sections
     if not sections: raise ValueError('Voeg eerst een bouwsteen toe.')
     validate_body('book',b,prepared=True)
@@ -402,6 +414,7 @@ def make_export(book,options=None):
     report['warnings'].append('Geen PDF/X-certificering, kleurconversie of automatische controle van fotoresolutie/afloop. Stem dit af op het gekozen drukproduct en controleer een proefdruk.')
     report['pages']=len(writer.pages)
     report['fillersAdded']=sum(x['pages'] for x in preparation['fillers']) if options.get('fill') else 0
+    report['fillersSkipped']=preparation['droppedFillers'] if options.get('fill') else []
     if preparation['missing']:report['warnings'].append('Niet ingestelde keuzeplekken overgeslagen: '+', '.join(preparation['missing']))
     if report['pages']%4:report['warnings'].append('Op uw keuze geëxporteerd zonder aanvulling: aantal pagina’s is niet deelbaar door vier.')
     if options.get('dryRun'):return {'report':report}

@@ -1,4 +1,5 @@
 import copy, unicodedata
+import trip_fillers
 
 COUNTRIES = 'Albanië|Andorra|Armenië|Azerbeidzjan|België|Bosnië en Herzegovina|Bulgarije|Cyprus|Denemarken|Duitsland|Estland|Finland|Frankrijk|Georgië|Griekenland|Hongarije|Ierland|IJsland|Italië|Kazachstan|Kosovo|Kroatië|Letland|Liechtenstein|Litouwen|Luxemburg|Malta|Moldavië|Monaco|Montenegro|Nederland|Noord-Macedonië|Noorwegen|Oekraïne|Oostenrijk|Polen|Portugal|Roemenië|Rusland|San Marino|Servië|Slovenië|Slowakije|Spanje|Tsjechië|Turkije|Vaticaanstad|Verenigd Koninkrijk|Wit-Rusland|Zweden|Zwitserland'.split('|')
 SIZES={'A4':(595.276,841.89),'A5':(595.276,419.528)}
@@ -31,10 +32,12 @@ def omitted_document_warnings(body):
     return ['Bewust overgeslagen / niet van toepassing: '+str(slot.get('title') or 'Document')+'. Dit document is niet opgenomen in het boekje.' for slot in body.get('sections',[]) if slot.get('choice')=='document' and slot.get('omitted') is True]
 def resolved(b):
     sections=[]
-    for slot in b.get('sections',[]):
+    for index,slot in enumerate(b.get('sections',[])):
         if document_condition(slot,b) is False:continue
         if slot.get('choice') and not slot.get('selected'):continue
         section=copy.deepcopy(slot['selected'] if slot.get('choice') else slot)
+        section.update({k:slot[k] for k in trip_fillers.KEYS if k in slot})
+        section['_tripFillerIndex']=index
         if slot.get('choice') and (slot.get('tocBoldOverride') or slot.get('choice')=='document' and 'tocBold' in slot):section['tocBold']=bool(slot.get('tocBold'))
         sections.append(section)
     return sections
@@ -48,6 +51,7 @@ def refresh_blocks(body,objects):
         fresh=snapshot(o)
         if s.get('tocBoldOverride'):fresh.update(tocBold=bool(s.get('tocBold')),tocBoldOverride=True)
         fresh['todoMatch']=s.get('todoMatch','') if s.get('todoMatchOverride') else o['body'].get('todoMatch','');fresh['todoMatchOverride']=bool(s.get('todoMatchOverride'));fresh['values']=copy.deepcopy(s.get('values',{}));fresh['recto']=s.get('recto',False)
+        fresh.update({k:copy.deepcopy(s[k]) for k in trip_fillers.KEYS if k in s})
         return fresh
     for i,s in enumerate(b.get('sections',[])):
         if s.get('choice'):
@@ -84,17 +88,19 @@ def plan(b,objects):
     sections=resolved(b)
     if not sections:raise ValueError('Kies of voeg ten minste één bouwsteen toe.')
     pages=count_pages(b,sections);needed=(-pages)%4
+    in_trip=trip_fillers.choose(b,sections,count_pages)
+    adjusted=in_trip['sections'];adjusted_needed=(-count_pages(b,adjusted))%4
     available=sorted([o for o in objects if o['kind']=='block' and not o['body'].get('archived') and o['body'].get('fillerOrder') and o['body'].get('format')==b.get('format','A4')],key=lambda o:(int(o['body']['fillerOrder']),o['title']))
     # At most one page per fixed position, never two competing page 1 designs.
     available=list({int(o['body']['fillerOrder']):o for o in reversed(available)}.values())
     available.sort(key=lambda o:int(o['body']['fillerOrder']))
     chosen=[]
-    if needed:
+    if adjusted_needed:
         for o in available:
             s=snapshot(o);s['tocHidden']=True;chosen.append(s)
             if sum(x['pages'] for x in chosen)>3:break
-            proposed=insert_fillers(sections,chosen)
+            proposed=insert_fillers(adjusted,chosen)
             if count_pages(b,proposed)%4==0:break
         else:chosen=[]
-        if chosen and count_pages(b,insert_fillers(sections,chosen))%4:chosen=[]
-    return dict(pages=pages,needed=needed,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected') and document_condition(s,b) is not False and not (s.get('choice')=='document' and s.get('omitted'))],fillers=chosen,canFill=bool(chosen),sections=sections)
+        if chosen and count_pages(b,insert_fillers(adjusted,chosen))%4:chosen=[]
+    return dict(pages=pages,needed=needed,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected') and document_condition(s,b) is not False and not (s.get('choice')=='document' and s.get('omitted'))],fillers=chosen,canFill=bool(chosen or in_trip['dropped']),sections=sections,adjustedSections=adjusted,droppedFillers=in_trip['dropped'],droppedFillerIndices=in_trip['droppedIndices'],fillerWarnings=in_trip['warnings'],tripDays=in_trip['days'])
