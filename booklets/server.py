@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.2'
+APP_VERSION = '2026.10.12.3'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -159,6 +159,8 @@ def fields_validate(fields,meta):
         if not re.fullmatch(r'#[0-9a-fA-F]{6}',f.get('color','#172d35')): raise ValueError('Ongeldige tekstkleur.')
 def validate_body(kind,b,prepared=False):
     def toc_info(item):
+        for key in ('tocBold','tocBoldOverride'):
+            if key in item and type(item[key]) is not bool:raise ValueError('Kies wel of geen vetgedrukte titel in de inhoudsopgave.')
         if not isinstance(item.get('todoMatch',''),str) or len(item.get('todoMatch',''))>300:raise ValueError('ToDo-herkenning mag maximaal 300 tekens bevatten.')
         if not isinstance(item.get('tocTitle',''),str) or len(item.get('tocTitle',''))>300:raise ValueError('De titel voor de inhoudsopgave mag maximaal 300 tekens bevatten.')
     if kind=='choice':
@@ -193,6 +195,7 @@ def validate_body(kind,b,prepared=False):
         if len(b.get('sections',[]))>100: raise ValueError('Maximaal 100 bouwstenen.')
         if b.get('format','A4') not in SIZES:raise ValueError('Kies A4 of A5.')
         for slot in b.get('sections',[]):
+            toc_info(slot)
             if kind=='template' and slot.get('oneOff'):raise ValueError('Eenmalige PDF’s horen alleen bij een persoonlijk boekje.')
             if slot.get('choice'):
                 if slot.get('choice') not in ('manual','route','document'):raise ValueError('Ongeldige keuzeplek.')

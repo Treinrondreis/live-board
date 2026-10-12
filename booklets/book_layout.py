@@ -64,7 +64,7 @@ def contents_plan(sections):
     for index,section in enumerate(sections):
         if section.get('tocHidden',False):continue
         title=section.get('tocTitle','').strip() or section['title']
-        p=Paragraph(escape(title),ParagraphStyle('toc',fontName='Booklet',fontSize=10.5,leading=16.8,textColor='#1A1A1A'))
+        p=Paragraph(escape(title),ParagraphStyle('toc',fontName='Booklet-Bold' if section.get('tocBold') else 'Booklet',fontSize=10.5,leading=16.8,textColor='#1A1A1A'))
         _,h=p.wrap(425,100000);height=h+15
         if height>640:raise ValueError('Een titel voor de inhoudsopgave is te lang.')
         if rows and used+height>640:pages.append(rows);rows=[];used=0
@@ -79,7 +79,7 @@ def render_contents(rows,starts,number,pagesize=(595.276,841.89)):
     c.drawString(54,768,'Inhoudsopgave' if number==0 else 'Inhoudsopgave (vervolg)')
     y=717
     for index,paragraph,h in rows:
-        paragraph.drawOn(c,54,y-h);c.setFont('Booklet',10.5)
+        paragraph.drawOn(c,54,y-h);c.setFont(paragraph.style.fontName,10.5)
         c.drawRightString(541,y-10.5,str(starts[index]+1));y-=h+15
     c.save();page=PdfReader(out).pages[0]
     if pagesize!=(595.276,841.89):page.scale_to(*pagesize)
@@ -102,7 +102,8 @@ def contents_field_layout(sections,starts,width,size,color,font):
     for i,section in enumerate(sections):
         if section.get('tocHidden',False):continue
         title=section.get('tocTitle','').strip() or section['title']
-        paragraph=Paragraph(escape(title),ParagraphStyle('toc-field',fontName=font,fontSize=size,leading=size*1.5,textColor=color,splitLongWords=True))
+        row_font=font+'-Bold' if section.get('tocBold') and not font.endswith('-Bold') else font
+        paragraph=Paragraph(escape(title),ParagraphStyle('toc-field',fontName=row_font,fontSize=size,leading=size*1.5,textColor=color,splitLongWords=True))
         _,height=paragraph.wrap(max(1,width-size*4),100000)
         rows.append((paragraph,height,str(starts[i]+1)))
     return rows
@@ -111,5 +112,6 @@ def draw_contents_field(cv,rows,x,top,width,size,font,color):
     cv.setFillColor(color);cv.setFont(font,size)
     for paragraph,height,number in rows:
         paragraph.drawOn(cv,x,top-height)
+        cv.setFont(paragraph.style.fontName,size)
         cv.drawRightString(x+width,top-size,number)
         top-=height+size*.5
