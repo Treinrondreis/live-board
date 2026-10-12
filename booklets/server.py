@@ -6,7 +6,7 @@ import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 import export_history,document_duplicates
-import trip_fillers
+import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
 import base64, hashlib, hmac, io, json, os, re, secrets, socket, sqlite3, subprocess, threading, time, uuid
@@ -36,7 +36,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.10'
+APP_VERSION = '2026.10.12.11'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -162,6 +162,7 @@ def fields_validate(fields,meta):
         if not 6<=float(f.get('size',11))<=72: raise ValueError('Lettergrootte moet tussen 6 en 72 pt liggen.')
         if not re.fullmatch(r'#[0-9a-fA-F]{6}',f.get('color','#172d35')): raise ValueError('Ongeldige tekstkleur.')
 def validate_body(kind,b,prepared=False):
+    automatic_builder.settings(b)
     def toc_info(item):
         for key in ('tocBold','tocBoldOverride'):
             if key in item and type(item[key]) is not bool:raise ValueError('Kies wel of geen vetgedrukte titel in de inhoudsopgave.')
@@ -553,6 +554,14 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/users':
                 if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan accounts toevoegen.'})
                 user_create(b['name'],b['password']);return self.send(200,{'ok':True})
+            if path in ('/api/automatic-build','/api/automatic-choices'):
+                with db() as c:
+                    objects=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute("SELECT * FROM objects WHERE kind IN ('block','choice')")]
+                if path=='/api/automatic-choices':return self.send(200,automatic_builder.reselect(objects,b))
+                result=automatic_builder.propose(objects,b)
+                validate_body(result['kind'],result['body'])
+                result['catalogRevisions']={o['id']:o['revision'] for o in objects}
+                return self.send(200,result)
             if path=='/api/tickets/compose':return self.send(200,ticket_import.compose(SimpleNamespace(**globals()),b))
             if path=='/api/tickets/inspect':return self.send(200,ticket_dates.inspect(SimpleNamespace(**globals()),b))
             if path=='/api/train-screen/inspect':return self.send(200,train_screen.inspect(SimpleNamespace(**globals()),b))

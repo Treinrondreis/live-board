@@ -37,6 +37,38 @@ Python variables:
   and explicit OAuth consent for drive.file. Existing documents.readonly access
   continues to work without that extra grant. Copies do not sync back to routes.
 
+## Automatische voorstellen
+
+Boekingen → Automatisch boekje voorstellen: zoek en selecteer een exacte
+Sanity-boeking. Reissjablonen → Automatisch sjabloon voorstellen: beschrijf de
+reis of gebruik een boeking als voorbeeld. Het voorstel blijft bewerkbaar voordat
+het als concept wordt overgenomen; opslaan blijft een aparte handeling.
+Sjablonen bewaren geen klantgegevens of persoonlijke documentselecties.
+
+Bij bouwstenen en herbruikbare keuzepagina’s staat **Herkenning voor automatisch
+bouwen**: rol, bestemmingen, treinen, ToDo-teksten, omschrijving, keuzegroep en
+algemene standaard. Puntkomma’s scheiden alternatieven. Een volledige ToDo-tekst
+moet binnen één ToDo voorkomen. Codes hebben woordgrenzen (CORA ≠ CORA2).
+De lokale planner rangschikt exacte ToDo-matches, bestemmingen/treinen,
+overeenkomstige woorden in de omschrijving en standaarden, in die volgorde.
+Er is geen externe AI-aanroep of willekeurige selectie. Zwakke of even sterke
+keuzes blijven zichtbare voorstellen. Bij hergebruik van een automatisch sjabloon
+worden de toegestane alternatieven opnieuw gerangschikt voor de gekozen boeking;
+een expliciete eigen keuze wordt behouden.
+
+De bestaande paginatypes worden als rol gebruikt wanneer geen rol is ingesteld.
+Alleen actieve bouwstenen van het gekozen formaat doen mee. Passende train-,
+route- en bestemmingsgroepen kunnen samen in de reis komen. De boekingsplekken
+voor brief, reisschema, gecombineerde treintickets en vouchers worden toegevoegd.
+Tickets en vouchers worden binnen hun hoofdstuk gesorteerd. Ze staan aanvankelijk
+per documentsoort bij elkaar: de documentenbak kan ze daarna over de reis verdelen.
+Er worden geen reismomenten verzonnen op basis van onzekere ToDo-datums.
+
+`/api/automatic-build` en `/api/automatic-choices` vereisen de bestaande beveiligde
+sessie/gateway. Beide lezen uitsluitend de bibliotheek en schrijven niets. De
+voorstelknop controleert bibliotheekrevisies opnieuw voordat een voorstel gebruikt
+wordt. Laat binnengekomen resultaten worden genegeerd na wijzigen/annuleren.
+
 ## Treinscherm
 
 Bibliotheek of persoonlijk boekje → Treinscherm. Kies heen/terug met twee
