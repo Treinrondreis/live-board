@@ -1,5 +1,6 @@
 """Collect all user-fixable field errors before rendering, without writing exports."""
 import io
+from features import document_condition
 
 def check(s,body,objects,fill=False):
     b=s.refresh_blocks(body,objects);errors=[];missing=[]
@@ -8,6 +9,9 @@ def check(s,body,objects,fill=False):
     def error(index,title,message):errors.append({'section':index,'title':title,'message':str(message)})
     if not b.get('sections'):error(None,'Boekje','Voeg eerst een bouwsteen toe.')
     for i,slot in enumerate(b.get('sections',[])):
+        condition=document_condition(slot,b)
+        if condition is False:continue
+        if condition is None:error(i,slot.get('title','Document'),'Controleer eerst de ToDo-voorwaarde van deze documentophaler.');continue
         sec=slot.get('selected') if slot.get('choice') else slot
         if not sec:
             if slot.get('choice')=='document':

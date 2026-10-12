@@ -6,7 +6,7 @@ function fixture(options={}){
  const ctx=vm.createContext({document:{querySelector:node},window:{addEventListener(){}},structuredClone,console,clearTimeout,setTimeout,confirm:()=>true,AbortSignal});
  vm.runInContext(source,ctx);
  ctx.api=async(path,b)=>{calls.push({path,b:structuredClone(b)});if(options.api){const r=await options.api(path,b);if(r!==undefined)return r;}
-  if(path==='/api/booking-data/documents')return {items:options.items||[{id:'letter',kind:'letter'},{id:'voucher1',kind:'voucher',approved:true},{id:'voucher2',kind:'voucher',approved:true}]};
+  if(path==='/api/booking-data/documents')return {booking:{todos:options.todos||[]},items:options.items||[{id:'letter',kind:'letter'},{id:'voucher1',kind:'voucher',approved:true},{id:'voucher2',kind:'voucher',approved:true}]};
   if(path==='/api/booking-data/document')return {bookingId:b.bookingId,documentId:b.documentId,kind:b.documentId.startsWith('voucher')?'voucher':'letter',approved:true,digest:'current'};
   if(path==='/api/booking-documents/render')return {asset:b.document.documentId,pages:2,format:b.format,bookingDocument:{...b.document,layout:b.document.kind==='letter'?(b.letterLayout==='columns'?'treinrondreis-letter-columns-2':'treinrondreis-letter-1'):'treinrondreis-voucher-1'}};
   if(path==='/api/booking-documents/drive-search')return {items:options.driveItems||[{id:'drive',recommended:true}]};

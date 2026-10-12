@@ -15,6 +15,15 @@ preserved on retry and on refreshing the same booking. Stopping or changing the
 booking invalidates all pending results. Each failure is reported on its own
 chapter and does not stop the remaining chapters.
 
+Document slots can set `todoCondition`, e.g. `CORA2`, to require the complete
+phrase in a single booking ToDo's title/description (case and whitespace are
+normalized). No match clears the selected document and skips the chapter,
+including its contents entry and page count. The result is bound to the exact
+booking ID and condition text in `todoConditionState`; it is cleared when
+copying to a template or changing bookings. The UI rechecks the current ToDos
+before exporting. Unchecked, stale or failed conditions must not silently skip
+a chapter. A matched condition with missing tickets still requires attention.
+
 One linked letter is used automatically; several letters require selection.
 Only approved linked vouchers are imported, sorted by check-in date by default; unapproved
 vouchers are skipped and reported. Multiple vouchers retain every source digest through page

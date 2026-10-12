@@ -17,9 +17,18 @@ def pdf_format(meta):
     return formats[0] if formats and len(set(formats))==1 else 'Onbekend'
 def snapshot(o):
     b=o['body'];return dict(block=o['id'],revision=o['revision'],title=o['title'],**{k:copy.deepcopy(b[k]) for k in ('asset','pages','fields','numberingConfigured','tocTitle','tocHidden','tocBold','googleDoc','sanityText','todoMatch') if k in b},values={},recto=False)
+
+def document_condition(slot,body):
+    """True: required, False: skipped, None: condition still needs checking."""
+    if slot.get('choice')!='document' or not str(slot.get('todoCondition','')).strip():return True
+    state=slot.get('todoConditionState') or {}
+    booking_id=(body.get('sanityBooking') or {}).get('id')
+    if not booking_id or state.get('bookingId')!=booking_id or state.get('text')!=slot['todoCondition'] or type(state.get('matches')) is not bool:return None
+    return state['matches']
 def resolved(b):
     sections=[]
     for slot in b.get('sections',[]):
+        if document_condition(slot,b) is False:continue
         if slot.get('choice') and not slot.get('selected'):continue
         section=copy.deepcopy(slot['selected'] if slot.get('choice') else slot)
         if slot.get('choice') and (slot.get('tocBoldOverride') or slot.get('choice')=='document' and 'tocBold' in slot):section['tocBold']=bool(slot.get('tocBold'))
@@ -79,4 +88,4 @@ def plan(b,objects):
             if count_pages(b,proposed)%4==0:break
         else:chosen=[]
         if chosen and count_pages(b,insert_fillers(sections,chosen))%4:chosen=[]
-    return dict(pages=pages,needed=needed,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected') and not (s.get('choice')=='document' and s.get('omitted'))],fillers=chosen,canFill=bool(chosen),sections=sections)
+    return dict(pages=pages,needed=needed,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected') and document_condition(s,b) is not False and not (s.get('choice')=='document' and s.get('omitted'))],fillers=chosen,canFill=bool(chosen),sections=sections)
