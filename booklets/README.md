@@ -37,6 +37,23 @@ Python variables:
   and explicit OAuth consent for drive.file. Existing documents.readonly access
   continues to work without that extra grant. Copies do not sync back to routes.
 
+## Treinscherm
+
+Bibliotheek of persoonlijk boekje → Treinscherm. Kies heen/terug met twee
+ritparen of een rondreis met twee tot zes bestemmingen. Een A4-pagina gebruikt
+een staande uitsnede; A5 liggend toont een bredere uitsnede. De originele foto
+van 6000 × 4002 pixels blijft ingesloten; schermvormen en Open Sans-tekst zijn
+vectoren. Geen Frutiger-fontbestand wordt meegeleverd.
+
+Bij een persoonlijk boekje kunnen al opgehaalde ticketpagina’s worden gelezen.
+Alleen expliciete ritregels met gekoppelde stations en tijden worden voorgesteld.
+Kies zelf de juiste heen- en terugrit en bevestig de controle. Er wordt geen
+OCR of externe AI gebruikt en er worden geen ontbrekende tijden of datums
+verzonnen. Datums zijn optioneel, afzonderlijk voor vertrek en aankomst.
+De PDF wordt eerst als voorbeeld gemaakt; toevoegen aan het boekje en opslaan
+blijven aparte handelingen. De pagina is daarna opnieuw te bewerken via
+Treinscherm bewerken. Eerdere PDF-assets blijven onveranderd.
+
 ## Routemaker
 
 Library → Routemaker. Search and explicitly select both locations, calculate the

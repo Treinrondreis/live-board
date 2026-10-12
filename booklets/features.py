@@ -16,7 +16,7 @@ def pdf_format(meta):
                              or (abs(w-x-bleed)<1 and abs(h-y-bleed)<1)), 'Onbekend'))
     return formats[0] if formats and len(set(formats))==1 else 'Onbekend'
 def snapshot(o):
-    b=o['body'];return dict(block=o['id'],revision=o['revision'],title=o['title'],**{k:copy.deepcopy(b[k]) for k in ('asset','pages','fields','numberingConfigured','tocTitle','tocHidden','tocBold','googleDoc','sanityText','todoMatch') if k in b},values={},recto=False)
+    b=o['body'];return dict(block=o['id'],revision=o['revision'],title=o['title'],**{k:copy.deepcopy(b[k]) for k in ('asset','pages','fields','numberingConfigured','tocTitle','tocHidden','tocBold','googleDoc','sanityText','todoMatch','trainScreen') if k in b},values={},recto=False)
 
 def document_condition(slot,body):
     """True: required, False: skipped, None: condition still needs checking."""

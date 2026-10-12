@@ -1,7 +1,7 @@
 """Local pilot. PDF originals and published exports are immutable. No AI services; optional read-only Google Docs connection."""
 import copy
 from pdf_geometry import display_meta, normalize_page
-import ticket_import,ticket_dates
+import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.7'
+APP_VERSION = '2026.10.12.8'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -521,6 +521,8 @@ class Handler(BaseHTTPRequestHandler):
                 user_create(b['name'],b['password']);return self.send(200,{'ok':True})
             if path=='/api/tickets/compose':return self.send(200,ticket_import.compose(SimpleNamespace(**globals()),b))
             if path=='/api/tickets/inspect':return self.send(200,ticket_dates.inspect(SimpleNamespace(**globals()),b))
+            if path=='/api/train-screen/inspect':return self.send(200,train_screen.inspect(SimpleNamespace(**globals()),b))
+            if path=='/api/train-screen/render':return self.send(200,train_screen.render(SimpleNamespace(**globals()),b))
             if path=='/api/tickets/drive-search':return self.send(200,ticket_drive.search(SimpleNamespace(**globals()),b))
             if path=='/api/tickets/drive-load':return self.send(200,ticket_drive.load(SimpleNamespace(**globals()),b))
             if path=='/api/booking-documents/render':return self.send(200,booking_documents.render(SimpleNamespace(**globals()),b))
