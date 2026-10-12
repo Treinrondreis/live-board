@@ -27,7 +27,7 @@ def inline_markup(text):
     text=re.sub(r'\*\*([^\n]+?)\*\*',r'<b>\1</b>',text)
     return re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)',r'<i>\1</i>',text)
 
-def rich_layout(template,values,width,size,color,token,font="Booklet",align="left"):
+def rich_layout(template,values,width,size,color,token,font="Booklet",align="left",line_spacing=1.5):
     items=[]
     # Parse formatting before substitution so customer data cannot introduce markup.
     def markup(line):
@@ -40,11 +40,11 @@ def rich_layout(template,values,width,size,color,token,font="Booklet",align="lef
         return result
     for line in template.replace('\r\n','\n').replace('\r','\n').split('\n'):
         substitutions=[]
-        if not line.strip():items.append((None,size*1.5));continue
+        if not line.strip():items.append((None,size*line_spacing));continue
         heading=re.match(r'^(#{1,3})\s+(.*)$',line)
         scale={1:1.5,2:1.3,3:1.15}.get(len(heading[1]),1) if heading else 1
         content=heading[2] if heading else line
-        style=ParagraphStyle('text',fontName=font+'-Bold' if heading else font,fontSize=size*scale,leading=size*scale*1.5,textColor=color,splitLongWords=True,alignment={'left':0,'center':1,'right':2}.get(align,0))
+        style=ParagraphStyle('text',fontName=font+'-Bold' if heading else font,fontSize=size*scale,leading=size*scale*line_spacing,textColor=color,splitLongWords=True,alignment={'left':0,'center':1,'right':2}.get(align,0))
         bullet=re.match(r'^\s*(?:[-*•]|(\d+)[.)])\s+(.*)$',content)
         if bullet:
             style.leftIndent=size*1.3;style.bulletIndent=0

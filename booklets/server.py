@@ -3,7 +3,7 @@ import copy
 from pdf_geometry import display_meta, normalize_page
 import ticket_import,ticket_dates
 import booking_documents,ticket_drive
-import field_background
+import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition
@@ -34,7 +34,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.5'
+APP_VERSION = '2026.10.12.6'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -149,6 +149,7 @@ def fields_validate(fields,meta):
         if f.get('align','left') not in ('left','center','right'):raise ValueError('Ongeldige tekstuitlijning.')
         field_keys(f)
         field_background.validate(f)
+        field_flow.validate(f)
         if f.get('type')=='prefilled' and (not isinstance(f.get('template',''),str) or len(f.get('template',''))>20000):raise ValueError('Standaardtekst mag maximaal 20.000 tekens bevatten.')
         n=int(f['page'])
         if not 0<=n<len(meta): raise ValueError('Ongeldige veldpagina.')
@@ -274,12 +275,13 @@ def check_layout(body,values):
             results.append({'name':f['key'],'page':int(f['page'])+1,'fits':True,'dynamic':True,'font':f.get('font','Open Sans'),'size':size,'exampleKeys':[]});continue
         value=field_text(f,sample,'voorbeeld')
         if f.get('type') in ('text','prefilled'):
-            items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else sample,width,size,f.get('color','#183c3c'),TOKEN,font_name(f),align)
-            needed=sum(h for _,h in items);width_ok=True
+            flow=field_flow.layout(f,value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else sample,width,available,TOKEN,font_name(f),align)
+            needed=flow['needed'];width_ok=True
         else:
             lines=value.splitlines();needed=len(lines)*size*1.5
             width_ok=all(pdfmetrics.stringWidth(line,font_name(f),size)<=width for line in lines)
-        results.append({'name':f['key'],'page':int(f['page'])+1,'fits':needed<=available and width_ok,'heightPercent':round(needed/m['height']*100,1),'availablePercent':float(f['h']),'widthFits':width_ok,'size':size,'font':f.get('font','Open Sans'),'exampleKeys':example_keys})
+        fits=flow['fits'] if f.get('type') in ('text','prefilled') else needed<=available and width_ok
+        results.append({'name':f['key'],'page':int(f['page'])+1,'fits':fits,'heightPercent':round(needed/m['height']*100,1),'availablePercent':float(f['h']),'widthFits':width_ok,'size':size,'font':f.get('font','Open Sans'),'columns':f.get('columns',1),'lineSpacing':f.get('lineSpacing',1.5),'exampleKeys':example_keys})
     return {'results':results,'fits':all(r['fits'] for r in results)}
 
 def make_export(book,options=None):
@@ -340,10 +342,9 @@ def make_export(book,options=None):
                     field_background.draw(cv,f,w,h)
                     size=float(f.get('size',11));x,fw,align=field_background.text_geometry(f,w);fh=h*float(f['h'])/100
                     if f.get('type') in ('text','prefilled'):
-                        items=rich_layout(value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else {**b.get('values',{}),**s.get('values',{})},fw,size,f.get('color','#172d35'),TOKEN,font_name(f),align)
-                        required_height=sum(height for _,height in items)
-                        if required_height>fh:raise ValueError(f"Het tekstblok bij {s['title']} is te laag: ingesteld {float(f['h']):g}%, nodig ongeveer {required_height/h*100:.1f}% bij de huidige breedte en lettergrootte. Vergroot Hoogte % in Bouwsteen beheren, of verkort de tekst. Neem daarna de nieuwe bouwsteenversie over in dit boekje.")
-                        draw_rich(cv,items,x,h*(1-float(f['y'])/100),fw)
+                        flow=field_flow.layout(f,value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else {**b.get('values',{}),**s.get('values',{})},fw,fh,TOKEN,font_name(f),align)
+                        if not flow['fits']:raise ValueError(f"Het tekstblok bij {s['title']} past niet in {f.get('columns',1)} kolom(men) van {float(f['h']):g}% hoogte. Vergroot het tekstvlak in Bouwsteen beheren, verkort de tekst of plaats het vervolg in een ander tekstblok. Neem daarna de nieuwe bouwsteenversie over in dit boekje.")
+                        field_flow.draw(cv,flow,x,h*(1-float(f['y'])/100))
                         continue
                     lines=wrap_text(value,fw,size) if f.get('type')=='text' else value.splitlines(); lineheight=size*1.5
                     if len(lines)*lineheight>fh or any(pdfmetrics.stringWidth(line,font_name(f),size)>fw for line in lines): raise ValueError(f"Tekst past niet in ‘{f['key']}’ bij {s['title']}. Verkort de tekst of vergroot het veld.")

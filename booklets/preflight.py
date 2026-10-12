@@ -32,8 +32,8 @@ def check(s,body,objects,fill=False):
                     if not value:continue
                     m=meta[int(f['page'])];_,w,align=s.field_background.text_geometry(f,m['width']);h=m['height']*f['h']/100;size=float(f.get('size',11))
                     if f.get('type') in ('text','prefilled'):
-                        items=s.rich_layout(value if f['type']=='prefilled' else f['template'],{} if f['type']=='prefilled' else values,w,size,f.get('color','#183c3c'),s.TOKEN,s.font_name(f),align)
-                        fits=sum(height for _,height in items)<=h
+                        flow=s.field_flow.layout(f,value if f['type']=='prefilled' else f['template'],{} if f['type']=='prefilled' else values,w,h,s.TOKEN,s.font_name(f),align)
+                        fits=flow['fits']
                     else:fits=len(value.splitlines())*size*1.5<=h and all(s.pdfmetrics.stringWidth(line,s.font_name(f),size)<=w for line in value.splitlines())
                     if not fits:error(i,title,'Pagina '+str(f['page']+1)+': tekst past niet in “'+f['key']+'”.')
                 except (ValueError,KeyError,TypeError) as e:error(i,title,e)
