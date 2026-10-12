@@ -42,6 +42,16 @@ class DocumentSettingsTests(unittest.TestCase):
         updated=refresh_blocks(body,[obj])
         self.assertEqual(updated['sections'][0]['selected']['todoMatch'],'Premier inn Wien')
         self.assertEqual(updated['sections'][1]['options'][0]['todoMatch'],'RITAD')
+    def test_shared_recognition_overrides_stale_copies_without_losing_values(self):
+        block={'id':'page','kind':'block','revision':2,'title':'Page','body':{'asset':'a','pages':1,'todoMatch':'fallback'}}
+        shared={'id':'shared','kind':'choice','body':{'slot':{'options':[{'block':'page','todoMatch':'RITAD; RITAX'}]}}}
+        option={'block':'page','todoMatch':'old','todoMatchOverride':True,'values':{'name':'Customer'}}
+        body={'sections':[{'choice':'manual','choiceSource':'shared','options':[option],'selected':option}]}
+        result=refresh_blocks(body,[block,shared])['sections'][0]
+        self.assertEqual(result['options'][0]['todoMatch'],'RITAD; RITAX')
+        self.assertEqual(result['selected']['todoMatch'],'RITAD; RITAX')
+        self.assertEqual(result['selected']['values'],{'name':'Customer'})
+
     def test_invalid_retriever_settings_cannot_be_saved(self):
         for extra in ({'numberX':91},{'numberY':float('nan')},{'pageNumbers':'true'},{'tocTitle':'a'*301}):
             with self.subTest(extra=extra),self.assertRaises(ValueError):

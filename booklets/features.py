@@ -47,6 +47,11 @@ def refresh_blocks(body,objects):
         return fresh
     for i,s in enumerate(b.get('sections',[])):
         if s.get('choice'):
+            source=next((o for o in objects if o['kind']=='choice' and o['id']==s.get('choiceSource')),None)
+            if source:
+                matches={o['block']:o.get('todoMatch','') for o in source['body']['slot'].get('options',[])}
+                for option in [*s.get('options',[]),*([s['selected']] if s.get('selected') else [])]:
+                    if option.get('block') in matches:option.update(todoMatch=matches[option['block']],todoMatchOverride=True)
             s['options']=[refresh(o) for o in s.get('options',[])]
             if s.get('selected'):s['selected']=refresh(s['selected'])
         else:b['sections'][i]=refresh(s)
