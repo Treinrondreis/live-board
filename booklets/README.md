@@ -54,6 +54,36 @@ De PDF wordt eerst als voorbeeld gemaakt; toevoegen aan het boekje en opslaan
 blijven aparte handelingen. De pagina is daarna opnieuw te bewerken via
 Treinscherm bewerken. Eerdere PDF-assets blijven onveranderd.
 
+## Opmaak, documentpagina’s en drukversies
+
+Bij een vaste PDF-bouwsteen kan de opmaak van de huidige pagina worden bewaard
+en toegepast op andere bouwstenen van hetzelfde formaat. De twee ingebouwde
+instellingen zijn Voorpagina (titel op fotoband) en Inhoudsopgave (Open Sans,
+zwart, 25 mm links/rechts/onder). Een opmaak bewaart velddefinities en invulcodes;
+geen achtergrond-PDF, bronkoppelingen of klantwaarden. Toepassen vervangt alleen
+de velden van de gekozen pagina, na bevestiging, met herstel van de vorige opmaak.
+
+Documenten wijzigen opent de documentenbak uitsluitend op verzoek. Bestaande
+documenthoofdstukken kunnen worden geordend en hun pagina’s vergroot/bekeken.
+Een geselecteerd deel van één document kan naar een nieuw hoofdstuk op een
+gekozen positie worden verplaatst. Beide PDF-delen worden eerst gemaakt; pas
+na succes en controle dat boeking/document/modal niet zijn gewijzigd wordt de
+samenstelling aangepast. Bronpagina’s, datumcontroles en bronmetadata blijven
+behouden. Gekoppelde Google/Sanity-bouwstenen en treinschermen worden niet gesplitst.
+
+Bij export zijn dubbele opgenomen documentpagina’s waarschuwingen, geen blokkade.
+De vergelijking gebruikt bron-PDF + paginanummer en SHA-256 van de PDF om ook
+identieke uploads te herkennen. Verschillende pagina’s van één PDF gelden niet
+als dubbel; niet gebruikte oorspronkelijke pagina’s tellen niet mee.
+
+Nieuwe drukversies krijgen een korte beschrijving van herkenbare wijzigingen.
+Gebruikers kunnen bij iedere export een afzonderlijke opmerking bewaren/bewerken.
+De PDF zelf blijft onveranderlijk. Eerdere exports kunnen naar een prullenbak en
+worden hersteld; de nieuwste actieve export is beschermd. Definitief verwijderen
+is een aparte, bevestigde actie en verwijdert PDF en exportvoorbeelden. Downloads
+en digitale proeven van exports in de prullenbak geven 404. Opruimen blijft mogelijk
+als de applicatie-opslagquota bereikt is.
+
 ## Routemaker
 
 Library → Routemaker. Search and explicitly select both locations, calculate the

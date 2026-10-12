@@ -69,6 +69,9 @@ def application(environ,start_response):
     match=re.fullmatch(r'/files/(asset|export)/([a-f0-9]{32})',path)
     if match and method in ('GET','HEAD'):
         kind,ident=match.groups()
+        if kind=='export':
+            with server.db() as c:
+                if server.export_history.deleted(c,ident):return response(404,{'error':'Deze drukversie staat in de prullenbak.'})
         filename=server.DATA/('pdfs' if kind=='asset' else 'exports')/(ident+'.pdf')
         if not filename.is_file():return response(404,{'error':'Niet gevonden.'})
         mode='attachment' if 'download=' in environ.get('QUERY_STRING','') else 'inline'
@@ -81,7 +84,7 @@ def application(environ,start_response):
     if not acquired:
         return response(429,{'error':'Er wordt al een boekje of pagina verwerkt. Probeer het zo nog eens.'},headers={'Retry-After':'3'})
     try:
-        if method=='POST':server.ensure_capacity(size*3+1024*1024)
+        if method=='POST' and path!='/api/export-status':server.ensure_capacity(size*3+1024*1024)
         if path.startswith('/api/migration/'):
             import migration
             result=migration.handle(path,environ,server)

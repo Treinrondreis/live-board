@@ -1,6 +1,7 @@
 """Collect all user-fixable field errors before rendering, without writing exports."""
 import io
 from features import document_condition,omitted_document_warnings
+import document_duplicates
 
 def check(s,body,objects,fill=False):
     b=s.refresh_blocks(body,objects);errors=[];missing=[]
@@ -38,7 +39,7 @@ def check(s,body,objects,fill=False):
                     if not fits:error(i,title,'Pagina '+str(f['page']+1)+': tekst past niet in “'+f['key']+'”.')
                 except (ValueError,KeyError,TypeError) as e:error(i,title,e)
         except (ValueError,KeyError,TypeError) as e:error(i,title,e)
-    result={'pages':0,'needed':0,'missing':missing,'canFill':False,'fillers':[],'warnings':omitted_document_warnings(b),'libraryStamp':s.library_stamp(objects),'errors':errors}
+    result={'pages':0,'needed':0,'missing':missing,'canFill':False,'fillers':[],'warnings':omitted_document_warnings(b)+document_duplicates.warnings(s,b),'libraryStamp':s.library_stamp(objects),'errors':errors}
     try:result.update(s.plan(b,objects))
     except ValueError as e:
         if not errors:error(None,'Boekje',e)

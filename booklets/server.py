@@ -5,6 +5,7 @@ import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
+import export_history,document_duplicates
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
 import base64, hashlib, hmac, io, json, os, re, secrets, socket, sqlite3, subprocess, threading, time, uuid
@@ -34,7 +35,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.8'
+APP_VERSION = '2026.10.12.9'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -67,6 +68,7 @@ with db() as c:
     CREATE TABLE IF NOT EXISTS bulk_history(id TEXT PRIMARY KEY, created TEXT, body TEXT, undone INTEGER);
     CREATE TABLE IF NOT EXISTS exports(id TEXT PRIMARY KEY, book_id TEXT, title TEXT, created TEXT, snapshot TEXT, report TEXT);
     ''')
+    export_history.initialize(c)
 def ident(): return uuid.uuid4().hex
 def now(): return time.strftime('%Y-%m-%d %H:%M')
 def pw(p,s): return hashlib.pbkdf2_hmac('sha256',p.encode(),bytes.fromhex(s),300000).hex()
@@ -164,7 +166,18 @@ def validate_body(kind,b,prepared=False):
             if key in item and type(item[key]) is not bool:raise ValueError('Kies wel of geen vetgedrukte titel in de inhoudsopgave.')
         if not isinstance(item.get('todoMatch',''),str) or len(item.get('todoMatch',''))>300:raise ValueError('ToDo-herkenning mag maximaal 300 tekens bevatten.')
         if not isinstance(item.get('tocTitle',''),str) or len(item.get('tocTitle',''))>300:raise ValueError('De titel voor de inhoudsopgave mag maximaal 300 tekens bevatten.')
-    if kind=='choice':
+    if kind=='layout':
+        if b.get('format') not in SIZES:raise ValueError('Kies A4 of A5 voor de opmaak.')
+        fields=b.get('fields')
+        if not isinstance(fields,list) or not 1<=len(fields)<=100:raise ValueError('Bewaar 1 tot 100 tekstvelden in de opmaak.')
+        w,h=SIZES[b['format']]
+        fields_validate(fields,[{'width':w,'height':h,'rotation':0}])
+        if any(f.get('page')!=0 for f in fields):raise ValueError('Opmaak geldt voor één pagina.')
+        if not isinstance(b.get('pageType',''),str) or len(b.get('pageType',''))>160:raise ValueError('Ongeldig paginatype.')
+        # Layout presets contain only field definitions, never customer values or PDFs.
+        for key in list(b):
+            if key not in ('format','fields','pageType','archived'):b.pop(key)
+    elif kind=='choice':
         slot=b.get('slot',{})
         if slot.get('choice') not in ('manual','route'):raise ValueError('Kies het soort keuzepagina.')
         options=slot.get('options',[])
@@ -385,7 +398,7 @@ def make_export(book,options=None):
         if key not in digital_chapters:digital_chapters[key]={'title':section.get('tocTitle') or section['title'],'hidden':bool(section.get('tocHidden')),'pageNumbers':[]}
         digital_chapters[key]['pageNumbers'].extend(range(starts[n]+1,starts[n]+section['pages']+1))
     report['digitalChapters']=[{**chapter,'page':chapter['pageNumbers'][0],'end':chapter['pageNumbers'][-1]} for chapter in digital_chapters.values() if not chapter['hidden']]
-    report['warnings']=list(dict.fromkeys(report['warnings']))
+    report['warnings']=list(dict.fromkeys(report['warnings']+document_duplicates.warnings(SimpleNamespace(**globals()),b)))
     report['warnings'].append('Geen PDF/X-certificering, kleurconversie of automatische controle van fotoresolutie/afloop. Stem dit af op het gekozen drukproduct en controleer een proefdruk.')
     report['pages']=len(writer.pages)
     report['fillersAdded']=sum(x['pages'] for x in preparation['fillers']) if options.get('fill') else 0
@@ -402,7 +415,12 @@ def make_export(book,options=None):
         raise
     result=PdfReader(target)
     if len(result.pages)!=report['pages'] or result.get_fields(): raise ValueError('PDF-controle mislukt.')
-    with db() as c:c.execute('INSERT INTO exports VALUES(?,?,?,?,?,?)',(i,book['id'],book['title'],now(),json.dumps(book,ensure_ascii=False),json.dumps(report,ensure_ascii=False)))
+    snapshot={**book,'body':b}
+    with db() as c:
+        previous=c.execute('SELECT snapshot FROM exports WHERE book_id=? ORDER BY rowid DESC LIMIT 1',(book['id'],)).fetchone()
+        change=export_history.summary(json.loads(previous['snapshot']) if previous else None,snapshot)
+        c.execute('INSERT INTO exports VALUES(?,?,?,?,?,?)',(i,book['id'],book['title'],now(),json.dumps(snapshot,ensure_ascii=False),json.dumps(report,ensure_ascii=False)))
+        c.execute('INSERT INTO export_details(id,note,summary) VALUES(?,?,?)',(i,options.get('note','')[:1000],change))
     return {'id':i,'report':report,'url':f'/files/export/{i}'}
 
 class Handler(BaseHTTPRequestHandler):
@@ -445,7 +463,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/state':
             with db() as c:
                 rows=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute("SELECT objects.*, COALESCE((SELECT rowid FROM assets WHERE assets.id=json_extract(objects.body,'$.asset')),0) AS uploadOrder FROM objects ORDER BY title")]
-                exports=[{k:r[k] for k in ('id','book_id','title','created','report')} for r in c.execute('SELECT * FROM exports ORDER BY rowid DESC')]
+                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at FROM exports e LEFT JOIN export_details d ON d.id=e.id ORDER BY e.rowid DESC")]
             for o in rows:
                 if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
             for r in exports:r['report']=json.loads(r['report'])
@@ -454,7 +472,8 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             kind,i,page=m.groups()
             with db() as c:row=c.execute('SELECT * FROM exports WHERE id=?',(i,)).fetchone()
-            if not row:return self.send(404,{'error':'Deze drukversie bestaat niet.'})
+            with db() as c:removed=export_history.deleted(c,i)
+            if not row or removed:return self.send(404,{'error':'Deze drukversie bestaat niet of staat in de prullenbak.'})
             report=json.loads(row['report'])
             if kind=='digital':return self.send(200,(ROOT/'digital.html').read_bytes(),'text/html; charset=utf-8')
             if kind=='api/digital':
@@ -475,6 +494,8 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             kind,i,page=m.groups()
             if kind=='export':
+                with db() as c:
+                    if export_history.deleted(c,i):return self.send(404,{'error':'Deze drukversie staat in de prullenbak.'})
                 p=DATA/'exports'/f'{i}.pdf'
                 if not p.exists():return self.send(404,{'error':'Niet gevonden.'})
                 return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':f'{"attachment" if parse_qs(urlparse(self.path).query).get("download") else "inline"}; filename="boekje-{i[:8]}.pdf"'})
@@ -573,6 +594,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200,{'id':i,'pages':len(reader.pages),'meta':meta,'format':pdf_format(meta)})
             if path=='/api/check-layout':
                 return self.send(200,check_layout(b['body'],b.get('values',{})))
+            if path=='/api/export-status':
+                return self.send(200,export_history.action(SimpleNamespace(**globals()),b))
+            if path=='/api/document-duplicates':
+                return self.send(200,{'warnings':document_duplicates.warnings(SimpleNamespace(**globals()),b['body'])})
             if path=='/api/template-status':
                 action=b.get('action')
                 if action not in ('archive','unarchive','trash','restore'):raise ValueError('Ongeldige actie.')
@@ -625,6 +650,7 @@ class Handler(BaseHTTPRequestHandler):
                     if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
                 return self.send(200,preflight.check(SimpleNamespace(**globals()),b['body'],objects,bool(b.get('fill'))))
             if path=='/api/export':
+                if not isinstance(b.get('note',''),str) or len(b.get('note',''))>1000:raise ValueError('Gebruik maximaal 1000 tekens voor de opmerking.')
                 book=obj(b['id'])
                 if book['body'].get('deletedAt'):raise ValueError('Deze boeking staat in de prullenbak. Herstel hem eerst.')
                 if book['kind']!='book':raise ValueError('Alleen boekingen kunnen worden geëxporteerd.')
