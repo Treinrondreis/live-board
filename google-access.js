@@ -18,8 +18,9 @@ async function overview(){const o=await api('overview');for(const id of ['accoun
  const actions={'device-requested':'Browser aangevraagd','admin-linked':'Beheerder gekoppeld','device-approved':'Browser goedgekeurd','device-revoked':'Browser ingetrokken','account-blocked':'Account geblokkeerd','account-enabled':'Account toegestaan','session-revoked':'Sessie afgemeld','permissions-changed':'Onderdeelrechten gewijzigd'};
  for(const a of o.audit)row('audit',date(a.at)+' · '+(actions[a.action]||a.action)+' · '+a.actor+' · '+a.detail);
 }
-async function start(){state=await api('status');for(const id of ['login','pending','ready','link','admin'])$(id).hidden=true;
+async function start(){state=await api('status');for(const id of ['login','pending','ready','link','admin','country-blocked'])$(id).hidden=true;
  $('logout').hidden=!state.authenticated&&!state.legacyOwner;
+ if(state.countryAllowed===false){$('country-blocked').hidden=false;$('country-text').textContent=state.country?'Je huidige land ('+state.country+') staat niet op de lijst met toegestane landen.':'Het land van je verbinding kon niet worden vastgesteld.';return;}
  if(!state.configured)$('message').textContent='Google-login wordt nog ingericht. De bestaande beheerlogin blijft beschikbaar.';
  if(state.authenticated){$('ready').hidden=false;$('identity').textContent='Ingelogd als '+state.identity;}
  else if(state.device){$('pending').hidden=false;$('pending-title').textContent=state.device.status==='revoked'?'Toegang ingetrokken':state.device.status==='approved'?'Browser goedgekeurd':'Wachten op goedkeuring';$('pending-text').textContent=state.device.email+' · '+state.device.label+'. '+(state.device.status==='revoked'?'Een beheerder moet deze browser opnieuw goedkeuren.':state.device.status==='approved'?'Meld opnieuw aan via Google als je eerdere bevestiging is verlopen.':'Laat een beheerder deze aanvraag goedkeuren.');$('continue').hidden=state.device.status==='revoked';}

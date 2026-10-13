@@ -12,7 +12,9 @@ export const INITIAL_ACCOUNTS=[
 export function cookieValue(req,name){return String(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith(name+'='))?.slice(name.length+1)||'';}
 export function accessState(s){return s.googleAccess||= {accounts:Object.fromEntries(INITIAL_ACCOUNTS.map(a=>[a.email,{...a,active:true}])),devices:{},sessions:{},pending:{},audit:[]};}
 export function audit(g,action,actor,detail,now){g.audit.push({at:now,action,actor,detail});g.audit=g.audit.slice(-500);}
-export function googleSessionFor(req,s,now=Date.now()){
+export function accessCountryAllowed(s,country,now=Date.now()){return !!country&&!!s?.countries?.some(c=>c.code===country&&(!c.until||c.until>now));}
+export function googleSessionFor(req,s,country,now=Date.now()){
+ if(!accessCountryAllowed(s,country,now))return null;
  const g=s?.googleAccess,v=g?.sessions[hash(cookieValue(req,GOOGLE_SESSION))];
  if(!v||v.expires<=now)return null;
  const a=g.accounts[v.email],d=g.devices[v.device];

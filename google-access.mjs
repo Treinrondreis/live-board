@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {readAdminSecurity,writeAdminSecurity} from './board-cache.mjs';
-import {sessionFor,countryFor,clientIP,consumeTotp,seal,unseal,locationFor} from './admin-security.mjs';
+import {sessionFor,countryFor,clientIP,consumeTotp,seal,unseal,locationFor,allowed} from './admin-security.mjs';
 import {createGoogleLogin,googleLoginConfig} from './google-login.mjs';
 import {hash,token,cookieValue,accessState,audit,googleSessionFor,GOOGLE_SESSION,GOOGLE_DEVICE,revokeDevice,blockAccount,APP_SCOPES} from './google-access-state.mjs';
 const DAY=86400000,STATE_COOKIE='tr_google_state',SESSION_DAYS=30;
@@ -24,17 +24,18 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
    }
    let record=await read(),s=record.value,time=now();if(!s?.user)return json(409,{error:'Stel eerst de bestaande beheerder in.'});
    let g=accessState(s);clean(g,time);
-   const current=googleSessionFor(req,s,time),owner=current?null:legacyOwner(req,s,time),isAdmin=current?current.role==='admin':!!owner;
+   const country=countryFor(req),countryAllowed=allowed(s,country,time),current=googleSessionFor(req,s,country,time),owner=current?null:legacyOwner(req,s,time),isAdmin=current?current.role==='admin':!!owner;
    const action=path.slice('/api/seinhuis-access/'.length);
    if(req.method==='GET'&&action==='status'){
     const device=g.devices[hash(cookieValue(req,GOOGLE_DEVICE))];
-    return json(200,{configured:login.configured(),authenticated:!!current,isAdmin,legacyOwner:!!owner,identity:current?.email,device:device?{email:device.email,status:device.status,label:device.label}:null,sessionDays:SESSION_DAYS});
+    return json(200,{configured:login.configured(),authenticated:!!current,isAdmin,legacyOwner:!!owner,identity:current?.email,device:device?{email:device.email,status:device.status,label:device.label}:null,sessionDays:SESSION_DAYS,country,countryAllowed});
    }
    if(req.method==='GET'&&action==='overview'){
     if(!isAdmin)fail('Alleen beheerders kunnen toegang beheren.',403);
     return json(200,{appScopes:APP_SCOPES,accounts:Object.values(g.accounts).map(a=>({email:a.email,role:a.role,apps:a.apps,active:a.active,linked:!!a.sub})),devices:Object.entries(g.devices).map(([id,d])=>({id,...d})),sessions:Object.entries(g.sessions).map(([id,v])=>({id,email:v.email,device:v.device,created:v.created,expires:v.expires,lastSeen:v.lastSeen})),audit:g.audit.slice(-50).reverse()});
    }
    if(path==='/seinhuis/google/callback'){
+    if(!countryAllowed)fail('Dit land is niet toegestaan of kon niet worden vastgesteld. De landencontrole geldt ook voor Google-login.',403);
     if(req.method!=='GET'||!login.configured())fail('Google-login is niet beschikbaar.',503);
     const state=url.searchParams.get('state')||'',pending=g.pending[hash(state)];
     if(!state||!pending||pending.expires<=time||pending.browser!==hash(cookieValue(req,STATE_COOKIE)))fail('Deze login is verlopen. Begin opnieuw.');
@@ -43,6 +44,7 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
     const identity=await login.finish(url.searchParams.get('code'),{nonce:pending.nonce,verifier:unseal(pending.verifier)});
     // Re-read after Google: never overwrite a concurrent revocation or block.
     record=await read();s=record.value;g=accessState(s);time=now();
+    if(!allowed(s,countryFor(req),time))fail('Dit land is niet meer toegestaan. Er is geen Google-sessie geopend.',403);
     const account=g.accounts[identity.email];
     if(!account?.active)fail('Dit Google-account heeft geen toegang tot Seinhuis.',403);
     if(account.sub&&account.sub!==identity.sub)fail('Dit e-mailadres hoort bij een ander gekoppeld Google-account.',403);
@@ -70,6 +72,7 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
    if(!String(req.headers['content-type']||'').startsWith('application/json'))fail('Gebruik JSON.',415);
    const input=await body(req);
    if(['start','link'].includes(action)){
+    if(!countryAllowed)fail('Dit land is niet toegestaan of kon niet worden vastgesteld. Vraag een beheerder het land toe te staan.',403);
     if(!login.configured())fail('De Google-login moet nog worden ingesteld.',503);
     if(action==='link'){
      if(!owner||!consumeTotp(s.user,input.code,time))fail('Log in met het bestaande beheeraccount en bevestig met een verse Authenticator-code.',403);
@@ -84,6 +87,7 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
     return json(200,{url:login.start({state,nonce,verifier})});
    }
    if(action==='continue'){
+    if(!countryAllowed)fail('Dit land is niet toegestaan of kon niet worden vastgesteld.',403);
     const id=hash(cookieValue(req,GOOGLE_DEVICE)),d=g.devices[id],a=d&&g.accounts[d.email];
     if(!d||d.status!=='approved'||!a?.active||a.sub!==d.sub)fail('Deze browser is nog niet goedgekeurd.',403);
     if(!d.verifiedAt||d.verifiedAt<time-10*60000)fail('Je browser is goedgekeurd. Meld je nog één keer aan via Google.',401);

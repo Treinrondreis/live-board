@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import geoip from 'geoip-lite';
 import QRCode from 'qrcode';
 import {readAdminSecurity,writeAdminSecurity} from './board-cache.mjs';
-import {googleSessionFor,googleHasScope,cookieValue,hash as accessHash,GOOGLE_SESSION} from './google-access-state.mjs';
+import {googleSessionFor,googleHasScope,cookieValue,hash as accessHash,GOOGLE_SESSION,accessCountryAllowed} from './google-access-state.mjs';
 
 const scrypt=promisify(scryptCallback),SESSION='tr_admin_session',TRUST='tr_admin_device',DAY=86400000;
 const hash=s=>createHash('sha256').update(String(s)).digest('hex');
@@ -32,21 +32,21 @@ function fail(message,status=400){const e=Error(message);e.status=status;throw e
 async function body(req){let n=0,parts=[];for await(const b of req){n+=b.length;if(n>8192)fail('Verzoek te groot.',413);parts.push(b);}try{return JSON.parse(Buffer.concat(parts).toString()||'{}');}catch{fail('Ongeldig verzoek.');}}
 const fresh=()=>({user:null,pending:{},sessions:{},devices:{},attempts:{},countries:[{code:'NL',until:null}]});
 function prune(s,now){for(const group of ['pending','sessions','devices'])for(const [id,v] of Object.entries(s[group]))if(v.expires<=now)delete s[group][id];for(const [id,v] of Object.entries(s.attempts))if(v.start<now-15*60000)delete s.attempts[id];}
-export function allowed(s,country,now=Date.now()){return !!country&&s.countries.some(c=>c.code===country&&(!c.until||c.until>now));}
+export function allowed(s,country,now=Date.now()){return accessCountryAllowed(s,country,now);}
 export function sessionFor(req,s,country,now=Date.now()){const v=s.sessions[hash(cookies(req)[SESSION]||'')];if(!v||v.expires<=now)return null;if(v.username&&v.username!==s.user?.name&&!s.members?.[v.username]?.active)return null;if(v.recovery)return v;if(v.device){const d=s.devices[v.device];if(hash(cookies(req)[TRUST]||'')!==v.device||!d||d.expires<=now||(d.username||s.user.name)!==(v.username||s.user.name))return null;}return (v.device||v.country===country)&&allowed(s,country,now)?v:null;}
 export async function securityStatus(){return !!(await readAdminSecurity()).value?.user;}
 export async function adminAuthenticated(req,scope='owner'){
  const record=await readAdminSecurity(),s=record.value;if(!s?.user)return false;
- const google=googleSessionFor(req,s);
+ const google=googleSessionFor(req,s,countryFor(req));
  if(google){
   if(!googleHasScope(google,scope))return false;
   const now=Date.now(),v=s.googleAccess.sessions[accessHash(cookieValue(req,GOOGLE_SESSION))],d=s.googleAccess.devices[google.device];
-  if(v.lastSeen<now-60000){v.lastSeen=now;d.lastSeen=now;d.location=locationFor(req);try{await writeAdminSecurity(s,record.revision);}catch{const fresh=(await readAdminSecurity()).value;return googleHasScope(googleSessionFor(req,fresh),scope);}}
+  if(v.lastSeen<now-60000){v.lastSeen=now;d.lastSeen=now;d.location=locationFor(req);try{await writeAdminSecurity(s,record.revision);}catch{const fresh=(await readAdminSecurity()).value;return googleHasScope(googleSessionFor(req,fresh,countryFor(req)),scope);}}
   return true;
  }
  const session=sessionFor(req,s,countryFor(req));return !!session&&!session.recovery&&(!session.username||session.username===s.user.name||scope==='treinhuis'&&s.members?.[session.username]?.scope==='treinhuis');
 }
-export async function authenticatedActor(req){const s=(await readAdminSecurity()).value;return googleSessionFor(req,s)?.email||sessionFor(req,s,countryFor(req))?.username||s?.user?.name||'Seinhuis-beheerder';}
+export async function authenticatedActor(req){const s=(await readAdminSecurity()).value;return googleSessionFor(req,s,countryFor(req))?.email||sessionFor(req,s,countryFor(req))?.username||s?.user?.name||'Seinhuis-beheerder';}
 function consumeRecovery(user,code){const h=hash(String(code||'').replace(/[\s-]/g,'').toUpperCase());const i=user.recovery.findIndex(x=>safe(x,h));if(i<0)return false;user.recovery.splice(i,1);return true;}
 function codes(){return Array.from({length:10},()=>randomBytes(10).toString('hex').toUpperCase());}
 export function newSession(s,res,now,recovery=false,country=null,username=null,device=null){const t=token(),seconds=recovery?900:device?Math.max(0,Math.min(30*86400,Math.floor((s.devices[device].expires-now)/1000))):43200;s.sessions[hash(t)]={expires:now+seconds*1000,recovery,created:now,country,username,...(device?{device}:{})};cookie(res,SESSION,t,seconds);}
