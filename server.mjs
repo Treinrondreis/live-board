@@ -3,6 +3,7 @@ import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
 import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
 import {handleAdminHub} from './admin-hub.mjs';
+import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
 import {handleExpedia} from './expedia.mjs';
 import {startFlora} from './flora-schedule.mjs';
@@ -1095,6 +1096,7 @@ const server=http.createServer(async(req,res)=>{
     if(await handleAppCms(req,res,url))return;
     if(await handleKKTest(req,res,url))return;
     if(await handlePasswordReset(req,res,url))return;
+    if(await handleGoogleAccess(req,res,url))return;
     if(await handleTreinhuisAccess(req,res,url))return;
     if(await handleKilometerkampioen(req,res,url))return;
     if(await handleAdminHub(req,res,url))return;

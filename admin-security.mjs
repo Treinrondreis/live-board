@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import geoip from 'geoip-lite';
 import QRCode from 'qrcode';
 import {readAdminSecurity,writeAdminSecurity} from './board-cache.mjs';
+import {googleSessionFor,googleHasScope,cookieValue,hash as accessHash,GOOGLE_SESSION} from './google-access-state.mjs';
 
 const scrypt=promisify(scryptCallback),SESSION='tr_admin_session',TRUST='tr_admin_device',DAY=86400000;
 const hash=s=>createHash('sha256').update(String(s)).digest('hex');
@@ -12,7 +13,7 @@ const safe=(a,b)=>{const x=Buffer.from(String(a)),y=Buffer.from(String(b));retur
 const token=()=>randomBytes(32).toString('base64url');
 const key=()=>createHash('sha256').update('treinreiziger-admin-v1\0'+(process.env.ADMIN_ENCRYPTION_KEY||process.env.BOARD_ADMIN_PASSWORD||'')).digest();
 export function seal(value){const iv=randomBytes(12),c=createCipheriv('aes-256-gcm',key(),iv);return Buffer.concat([iv,c.update(value,'utf8'),c.final(),c.getAuthTag()]).toString('base64url');}
-function unseal(value){const b=Buffer.from(value,'base64url'),d=createDecipheriv('aes-256-gcm',key(),b.subarray(0,12));d.setAuthTag(b.subarray(-16));return Buffer.concat([d.update(b.subarray(12,-16)),d.final()]).toString();}
+export function unseal(value){const b=Buffer.from(value,'base64url'),d=createDecipheriv('aes-256-gcm',key(),b.subarray(0,12));d.setAuthTag(b.subarray(-16));return Buffer.concat([d.update(b.subarray(12,-16)),d.final()]).toString();}
 const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 export function base32(bytes){let bits=0,v=0,out='';for(const b of bytes){v=(v<<8)|b;bits+=8;while(bits>=5){bits-=5;out+=alphabet[(v>>>bits)&31];}}if(bits)out+=alphabet[(v<<(5-bits))&31];return out;}
 function decode32(s){let bits=0,v=0,out=[];for(const c of s){v=(v<<5)|alphabet.indexOf(c);bits+=5;if(bits>=8){bits-=8;out.push((v>>>bits)&255);}}return Buffer.from(out);}
@@ -22,6 +23,7 @@ export async function passwordHash(p){const salt=randomBytes(16).toString('hex')
 async function verifyPassword(p,encoded){const [salt,digest]=encoded.split(':');return safe((await scrypt(String(p).slice(0,512),salt,64,{N:32768,r:8,p:1,maxmem:64*1024*1024})).toString('hex'),digest);}
 export function clientIP(req){const raw=process.env.RAILWAY_ENVIRONMENT_ID?req.headers['x-real-ip']:req.socket.remoteAddress;const ip=String(raw||'').replace(/^::ffff:/,'');return isIP(ip)?ip:null;}
 export function countryFor(req){const ip=clientIP(req);return ip?geoip.lookup(ip)?.country||null:null;}
+export function locationFor(req){const ip=clientIP(req),geo=ip?geoip.lookup(ip):null;return {ip,country:geo?.country||null,city:geo?.city||null};}
 function cookies(req){return Object.fromEntries(String(req.headers.cookie||'').split(';').map(s=>s.trim().split('=')));}
 function cookie(res,name,value,seconds){const existing=res.getHeader('Set-Cookie')||[];res.setHeader('Set-Cookie',[...(Array.isArray(existing)?existing:[existing]),`${name}=${value}; Path=/; HttpOnly; Secure; SameSite=${name===SESSION?'Lax':'Strict'}; Max-Age=${seconds}`]);}
 function headers(res){res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');}
@@ -33,7 +35,18 @@ function prune(s,now){for(const group of ['pending','sessions','devices'])for(co
 export function allowed(s,country,now=Date.now()){return !!country&&s.countries.some(c=>c.code===country&&(!c.until||c.until>now));}
 export function sessionFor(req,s,country,now=Date.now()){const v=s.sessions[hash(cookies(req)[SESSION]||'')];if(!v||v.expires<=now)return null;if(v.username&&v.username!==s.user?.name&&!s.members?.[v.username]?.active)return null;if(v.recovery)return v;if(v.device){const d=s.devices[v.device];if(hash(cookies(req)[TRUST]||'')!==v.device||!d||d.expires<=now||(d.username||s.user.name)!==(v.username||s.user.name))return null;}return (v.device||v.country===country)&&allowed(s,country,now)?v:null;}
 export async function securityStatus(){return !!(await readAdminSecurity()).value?.user;}
-export async function adminAuthenticated(req,scope='owner'){const s=(await readAdminSecurity()).value;if(!s?.user)return false;const session=sessionFor(req,s,countryFor(req));return !!session&&!session.recovery&&(!session.username||session.username===s.user.name||scope==='treinhuis'&&s.members?.[session.username]?.scope==='treinhuis');}
+export async function adminAuthenticated(req,scope='owner'){
+ const record=await readAdminSecurity(),s=record.value;if(!s?.user)return false;
+ const google=googleSessionFor(req,s);
+ if(google){
+  if(!googleHasScope(google,scope))return false;
+  const now=Date.now(),v=s.googleAccess.sessions[accessHash(cookieValue(req,GOOGLE_SESSION))],d=s.googleAccess.devices[google.device];
+  if(v.lastSeen<now-60000){v.lastSeen=now;d.lastSeen=now;d.location=locationFor(req);try{await writeAdminSecurity(s,record.revision);}catch{const fresh=(await readAdminSecurity()).value;return googleHasScope(googleSessionFor(req,fresh),scope);}}
+  return true;
+ }
+ const session=sessionFor(req,s,countryFor(req));return !!session&&!session.recovery&&(!session.username||session.username===s.user.name||scope==='treinhuis'&&s.members?.[session.username]?.scope==='treinhuis');
+}
+export async function authenticatedActor(req){const s=(await readAdminSecurity()).value;return googleSessionFor(req,s)?.email||sessionFor(req,s,countryFor(req))?.username||s?.user?.name||'Seinhuis-beheerder';}
 function consumeRecovery(user,code){const h=hash(String(code||'').replace(/[\s-]/g,'').toUpperCase());const i=user.recovery.findIndex(x=>safe(x,h));if(i<0)return false;user.recovery.splice(i,1);return true;}
 function codes(){return Array.from({length:10},()=>randomBytes(10).toString('hex').toUpperCase());}
 export function newSession(s,res,now,recovery=false,country=null,username=null,device=null){const t=token(),seconds=recovery?900:device?Math.max(0,Math.min(30*86400,Math.floor((s.devices[device].expires-now)/1000))):43200;s.sessions[hash(t)]={expires:now+seconds*1000,recovery,created:now,country,username,...(device?{device}:{})};cookie(res,SESSION,t,seconds);}
@@ -108,8 +121,8 @@ export async function handleAdminSecurity(req,res,url){
    }
    newSession(s,res,now,recovery,country,user.name,rememberedDevice);await commit({ok:true,recovery});return true;
   }
+  if(action==='logout'){delete s.sessions[hash(cookies(req)[SESSION]||'')];if(s.googleAccess){const g=s.googleAccess,v=g.sessions[accessHash(cookieValue(req,GOOGLE_SESSION))];if(v&&g.devices[v.device])g.devices[v.device].verifiedAt=0;delete g.sessions[accessHash(cookieValue(req,GOOGLE_SESSION))];}cookie(res,SESSION,'',0);cookie(res,GOOGLE_SESSION,'',0);await commit({ok:true});return true;}
   if(!session)fail('Log eerst in.',401);
-  if(action==='logout'){delete s.sessions[hash(cookies(req)[SESSION]||'')];cookie(res,SESSION,'',0);await commit({ok:true});return true;}
   if(session.username&&session.username!==s.user.name)fail('Alleen toegang tot Treinhuis.',403);
   if(!['countries','revoke-device','password','recovery-codes'].includes(action))fail('Niet gevonden.',404);
   if(!(session.recovery?consumeRecovery(s.user,input.recoveryCode):consumeTotp(s.user,input.code,now)))fail(session.recovery?'Gebruik een tweede, ongebruikte herstelcode.':'Vul een nieuwe authenticatorcode in.',401);

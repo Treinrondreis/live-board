@@ -1,0 +1,74 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {Readable} from 'node:stream';
+import {DatabaseSync} from 'node:sqlite';
+import {initBoardCache,readAdminSecurity,writeAdminSecurity} from './board-cache.mjs';
+import {createGoogleAccess} from './google-access.mjs';
+import {adminAuthenticated,seal,totp} from './admin-security.mjs';
+import {hash,googleSessionFor,accessState} from './google-access-state.mjs';
+const origin='https://example.test',secret='JBSWY3DPEHPK3PXP';
+process.env.BOARD_ADMIN_PASSWORD='test-google-security-key';process.env.RAILWAY_ENVIRONMENT_ID='test';
+test('Google onboarding, least privilege, lasting approvals and immediate revocation',async()=>{
+ const db=new DatabaseSync(':memory:');await initBoardCache({sqlite:db});let now=Date.now();const original=Date.now;Date.now=()=>now;
+ try{
+  const legacy='legacy-owner-token',admin={},user={};admin.tr_admin_session=legacy;
+  await writeAdminSecurity({user:{name:'owner',secret:seal(secret),lastStep:-1,recovery:[]},pending:{},sessions:{[hash(legacy)]:{created:now,expires:now+12*3600000,country:'NL',username:'owner'}},devices:{},attempts:{},countries:[{code:'NL',until:null}]},0);
+  let identity={email:'hildebrand@treinreiziger.nl',sub:'111111'},duringFinish=null;
+  const handler=createGoogleAccess({configuration:()=>({origin,id:'id',secret:'secret'}),now:()=>now,login:{configured:()=>true,start:p=>origin+'/fake-google?state='+p.state,finish:async()=>{if(duringFinish)await duringFinish();return identity;}}});
+  const request=(jar,method)=>{const req=Readable.from([]);req.method=method;req.headers={host:'example.test',origin,'content-type':'application/json','x-real-ip':'145.100.100.100','user-agent':'Test browser',cookie:Object.entries(jar).map(([k,v])=>k+'='+v).join('; ')};req.socket={remoteAddress:'127.0.0.1'};return req;};
+  async function call(jar,path,data,overrides={}){const req=request(jar,data?'POST':'GET');if(data){const stream=Readable.from([Buffer.from(JSON.stringify(data))]);req[Symbol.asyncIterator]=stream[Symbol.asyncIterator].bind(stream);}Object.assign(req.headers,overrides);let status,text,headers={};const res={setHeader:(k,v)=>headers[k]=v,getHeader:k=>headers[k],writeHead:(s,h)=>{status=s;Object.assign(headers,h)},end:t=>text=t};const handled=await handler(req,res,new URL(path.startsWith('/')?path:'/api/seinhuis-access/'+path,origin));assert.equal(handled,true);for(const c of headers['Set-Cookie']||[]){const [k,v]=c.split(';')[0].split('=');jar[k]=v;}return {status,data:text?JSON.parse(text):null,headers};}
+  async function login(jar,action='start'){const r=await call(jar,action,{code:totp(secret,now),label:'Laptop'});assert.equal(r.status,200);const state=new URL(r.data.url).searchParams.get('state');return call(jar,'/seinhuis/google/callback?state='+state+'&code=test');}
+  assert.equal((await call({},'start',{}, {origin:'https://evil.test'})).status,403,'CSRF blocked');
+  assert.equal((await call({},'link',{code:totp(secret,now)})).status,403,'first admin cannot self-approve without legacy owner');
+  const unapprovedAdmin={};assert.equal((await login(unapprovedAdmin)).status,303);assert.equal((await call(unapprovedAdmin,'status')).data.device.status,'pending');assert.equal((await call(unapprovedAdmin,'overview')).status,403,'allowlisted admin still needs browser approval');
+  assert.equal((await login(admin,'link')).status,303);assert.equal(admin.tr_admin_session,'','legacy cookie cleared on Google switch');
+  assert.equal(await adminAuthenticated(request(admin,'GET')),true);
+  assert.equal((await call(admin,'overview')).data.accounts.length,4);
+  identity={email:'tickets@treinrondreis.nl',sub:'222222'};
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'pending');
+  assert.equal(await adminAuthenticated(request(user,'GET'),'booklets'),false);
+  assert.equal((await call(user,'overview')).status,403);
+  let id=hash(user.tr_google_device);
+  assert.equal((await call(admin,'approve',{id})).status,200);
+  assert.equal((await call(user,'continue',{})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'booklets'),true);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true);
+  now+=61000;assert.deepEqual(await Promise.all([adminAuthenticated(request(user,'GET'),'flora'),adminAuthenticated(request(user,'GET'),'flora')]),[true,true],'parallel activity writes do not reject valid requests');
+  assert.equal(await adminAuthenticated(request(user,'GET')),false);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'treinhuis'),false);
+  assert.equal((await call(user,'approve',{id})).status,403);
+  const sessions=(await call(admin,'overview')).data.sessions,userSession=sessions.find(v=>v.email==='tickets@treinrondreis.nl');assert.equal((await call(admin,'revoke-session',{id:userSession.id})).status,200);assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);assert.equal((await call(user,'continue',{})).status,401,'session revocation cannot be undone by pending approval continuation');await login(user);
+  assert.equal(await adminAuthenticated(request({tr_google_session:user.tr_google_session},'GET'),'booklets'),false,'session needs device cookie');
+  assert.equal((await call(admin,'revoke',{id})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'booklets'),false,'existing session denied immediately');
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'revoked','Google login cannot undo revocation');
+  assert.equal((await call(user,'continue',{})).status,403);
+  assert.equal((await call(admin,'approve',{id})).status,200);assert.equal((await login(user)).status,303);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true);
+  assert.equal((await call(admin,'block',{email:identity.email})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);
+  assert.equal((await login(user)).status,403,'blocked account stays blocked');
+  assert.equal((await call(admin,'enable',{email:identity.email})).status,200);
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'revoked');
+  assert.equal((await call(admin,'approve',{id})).status,200);await login(user);
+  identity={email:'tickets@treinrondreis.nl',sub:'333333'};assert.equal((await login(user)).status,403,'changed Google subject cannot take over pinned account');
+  identity={email:'tickets@treinrondreis.nl',sub:'222222'};
+  now+=31*86400000;assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'approved','approval survives session expiry');
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true);
+  identity={email:'hildebrand@treinreiziger.nl',sub:'111111'};await login(admin);now+=11*60000;
+  assert.equal((await call(admin,'revoke',{id})).status,401,'sensitive actions require recent Google confirmation');
+  await login(admin);assert.equal((await call(admin,'revoke',{id})).status,200);
+  // A revocation during Google's network response must not be overwritten.
+  duringFinish=async()=>{const r=await readAdminSecurity();r.value.googleAccess.accounts['tickets@treinrondreis.nl'].active=false;await writeAdminSecurity(r.value,r.revision);};
+  identity={email:'tickets@treinrondreis.nl',sub:'222222'};assert.equal((await login(user)).status,403);duringFinish=null;
+  // Browser-bound OAuth state is required and single use.
+  const start=await call(admin,'start',{}),state=new URL(start.data.url).searchParams.get('state');
+  assert.equal((await call({},'/seinhuis/google/callback?state='+state+'&code=test')).status,400);
+  identity={email:'hildebrand@treinreiziger.nl',sub:'111111'};
+  assert.equal((await call(admin,'/seinhuis/google/callback?state='+state+'&code=test')).status,303);
+  assert.equal((await call(admin,'/seinhuis/google/callback?state='+state+'&code=test')).status,400);
+  const persisted=(await readAdminSecurity()).value;assert.ok(!JSON.stringify(persisted).includes(admin.tr_google_session));assert.ok(!JSON.stringify(persisted).includes(user.tr_google_device));
+  assert.equal(googleSessionFor(request(admin,'GET'),persisted).role,'admin');assert.equal(accessState(persisted).accounts['tickets@treinrondreis.nl'].active,false);
+ }finally{Date.now=original;db.close();}
+});

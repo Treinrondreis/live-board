@@ -7,7 +7,7 @@ import {adminAuthenticated} from './admin-security.mjs';
 
 export const BOOKLETS_PREFIX='/seinhuis/boekjesmaker';
 const MAX_UPLOAD=50*1024*1024;
-export function createBookletsGateway({authenticate=adminAuthenticated, bookings=bookletsBookings, mail=bookletsMail, configuration=()=>({upstream:process.env.BOOKLETS_INTERNAL_URL,secret:process.env.BOOKLETS_GATEWAY_SECRET,origin:process.env.BOOKLETS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'})}={}) {
+export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,'booklets'), bookings=bookletsBookings, mail=bookletsMail, configuration=()=>({upstream:process.env.BOOKLETS_INTERNAL_URL,secret:process.env.BOOKLETS_GATEWAY_SECRET,origin:process.env.BOOKLETS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'})}={}) {
   return async function handleBooklets(req,res,url) {
     const prefix=BOOKLETS_PREFIX;
     if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
