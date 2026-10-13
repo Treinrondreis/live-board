@@ -2,7 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {readAdminSecurity,writeAdminSecurity} from './board-cache.mjs';
 import {sessionFor,countryFor,clientIP,consumeTotp,seal,unseal,locationFor} from './admin-security.mjs';
 import {createGoogleLogin,googleLoginConfig} from './google-login.mjs';
-import {hash,token,cookieValue,accessState,audit,googleSessionFor,GOOGLE_SESSION,GOOGLE_DEVICE,revokeDevice,blockAccount} from './google-access-state.mjs';
+import {hash,token,cookieValue,accessState,audit,googleSessionFor,GOOGLE_SESSION,GOOGLE_DEVICE,revokeDevice,blockAccount,APP_SCOPES} from './google-access-state.mjs';
 const DAY=86400000,STATE_COOKIE='tr_google_state',SESSION_DAYS=30;
 function setCookie(res,name,value,seconds){const existing=res.getHeader('Set-Cookie')||[];res.setHeader('Set-Cookie',[...(Array.isArray(existing)?existing:[existing]),`${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${seconds}`]);}
 function fail(message,status=400){throw Object.assign(Error(message),{status});}
@@ -32,7 +32,7 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
    }
    if(req.method==='GET'&&action==='overview'){
     if(!isAdmin)fail('Alleen beheerders kunnen toegang beheren.',403);
-    return json(200,{accounts:Object.values(g.accounts).map(a=>({email:a.email,role:a.role,apps:a.apps,active:a.active,linked:!!a.sub})),devices:Object.entries(g.devices).map(([id,d])=>({id,...d})),sessions:Object.entries(g.sessions).map(([id,v])=>({id,email:v.email,device:v.device,created:v.created,expires:v.expires,lastSeen:v.lastSeen})),audit:g.audit.slice(-50).reverse()});
+    return json(200,{appScopes:APP_SCOPES,accounts:Object.values(g.accounts).map(a=>({email:a.email,role:a.role,apps:a.apps,active:a.active,linked:!!a.sub})),devices:Object.entries(g.devices).map(([id,d])=>({id,...d})),sessions:Object.entries(g.sessions).map(([id,v])=>({id,email:v.email,device:v.device,created:v.created,expires:v.expires,lastSeen:v.lastSeen})),audit:g.audit.slice(-50).reverse()});
    }
    if(path==='/seinhuis/google/callback'){
     if(req.method!=='GET'||!login.configured())fail('Google-login is niet beschikbaar.',503);
@@ -93,12 +93,17 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
     const v=g.sessions[hash(cookieValue(req,GOOGLE_SESSION))];if(v&&g.devices[v.device])g.devices[v.device].verifiedAt=0;delete g.sessions[hash(cookieValue(req,GOOGLE_SESSION))];setCookie(res,GOOGLE_SESSION,'',0);await write(s,record.revision);return json(200,{ok:true});
    }
    if(!isAdmin)fail('Alleen beheerders kunnen toegang beheren.',403);
-   if(!['approve','revoke','block','enable','revoke-session'].includes(action))fail('Niet gevonden.',404);
+   if(!['approve','revoke','block','enable','revoke-session','permissions'].includes(action))fail('Niet gevonden.',404);
    if(current?.role==='admin'){
     if(current.verifiedAt<time-10*60000)fail('Bevestig deze beheeractie door opnieuw via Google aan te melden.',401);
    }else if(!consumeTotp(s.user,input.code,time))fail('Vul een verse Authenticator-code in.',403);
    const actor=current?.email||s.user.name;
-   if(action==='approve'){
+   if(action==='permissions'){
+    const a=g.accounts[input.email];if(!a)fail('Account niet gevonden.',404);
+    if(a.role==='admin')fail('Beheerders hebben toegang tot alle onderdelen.');
+    if(!Array.isArray(input.apps)||input.apps.length>Object.keys(APP_SCOPES).length||input.apps.some(scope=>typeof scope!=='string'||!Object.hasOwn(APP_SCOPES,scope))||new Set(input.apps).size!==input.apps.length)fail('Kies geldige Seinhuis-onderdelen.');
+    a.apps=[...input.apps];audit(g,'permissions-changed',actor,a.email+' · '+a.apps.map(v=>APP_SCOPES[v]).join(', '),time);
+   }else if(action==='approve'){
     const d=g.devices[input.id],a=d&&g.accounts[d.email];if(!d||!a?.active||a.sub!==d.sub)fail('Deze aanvraag kan niet worden goedgekeurd.');
     if(d.status!=='pending'&&d.status!=='revoked')fail('Deze browser is al goedgekeurd.');
     d.status='approved';d.approvedAt=time;d.approvedBy=actor;delete d.revokedAt;audit(g,'device-approved',actor,d.email+' · '+d.label,time);

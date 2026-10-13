@@ -7,3 +7,5 @@ assert.match(owner.body,/href="\/seinhuis\/flora\/"/);
 assert.doesNotMatch(member.body,/FloRA/);
 
 const appUser=await request('/seinhuis',{apps:['booklets','flora']});assert.equal(appUser.status,200);assert.match(appUser.body,/Boekjesmaker/);assert.match(appUser.body,/FloRA/);assert.doesNotMatch(appUser.body,/Algemeen beheer|href="\/stationschef"|App-pagina|href="\/treinhuis"/);assert.equal((await request('/stationschef',{apps:['booklets','flora']})).status,303);
+
+for(const [scope,path,label] of [['stations','/stationschef','Stationschef'],['treinhuis','/seinhuis','KM-trein'],['treinreiziger','/seinhuis/treinreiziger','Treinreiziger']]){const page=await request(path,{apps:[scope]});assert.equal(page.status,200);assert.ok(page.body.includes(label));assert.doesNotMatch(page.body,/Algemeen beheer/);}

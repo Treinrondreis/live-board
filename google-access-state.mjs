@@ -2,6 +2,7 @@ import {createHash,randomBytes} from 'node:crypto';
 export const hash=value=>createHash('sha256').update(String(value)).digest('hex');
 export const token=()=>randomBytes(32).toString('base64url');
 export const GOOGLE_SESSION='tr_google_session',GOOGLE_DEVICE='tr_google_device';
+export const APP_SCOPES={stations:'Stationschef',treinhuis:'Treinhuis (KM-trein)',treinreiziger:'Treinreiziger',booklets:'Boekjesmaker',flora:'FloRA'};
 export const INITIAL_ACCOUNTS=[
  {email:'hildebrand@treinreiziger.nl',role:'admin',apps:[]},
  {email:'reservations@treinrondreis.nl',role:'admin',apps:[]},

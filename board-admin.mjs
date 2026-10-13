@@ -92,7 +92,7 @@ const configured=()=>password().length>=12;
 const sign=value=>createHmac('sha256',password()).update(value).digest('hex');
 function equal(a,b){const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y);}
 async function authenticated(req){
- if(await securityStatus())return adminAuthenticated(req);
+ if(await securityStatus())return adminAuthenticated(req,'stations');
  if(!configured())return false;
  const value=(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(cookieName+'='))?.slice(cookieName.length+1)||'';
  const [expires,nonce,signature]=value.split('.');return Number(expires)>Date.now()&&Number(expires)<Date.now()+13*3600000&&Boolean(nonce)&&equal(signature||'',sign(expires+'.'+nonce));

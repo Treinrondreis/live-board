@@ -36,6 +36,16 @@ test('Google onboarding, least privilege, lasting approvals and immediate revoca
   now+=61000;assert.deepEqual(await Promise.all([adminAuthenticated(request(user,'GET'),'flora'),adminAuthenticated(request(user,'GET'),'flora')]),[true,true],'parallel activity writes do not reject valid requests');
   assert.equal(await adminAuthenticated(request(user,'GET')),false);
   assert.equal(await adminAuthenticated(request(user,'GET'),'treinhuis'),false);
+  assert.equal((await call(user,'permissions',{email:'tickets@treinrondreis.nl',apps:['stations']})).status,403,'users cannot grant themselves parts');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['owner']})).status,400,'owner privilege is never an app scope');
+  assert.equal((await call(admin,'permissions',{email:'hildebrand@treinreiziger.nl',apps:[]})).status,400,'admin roles cannot be changed through app permissions');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['stations','treinhuis','treinreiziger']})).status,200);
+  for(const scope of ['stations','treinhuis','treinreiziger'])assert.equal(await adminAuthenticated(request(user,'GET'),scope),true,'granted scope '+scope);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false,'removing a scope stops existing session access immediately');
+  assert.equal(await adminAuthenticated(request(user,'GET')),false,'all operational scopes still cannot administer accounts');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:[]})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'stations'),false);assert.equal(await adminAuthenticated(request(user,'GET'),'seinhuis'),true,'zero scopes still permit the account landing page');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['booklets','flora']})).status,200);
   assert.equal((await call(user,'approve',{id})).status,403);
   const sessions=(await call(admin,'overview')).data.sessions,userSession=sessions.find(v=>v.email==='tickets@treinrondreis.nl');assert.equal((await call(admin,'revoke-session',{id:userSession.id})).status,200);assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);assert.equal((await call(user,'continue',{})).status,401,'session revocation cannot be undone by pending approval continuation');await login(user);
   assert.equal(await adminAuthenticated(request({tr_google_session:user.tr_google_session},'GET'),'booklets'),false,'session needs device cookie');

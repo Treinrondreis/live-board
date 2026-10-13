@@ -8,8 +8,8 @@ Deze wijziging voegt Google-login naast het bestaande eigenaaraccount toe. Besta
 | --- | --- | --- |
 | hildebrand@treinreiziger.nl | Beheerder | Alle bestaande beheeronderdelen en toegangsbeheer |
 | reservations@treinrondreis.nl | Beheerder | Alle bestaande beheeronderdelen en toegangsbeheer |
-| tickets@treinrondreis.nl | Gebruiker | Boekjesmaker en FloRA |
-| florentina.niculae@treinrondreis.nl | Gebruiker | Boekjesmaker en FloRA |
+| tickets@treinrondreis.nl | Gebruiker | Instelbaar per onderdeel; aanvankelijk Boekjesmaker en FloRA |
+| florentina.niculae@treinrondreis.nl | Gebruiker | Instelbaar per onderdeel; aanvankelijk Boekjesmaker en FloRA |
 
 Een toegestaan account heeft nog geen goedgekeurde browser. De eerste Google-login bindt het geverifieerde Workspace-adres aan Googles vaste `sub`. Een ander Google-account met hetzelfde adres neemt die binding niet over. Alleen Google Workspace-identiteiten met een passend `hd` en geverifieerd e-mailadres worden geaccepteerd. De twee verschillende Workspace-domeinen vereisen een OAuth-app die beide organisaties toelaat.
 
@@ -27,7 +27,9 @@ Een toegestaan account heeft nog geen goedgekeurde browser. De eerste Google-log
 2. Open `/seinhuis/toegang`, kies **Beheerdersaccount koppelen**, vul een verse Authenticator-code in en selecteer één van de twee toegestane beheerdersaccounts bij Google.
 3. Alleen deze expliciete, browsergebonden koppelactie keurt de eerste beheerdersbrowser automatisch goed. Een gewone Google-login van een beheerder doet dat niet.
 4. Controleer het overzicht en de apps. Laat het tweede beheerdersaccount via Google aanmelden en keur diens browser goed vanuit het eerste account.
-5. Laat Tickets en Florentina aanmelden en keur hun aanvragen goed. Zij zien alleen Boekjesmaker en FloRA.
+5. Stel onder Accounts de onderdeelrechten voor Tickets en Florentina in. Je kunt Stationschef, Treinhuis (KM-trein), Treinreiziger, Boekjesmaker en FloRA afzonderlijk aan- of uitzetten. Laat hen daarna aanmelden en keur hun browsers goed. Zij zien uitsluitend de toegekende onderdelen.
+
+Onderdeelrechten zijn onafhankelijk van de rol beheerder. Een gebruiker met alle vijf onderdelen kan de operationele functies gebruiken, maar geen accounts, browsergoedkeuringen of algemene beveiliging beheren. Beide beheerders hebben alle onderdelen. Rechten worden bij iedere aanvraag uit de database gelezen: een onderdeel intrekken geldt meteen voor bestaande sessies, zonder de browser opnieuw te hoeven goedkeuren. Je kunt ook alle onderdelen uitzetten; het account blijft dan ingelogd op een leeg Seinhuis-overzicht.
 
 Een succesvolle overgang naar een goedgekeurde Google-sessie sluit de bestaande eigenaarssessie in die browser. Het bestaande account kan nog steeds via de oude ingang opnieuw inloggen. Bewaar Authenticator en herstelcodes. Herstelcodes geven nog steeds beperkte toegang voor landenherstel; ze vervangen geen verloren Authenticator. Definitieve lock-out gebruikt de bestaande hostingprocedure `admin-recovery.mjs`.
 

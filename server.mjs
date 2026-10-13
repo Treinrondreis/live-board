@@ -1108,7 +1108,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(['/stationschef/borden','/stationschef/borden/'].includes(url.pathname)){
       res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');
-      if(!await adminAuthenticated(req)){res.writeHead(303,{Location:'/stationschef'});return res.end();}
+      if(!await adminAuthenticated(req,'stations')){res.writeHead(303,{Location:'/stationschef'});return res.end();}
       return sendFile(res,path.join(publicDir,'board-admin.html'));
     }
     if(await handleTreinreiziger(req,res,url))return;

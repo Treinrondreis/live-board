@@ -7,8 +7,8 @@ try{
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url()),path=url.pathname;
   if(path.startsWith('/api/seinhuis-access/')){
-   const action=path.split('/').at(-1);requests.push({action,body:route.request().postDataJSON()});
-   let data=action==='status'?state:action==='overview'?{accounts:[{email:'hildebrand@treinreiziger.nl',role:'admin',active:true,linked:true,apps:[]},{email:'reservations@treinrondreis.nl',role:'admin',active:true,linked:false,apps:[]},{email:'tickets@treinrondreis.nl',role:'user',apps:['booklets','flora'],active:true,linked:true},{email:'florentina.niculae@treinrondreis.nl',role:'user',apps:['booklets','flora'],active:true,linked:false}],devices:[device],sessions:[{id:'session',email:device.email,device:device.id,created:time,lastSeen:time,expires:time+30*86400000}],audit:[]}:{ok:true};
+   const action=path.split('/').at(-1);requests.push({action,body:route.request().postDataJSON()});if(action==='permissions')assert.deepEqual(route.request().postDataJSON().apps,['stations','booklets','flora']);
+   let data=action==='status'?state:action==='overview'?{appScopes:{stations:'Stationschef',treinhuis:'Treinhuis (KM-trein)',treinreiziger:'Treinreiziger',booklets:'Boekjesmaker',flora:'FloRA'},accounts:[{email:'hildebrand@treinreiziger.nl',role:'admin',active:true,linked:true,apps:[]},{email:'reservations@treinrondreis.nl',role:'admin',active:true,linked:false,apps:[]},{email:'tickets@treinrondreis.nl',role:'user',apps:['booklets','flora'],active:true,linked:true},{email:'florentina.niculae@treinrondreis.nl',role:'user',apps:['booklets','flora'],active:true,linked:false}],devices:[device],sessions:[{id:'session',email:device.email,device:device.id,created:time,lastSeen:time,expires:time+30*86400000}],audit:[]}:{ok:true};
    if(action==='approve')device.status='approved';if(action==='revoke'){device.status='revoked';}if(action==='overview'&&device.status==='revoked')data.sessions=[];
    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
   }
@@ -16,6 +16,7 @@ try{
   return route.fulfill({status:file?200:404,contentType:path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html',body:file?await readFile(file,'utf8'):''});
  });
  await page.goto(origin+'/seinhuis/toegang');await page.getByRole('heading',{name:'Accounts en apparaten',exact:true}).waitFor();
+ const rights=page.getByRole('group',{name:'Onderdelen voor tickets@treinrondreis.nl',exact:true});await rights.getByRole('checkbox',{name:'Stationschef',exact:true}).check();await rights.getByRole('button',{name:'Onderdeelrechten opslaan',exact:true}).click();await page.getByText('Onderdeelrechten opgeslagen.',{exact:false}).waitFor();assert.ok(requests.some(v=>v.action==='permissions'));
  await page.getByRole('button',{name:'Goedkeuren',exact:true}).click();await page.getByRole('button',{name:'Intrekken',exact:true}).waitFor();assert.equal(device.status,'approved');
  await page.getByRole('button',{name:'Intrekken',exact:true}).click();await page.getByRole('button',{name:'Goedkeuren',exact:true}).waitFor();assert.equal(device.status,'revoked');assert.ok(requests.some(v=>v.action==='revoke'&&v.body.id==='device'));
  await mkdir('outputs',{recursive:true});await page.screenshot({path:'outputs/google-access-desktop.png',fullPage:true});

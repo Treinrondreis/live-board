@@ -28,7 +28,7 @@ export async function handleConnectionAdmin(req,res,url){
  if(!['/stationschef/aansluitingen','/stationschef/aansluitingen/','/stationschef/aansluitingen.js','/stationschef/api/aansluitingen'].includes(url.pathname))return false;
  res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');res.setHeader('X-Content-Type-Options','nosniff');
  const json=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
- if(!await adminAuthenticated(req)){if(url.pathname.includes('/api/'))json(401,{error:'Log eerst in bij Stationschef.'});else{res.writeHead(303,{Location:'/stationschef'});res.end();}return true;}
+ if(!await adminAuthenticated(req,'stations')){if(url.pathname.includes('/api/'))json(401,{error:'Log eerst in bij Stationschef.'});else{res.writeHead(303,{Location:'/stationschef'});res.end();}return true;}
  try{
  if(url.pathname==='/stationschef/api/aansluitingen'){
  if(req.method==='GET'){json(200,{...await readConnectionSettings(),stations:stationAliases});return true;}
