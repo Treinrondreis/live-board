@@ -182,15 +182,15 @@ def verify(item, row, instance, allow_trashed=False):
         raise ValueError('De PDF in Drive komt niet overeen met de opgeslagen drukversie. De lokale PDF blijft bewaard; controleer het Drive-bestand.')
 
 
-def upload(path, row, cfg, title, token):
+def upload(path, row, cfg, title, token, mime='application/pdf', properties=None, name=None):
     # Bounded chunks; a retry always uses the reserved file ID, never overwrites.
     url = UPLOAD + '?' + urlencode({'uploadType': 'resumable', 'fields': 'id'})
-    body = {'id': row['file_id'], 'name': title[:160] + ' - ' + row['id'][:8] + '.pdf',
-            'mimeType': 'application/pdf', 'parents': [row['folder']],
-            'appProperties': {'bookletsExport': row['id'], 'bookletsInstance': cfg['instance']}}
+    body = {'id': row['file_id'], 'name': name or title[:160] + ' - ' + row['id'][:8] + '.pdf',
+            'mimeType': mime, 'parents': [row['folder']],
+            'appProperties': properties or {'bookletsExport': row['id'], 'bookletsInstance': cfg['instance']}}
     try:
         with open_request(url, token, 'POST', json.dumps(body).encode(), {
-                'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': 'application/pdf',
+                'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': mime,
                 'X-Upload-Content-Length': str(row['size'])}) as response:
             session = response.headers.get('Location', '')
         p = urlsplit(session)
@@ -208,7 +208,7 @@ def upload(path, row, cfg, title, token):
                     raise ValueError('De lokale PDF is tijdens de overdracht gewijzigd.')
                 try:
                     with open_request(session, token, 'PUT', chunk, {
-                            'Content-Type': 'application/pdf', 'Content-Length': str(len(chunk)),
+                            'Content-Type': mime, 'Content-Length': str(len(chunk)),
                             'Content-Range': f'bytes {offset}-{offset+len(chunk)-1}/{row["size"]}'}) as response:
                         if response.status not in (200, 201):
                             raise ValueError('De overdracht is niet bevestigd door Google Drive.')

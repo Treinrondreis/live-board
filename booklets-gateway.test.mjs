@@ -19,6 +19,9 @@ try{
  assert.equal((await fetch(base+p,{redirect:'manual'})).headers.get('location'),'/seinhuis');
  assert.equal((await fetch(base+p+'/api/state',{headers:{cookie:'member=valid'}})).status,401);
  const headers={cookie:'owner=valid',origin,'x-booklets':'1','content-type':'application/json','x-booklets-gateway':'attacker'};
+ const beforeInternal=seen.length;
+ for(const path of ['/internal/km-archive/setup','/%69nternal/km-archive/setup','//internal/km-archive/setup','/%2569nternal/km-archive/setup'])assert.equal((await fetch(base+p+path,{method:'POST',headers,body:'{}'})).status,404);
+ assert.equal(seen.length,beforeInternal);
  for(const change of [{origin:'https://evil.example'},{origin:''},{'x-booklets':'0'}])assert.equal((await fetch(base+p+'/api/save',{method:'POST',headers:{...headers,...change},body:'{}'})).status,403);
  for(const change of [{origin:'https://evil.example'},{'x-booklets':'0'}])assert.equal((await fetch(base+p+'/api/mail-tickets/search',{method:'POST',headers:{...headers,...change},body:'{}'})).status,403);
  const search=await fetch(base+p+'/api/mail-tickets/search',{method:'POST',headers,body:JSON.stringify({query:'ABCDEFG'})});assert.equal(search.status,200);assert.equal((await search.json()).query,'ABCDEFG');
