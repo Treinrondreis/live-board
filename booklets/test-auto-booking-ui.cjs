@@ -39,11 +39,25 @@ test('retry preserves edited documents and deliberately omitted places',async()=
 });
 test('ambiguous letters, Drive files and unapproved vouchers require a choice while other chapters continue',async()=>{
  const f=fixture({items:[{id:'a',kind:'letter'},{id:'b',kind:'letter'},{id:'v',kind:'voucher',approved:false}],driveItems:[{id:'a',recommended:true},{id:'b',recommended:true}]});
- await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[0].issue,/Meerdere Sanity-brieven/);assert.match(f.slots()[1].issue,/Meerdere reisschema/);assert.match(f.slots()[3].issue,/Geen gecontroleerde Sanity-vouchers/);assert(f.slots()[2].selected);
+ await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[0].issue,/Meerdere Sanity-brieven/);assert.match(f.slots()[1].issue,/Meerdere reisschema/);assert.match(f.slots()[3].issue,/Meerdere voucherdocumenten/);assert(f.slots()[2].selected);
  assert(!f.calls.some(c=>c.path==='/api/booking-data/document'||c.path==='/api/booking-documents/drive-load'));
 });
 test('duplicate booking numbers never pick a Drive customer document automatically',async()=>{
  const f=fixture();f.exec('draft.body.sanityBooking.sameNumberBookings=2');await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[1].issue,/niet uniek/);assert(!f.calls.some(c=>c.path.includes('drive-')));assert(f.slots()[0].selected);
+});
+
+test('approved vouchers and original attachments combine with mandatory review; attachment failure rolls back the whole replacement',async()=>{
+ for(const fail of [false,true]){
+  const f=fixture({api:async(path)=>{
+   if(path==='/api/booking-data/documents')return {booking:{todos:[]},items:[{id:'voucher',kind:'voucher',approved:true}],attachments:[{id:'attached',title:'Hotel',recommended:true}]};
+   if(path==='/api/booking-data/attachment'){if(fail)throw Error('Attachment unavailable');return {kind:'voucher',documentId:'attached',attachment:true,travelDate:'2026-10-12'};}
+  }});
+  f.exec('draft.body.sections=draft.body.sections.filter(s=>s.documentKind==="voucher")');
+  await f.exec('autoFillBookingDocuments()');
+  const slot=f.slots()[0];
+  if(fail){assert.equal(slot.selected,null);assert.match(slot.issue,/Attachment unavailable/);}
+  else{assert.equal(slot.selected.pages,4);assert.equal(slot.selected.reviewRequired,true);assert.equal(slot.selected.bookingDocuments.length,2);assert(slot.selected.warnings.some(w=>w.includes('dubbel')));}
+ }
 });
 test('NS cancellation, missing reference and unavailable PDF never leave partial tickets in the book',async()=>{
  for(const options of [{mail:{references:['ABCDEF'],messages:[{reference:'ABCDEF',latest:true,cancelled:true,tickets:[]}]}},{mail:{references:[],messages:[]}},{failTicket:'b'}]){

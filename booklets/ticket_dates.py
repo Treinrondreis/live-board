@@ -58,6 +58,17 @@ def labelled_date(text,provider,allowed=()):
         if len(values)>1:return '','ambiguous',True
     return '','unknown',True
 
+
+def moment_dates(body,slot,candidate):
+    dates={p.get('travelDate') for p in candidate.get('originalPages',candidate.get('pageSources',[])) if iso(p.get('travelDate'))}
+    if slot.get('documentKind')!='voucher' and slot.get('ticketDateBasis','booking')=='booking':
+        dates.update((body.get('sanityBooking') or {}).get('journeyDates',[]))
+        for other in body.get('sections',[]):
+            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets'):continue
+            source=other.get('selected') or {}
+            dates.update(p['travelDate'] for p in source.get('originalPages',source.get('pageSources',[])) if iso(p.get('travelDate')))
+    return sorted(d for d in dates if iso(d))
+
 def inspect(s,payload):
     provider=payload.get('provider','ns')
     if provider not in PROVIDERS:raise ValueError('Onbekende vervoerder voor datumcontrole.')

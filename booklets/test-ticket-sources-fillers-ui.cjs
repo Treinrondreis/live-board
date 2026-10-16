@@ -3,7 +3,7 @@ const source=fs.readFileSync(__dirname+'/index.html','utf8').split('<script>')[2
 function fixture(options={}){
  const nodes=new Map(),calls=[];let checked=['ns','obb'];
  const node=s=>{if(!nodes.has(s))nodes.set(s,{value:'',checked:false,innerHTML:'',open:false,style:{},showModal(){this.open=true},close(){this.open=false}});return nodes.get(s);};
- const ctx=vm.createContext({document:{querySelector:node,querySelectorAll:()=>checked.map(value=>({value}))},window:{addEventListener(){}},structuredClone,console,setTimeout,clearTimeout,AbortSignal,confirm:()=>true});vm.runInContext(source,ctx);
+ const ctx=vm.createContext({document:{querySelector:node,querySelectorAll:()=>checked.map(value=>({value}))},window:{addEventListener(){}},crypto:require('node:crypto').webcrypto,structuredClone,console,setTimeout,clearTimeout,AbortSignal,confirm:()=>true});vm.runInContext(source,ctx);
  const exec=code=>vm.runInContext(code,ctx);
  exec(`state={objects:[],exports:[]};draft={kind:'book',title:'Test',body:{format:'A4',values:{},sanityBooking:{id:'customer',number:'1234A',name:'Test'},sections:[{choice:'document',documentKind:'combinedTickets',ticketSources:['ns','obb'],ticketSourceMode:'all',title:'Tickets',selected:null,options:[]}]}}`);
  ctx.api=async(path,b)=>{calls.push({path,b:structuredClone(b)});if(options.api){const r=await options.api(path,b);if(r!==undefined)return r;}
@@ -20,6 +20,26 @@ function fixture(options={}){
 test('combines NS and another provider, sorts by journey date and preserves both origins',async()=>{
  const f=fixture();f.exec("draft.body.sections[0].ticketSources=['ns','db']");await f.exec('autoFillBookingDocuments()');
  const selected=f.slot().selected;assert.equal(selected.pages,2);assert.deepEqual(Array.from(selected.pageSources,p=>p.providerKey),['db','ns']);assert.equal(selected.ticketImport.providers.length,2);assert.equal(selected.reviewRequired,undefined);
+});
+
+test('NS first source date can be the second journey date after another carrier',()=>{
+ const f=fixture();f.exec(`draft.body.sanityBooking.journeyDates=['2026-10-12','2026-10-18'];draft.body.sections[0].ticketMoment=2`);
+ const result=f.exec(`momentPages([{asset:'return',page:0,travelDate:'2026-10-18',dateNeedsReview:false}],draft.body.sections[0])`);
+ assert.equal(result.length,1);assert.equal(result[0].travelDate,'2026-10-18');
+ f.exec(`draft.body.sections[0].ticketDateBasis='source'`);
+ assert.throws(()=>f.exec(`momentPages([{asset:'return',page:0,travelDate:'2026-10-18'}],draft.body.sections[0])`),/bestaat niet/);
+});
+
+test('hotel PDF attachments use original bytes and remain blocked until voucher review',async()=>{
+ const f=fixture({api:async(path,b)=>{
+  if(path==='/api/booking-data/documents')return {items:[],attachments:[{id:'hotel-file',title:'Hotel',recommended:true}],booking:{todos:[]}};
+  if(path==='/api/booking-data/attachment')return {kind:'voucher',originalPdf:'synthetic-only',attachment:true,travelDate:'2026-10-12'};
+  if(path==='/api/booking-documents/render')return {asset:'hotel-source',pages:1,bookingDocument:{attachment:true,documentId:'hotel-file',digest:'synthetic'},warnings:[]};
+ }});
+ f.exec(`draft.body.sections[0].documentKind='voucher';draft.body.sections[0].ticketSources=[]`);
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.reviewRequired,true);assert.equal(f.slot().selected.documentOrigin,'sanity-attachment');
+ assert.equal(f.slot().selected.bookingDocuments[0].attachment,true);assert.match(f.slot().issue,/Originele hotel-PDF/);
+ assert(!f.calls.some(c=>c.path==='/api/booking-documents/drive-search'));
 });
 test('at least one source suffices, no sources requires explicit omit or upload, fallback avoids extra downloads',async()=>{
  const f=fixture({missing:['ns']});await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.pages,1);assert.equal(f.slot().selected.ticketImport.providerKey,'obb');

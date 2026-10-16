@@ -1,7 +1,24 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createBookletsBookings,expandContent,variableValue} from './booklets-bookings.mjs';
+import {createBookletsBookings,expandContent,variableValue,voucherAttachments} from './booklets-bookings.mjs';
 const span=text=>({_type:'block',style:'normal',children:[{_type:'span',text,marks:[]}],markDefs:[]});
+
+test('original hotel attachments are scoped to the booking, require review and reject foreign asset hosts',async()=>{
+ const raw=Buffer.from('%PDF-synthetic-hotel'),hash='a'.repeat(40),id='file-'+hash+'-pdf',b=booking('b','Synthetic');b.docs=[];
+ b.todos=[{title:'Example hotel',startDate:'2026-10-08',endDate:'2026-10-10'}];
+ b.documents=[{title:'ExampleCity-0810-1010',asset:{_id:id,mimeType:'application/pdf',size:raw.length,originalFilename:'ExampleCity-0810-1010.pdf',url:'https://cdn.sanity.io/files/fixture/production/'+hash+'.pdf'}}];
+ let reads=0;
+ const c=createBookletsBookings({configuration:()=>({project:'fixture',dataset:'production',token:'synthetic-only'}),fetcher:async(u,options)=>{
+  if(u.hostname==='cdn.sanity.io'){reads++;assert.equal(options.redirect,'error');assert.equal(options.method,'GET');return new Response(raw);}
+  assert.equal(u.hostname,'fixture.api.sanity.io');return new Response(JSON.stringify({result:[b]}));
+ }});
+ const listed=(await c.documents({bookingId:'b'})).attachments;assert.equal(listed.length,1);assert.equal(listed[0].recommended,true);assert.equal(listed[0].requiresReview,true);assert.equal(listed[0].travelDate,'2026-10-08');
+ const meta=await c.attachment({bookingId:'b',documentId:id,metadataOnly:true});assert.equal(reads,0);assert.equal(meta.attachment,true);assert.equal(meta.approved,false);
+ const result=await c.attachment({bookingId:'b',documentId:id});assert.equal(reads,1);assert.deepEqual(Buffer.from(result.originalPdf,'base64'),raw);assert.equal(result.digest,meta.digest);
+ await assert.rejects(c.attachment({bookingId:'b',documentId:'file-'+('b'.repeat(40))+'-pdf'}),/hoort niet/);
+ b.documents[0].asset.url='https://foreign.invalid/photo.pdf';await assert.rejects(c.attachment({bookingId:'b',documentId:id}),/bestandslocatie/);assert.equal(reads,1);
+ b.documents[0].title='Invoice';assert.deepEqual(voucherAttachments(b),[]);
+});
 test('approved voucher retains structured table rows without altering Sanity source or ownership rules',async()=>{const {c,docs}=fixture(),voucher=docs.find(d=>d._id==='private.voucher-b');voucher.approved=true;voucher.content=[{_type:'table',rows:[{cells:['Naam','Test Reiziger']},{cells:['Check-in','20-10-2026']}]}];const before=JSON.stringify(voucher);const doc=await c.document({bookingId:'b',documentId:voucher._id});assert.deepEqual(doc.content,voucher.content);assert.equal(JSON.stringify(voucher),before);voucher.content[0].rows[0].cells[0]={invalid:true};await assert.rejects(c.document({bookingId:'b',documentId:voucher._id}),/tabel/);});
 const booking=(id,name)=>({_id:id,index:1234,firstName:name,lastName:'Reiziger',dateDeparture:'2026-10-20',dateReturn:'2026-10-25',trip:{title:'Testreis'},docs:[{_id:'private.letter-'+id,_type:'doc',template:'doc',title:'Briefing: Testreis',_rev:'rev',content:[span('Klantbrief')]},{_id:'private.voucher-'+id,_type:'doc',template:'doc',title:'Hotel voucher: Test',content:[span('Voucher')]}]});
 function fixture(){const rows=[booking('a','Eerste'),booking('b','Tweede')],docs=rows.flatMap(b=>b.docs);rows.forEach(b=>b.docs=b.docs.map(d=>({_ref:d._id})));const c=createBookletsBookings({configuration:()=>({project:'fixture',dataset:'production',token:'test-only'}),fetcher:async u=>{const q=u.searchParams.get('query'),ids=JSON.parse(u.searchParams.get('$ids')||'[]');assert.equal(u.searchParams.get('perspective'),'raw');const result=q.includes('index==$number')?rows:q.includes('_type=="doc"')?docs.filter(d=>ids.includes(d._id)):rows.filter(b=>ids.includes(b._id));return new Response(JSON.stringify({result}));}});return {c,rows,docs};}

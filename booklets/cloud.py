@@ -121,12 +121,12 @@ def application(environ,start_response):
         return [] if method=='HEAD' else FileWrapper(stream,64*1024)
     # One mutation/render at a time. Mutations fail fast; the fixed four HTTP
     # threads may briefly wait for previews, which browsers request in parallel.
-    heavy=(method=='POST' and path not in ('/api/routes/load','/api/routes/stations')) or path.startswith('/files/') or path=='/google/callback'
+    heavy=(method=='POST' and path not in ('/api/routes/load','/api/routes/stations','/api/export-cancel')) or path.startswith('/files/') or path=='/google/callback'
     acquired=not heavy or (BUSY.acquire(timeout=30) if method in ('GET','HEAD') and path.startswith('/files/') else BUSY.acquire(blocking=False))
     if not acquired:
         return response(429,{'error':'Er wordt al een boekje of pagina verwerkt. Probeer het zo nog eens.'},headers={'Retry-After':'3'})
     try:
-        if method=='POST' and path not in ('/api/export-status','/api/export-storage','/api/export-archive'):server.ensure_capacity(size*3+1024*1024)
+        if method=='POST' and path not in ('/api/export-status','/api/export-storage','/api/export-archive','/api/export-cancel','/api/book-trash','/api/template-status'):server.ensure_capacity(size*3+1024*1024)
         if path.startswith('/api/migration/'):
             import migration
             result=migration.handle(path,environ,server)
