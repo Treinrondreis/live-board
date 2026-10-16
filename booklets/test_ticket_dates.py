@@ -62,3 +62,28 @@ class TicketDateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Controleer eerst'):s.make_export({'id':'test','body':body},{'skipChoices':True,'allowUneven':True,'dryRun':True})
         for extra in ({'ticketMoment':True},{'ticketMoment':100},{'ticketMoment':-1},{'sortByDate':'yes'}):
             with self.assertRaises(ValueError):s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':'mavTickets',**extra}]})
+
+    def test_manual_placement_keeps_warning_and_source_validation_without_requiring_dates(self):
+        a,_=self.upload(['Ticket without a readable date','Unused source page'])
+        import ticket_import
+        selected=ticket_import.compose(SimpleNamespace(**vars(s)),{'format':'A4','pages':[{'asset':a['id'],'page':0}]})
+        selected.update(fields=[],manualDatePlacement=True,pageSources=[{'asset':a['id'],'page':0,'dateNeedsReview':True}],originalPages=[{'asset':a['id'],'page':n,'dateNeedsReview':True} for n in range(2)])
+        body={'format':'A4','sections':[{'choice':'document','documentKind':'nsTickets','ticketMoment':2,'selected':selected}]}
+        s.validate_body('book',body)
+        self.assertFalse(selected.get('reviewRequired',False))
+        self.assertIn('handmatig geplaatst',selected['warnings'][0])
+        selected['warnings']=[]
+        s.validate_body('book',body)
+        self.assertEqual(len(selected['warnings']),1)
+        self.assertNotIn('travelDate',selected['pageSources'][0])
+        selected['title']='Handmatig gekozen tickets'
+        report=s.make_export({'id':'test','body':body},{'skipChoices':True,'allowUneven':True,'dryRun':True})['report']
+        self.assertTrue(any('handmatig geplaatst' in w for w in report['warnings']))
+        selected['pageSources'][0]['page']=99
+        with self.assertRaisesRegex(ValueError,'documentpagina'):s.validate_body('book',body)
+        selected['pageSources'][0]['page']=0
+        selected['manualDatePlacement']='yes'
+        with self.assertRaisesRegex(ValueError,'handmatige'):s.validate_body('book',body)
+        selected['manualDatePlacement']=False
+        s.validate_body('book',body)
+        self.assertTrue(selected['reviewRequired'])

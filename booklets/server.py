@@ -250,6 +250,13 @@ def validate_body(kind,b,prepared=False):
             candidates=([*slot.get('options',[]),*([slot['selected']] if slot.get('selected') else [])] if slot.get('choice') else [slot])
             for candidate in candidates:
                 toc_info(candidate)
+                manual_dates=candidate.get('manualDatePlacement',False)
+                if type(manual_dates) is not bool:raise ValueError('Ongeldige keuze voor handmatige datumindeling.')
+                if manual_dates:
+                    warning='Pagina’s handmatig geplaatst; reisdatums en reismoment zijn niet automatisch gecontroleerd.'
+                    warnings=candidate.get('warnings',[])
+                    if not isinstance(warnings,list) or any(not isinstance(w,str) for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
+                    candidate['warnings']=[*warnings,*([warning] if warning not in warnings else [])]
                 for key in ('pageSources','originalPages'):
                     if key not in candidate:continue
                     pages=candidate[key]
@@ -264,8 +271,8 @@ def validate_body(kind,b,prepared=False):
                             if flag in p and type(p[flag]) is not bool:raise ValueError('Ongeldige datumcontrole.')
                         if p.get('documentRole','unknown') not in ('ticket','reservation','unknown'):raise ValueError('Ongeldig documenttype voor ticketsortering.')
                         if p.get('departureTime') and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',str(p['departureTime'])):raise ValueError('Ongeldige vertrektijd.')
-                        if key=='pageSources' and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and (p.get('dateNeedsReview') or (not value and not p.get('dateUnknownAccepted'))):candidate['reviewRequired']=True
-                if slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
+                        if not manual_dates and key=='pageSources' and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and (p.get('dateNeedsReview') or (not value and not p.get('dateUnknownAccepted'))):candidate['reviewRequired']=True
+                if not manual_dates and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
                     moment=slot.get('voucherMoment',0) if slot['documentKind']=='voucher' else slot.get('ticketMoment',0)
                     if moment:
                         dates=sorted({p.get('travelDate') for p in candidate.get('originalPages',candidate['pageSources']) if p.get('travelDate')})
@@ -337,6 +344,8 @@ def make_export(book,options=None):
     b['sections']=sections
     if not sections: raise ValueError('Voeg eerst een bouwsteen toe.')
     validate_body('book',b,prepared=True)
+    for section in sections:
+        if section.get('manualDatePlacement'):google_warnings.append(section.get('title','Document')+': pagina’s handmatig geplaatst; reisdatums en reismoment zijn niet automatisch gecontroleerd.')
     writer=PdfWriter(); report={'warnings':google_warnings, 'pages':0, 'blanks':0, 'created':now(), 'checks':['Originele PDF-pagina’s overgenomen; niet gerasterd.','Personalisatie als vaste tekst met ingesloten lettertype.','Verplichte velden en tekstpassing gecontroleerd.']}
     dynamic=[];configured_pages=set()
     has_contents=any(f.get('type')=='contents' for sec in sections for f in sec.get('fields',[]))
