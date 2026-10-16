@@ -148,3 +148,9 @@ test('manual voucher date placement still requires the independent voucher revie
  f.exec('documentPagesSave({disabled:false})');await assert.rejects(f.ctx.lastRun,/bevestig eerst de voucher/);
  f.node('#voucherReviewed').checked=true;f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;assert.equal(f.slots()[3].selected.manualDatePlacement,true);
 });
+
+test('a dated onward connection is a third travel moment and receives only its own reference hints',async()=>{
+ const f=fixture({mail:{references:['ABCDEFG'],referenceDates:[{reference:'ABCDEFG',dates:['2027-02-20','2027-02-23']}],referenceContinuationDates:[{reference:'ABCDEFG',dates:['2027-02-24']},{reference:'HIJKLMN',dates:['2027-03-01']}],messages:[{id:'desk',reference:'ABCDEFG',latest:true,tickets:[{id:'connection',title:'Tickets'}]}]},api:async(path,b)=>{if(path==='/api/tickets/inspect'){assert.deepEqual(Array.from(b.continuationDates),['2027-02-24']);return {pages:['2027-02-20','2027-02-23','2027-02-24','2027-02-24'].map((d,page)=>({asset:b.asset,page,travelDate:d,dateSource:'pdf-validity',dateNeedsReview:false}))};}}});
+ f.exec('draft.body.sections[2].ticketMoment=3');await f.exec('autoFillBookingDocuments()');
+ assert.equal(f.slots()[2].selected.pages,2);assert(f.slots()[2].selected.pageSources.every(p=>p.travelDate==='2027-02-24'));assert(!f.slots()[2].selected.reviewRequired);assert(!f.slots()[2].issue);
+});

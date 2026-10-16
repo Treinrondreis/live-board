@@ -46,6 +46,18 @@ class TicketDateTests(unittest.TestCase):
         self.assertEqual([p['travelDate'] for p in r['pages']],['2026-11-11','2026-11-14','2026-11-15'])
         self.assertEqual([p['dateNeedsReview'] for p in r['pages']],[False,False,True])
         self.assertEqual(r['pages'][2]['dateSource'],'pdf-conflict')
+
+    def test_ns_onward_ticket_on_arrival_day_keeps_its_own_printed_date(self):
+        a,_=self.upload(['Geldig: 20.02.2027 - 20.02.2027','Geldig: 23.02.2027\n23.02 18:20 Alpha -> Beta 24.02 09:30','Geldig: 24.02.2027 - 24.02.2027','No readable departure date','Departure: 25.02.2027'])
+        payload={'asset':a['id'],'provider':'ns','suggestedDates':['2027-02-20','2027-02-23'],'continuationDates':['2027-02-21','2027-02-24'],'travelDates':['2027-02-20','2027-02-23']}
+        pages=ticket_dates.inspect(SimpleNamespace(**vars(s)),payload)['pages']
+        self.assertEqual([p['travelDate'] for p in pages[:3]],['2027-02-20','2027-02-23','2027-02-24'])
+        self.assertFalse(any(p['dateNeedsReview'] for p in pages[:3]))
+        self.assertEqual(pages[3]['travelDate'],'')
+        self.assertTrue(pages[3]['dateNeedsReview'])
+        self.assertEqual(pages[4]['dateSource'],'pdf-conflict')
+        for invalid in (None,'2027-02-24',['not-a-date']):
+            with self.assertRaisesRegex(ValueError,'reisdatums'):ticket_dates.inspect(SimpleNamespace(**vars(s)),{**payload,'continuationDates':invalid})
     def test_saved_selection_checks_source_bounds_moment_and_review_before_export(self):
         a,_=self.upload(['Departure: 10.10.2026','Departure: 16.10.2026'])
         import ticket_import
