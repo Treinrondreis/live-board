@@ -5,7 +5,7 @@ import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
-import export_history,document_duplicates
+import export_history,export_storage,document_duplicates
 import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
@@ -36,7 +36,7 @@ pdfmetrics.registerFontFamily('Montserrat',normal='Montserrat',bold='Montserrat-
 def font_name(f):return 'Montserrat' if f.get('font')=='Montserrat' else 'Booklet'
 LOCK = threading.RLock()
 SESSIONS = {}
-APP_VERSION = '2026.10.12.11'
+APP_VERSION = '2026.10.16.1'
 
 def storage_remaining():
     limit=int(os.environ.get('BOOKLETS_STORAGE_LIMIT','5000000000'))
@@ -44,12 +44,12 @@ def storage_remaining():
 
 def ensure_capacity(size):
     if size+16*1024*1024>storage_remaining():
-        raise ValueError('De afgesproken opslagruimte van 5 GB is bijna vol. Neem contact op met de beheerder voordat u meer bestanden toevoegt.')
+        raise ValueError('De afgesproken opslagruimte is bijna vol. Verplaats gemaakte PDF’s naar Drive of neem contact op met de beheerder.')
 
 class QuotaWriter:
     def __init__(self,stream):self.stream=stream;self.remaining=storage_remaining()-16*1024*1024
     def write(self,raw):
-        if len(raw)>self.remaining:raise ValueError('Het boekje past niet meer binnen de opslaglimiet van 5 GB.')
+        if len(raw)>self.remaining:raise ValueError('Het boekje past niet meer binnen de ingestelde opslaglimiet.')
         self.remaining-=len(raw);return self.stream.write(raw)
     def __getattr__(self,name):return getattr(self.stream,name)
 class ClosingConnection(sqlite3.Connection):
@@ -70,6 +70,12 @@ with db() as c:
     CREATE TABLE IF NOT EXISTS exports(id TEXT PRIMARY KEY, book_id TEXT, title TEXT, created TEXT, snapshot TEXT, report TEXT);
     ''')
     export_history.initialize(c)
+    export_storage.initialize(c)
+
+# Interrupted private downloads are disposable, never source PDFs or exports.
+cache=DATA/'export-cache'
+if cache.is_dir():
+    for path in cache.glob('export-*.tmp'):path.unlink(missing_ok=True)
 def ident(): return uuid.uuid4().hex
 def now(): return time.strftime('%Y-%m-%d %H:%M')
 def pw(p,s): return hashlib.pbkdf2_hmac('sha256',p.encode(),bytes.fromhex(s),300000).hex()
@@ -316,6 +322,7 @@ def check_layout(body,values):
     return {'results':results,'fits':all(r['fits'] for r in results)}
 
 def make_export(book,options=None):
+    export_started=time.monotonic()
     options=options or {}
     book=copy.deepcopy(book);b=book['body']
     with db() as c:objects=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute('SELECT * FROM objects')]
@@ -444,7 +451,7 @@ def make_export(book,options=None):
         change=export_history.summary(json.loads(previous['snapshot']) if previous else None,snapshot)
         c.execute('INSERT INTO exports VALUES(?,?,?,?,?,?)',(i,book['id'],book['title'],now(),json.dumps(snapshot,ensure_ascii=False),json.dumps(report,ensure_ascii=False)))
         c.execute('INSERT INTO export_details(id,note,summary) VALUES(?,?,?)',(i,options.get('note','')[:1000],change))
-    return {'id':i,'report':report,'url':f'/files/export/{i}'}
+    return {'id':i,'report':report,'url':f'/files/export/{i}',**export_storage.finish(SimpleNamespace(**globals()),i,seconds=min(110,145-(time.monotonic()-export_started)))}
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
@@ -479,6 +486,8 @@ class Handler(BaseHTTPRequestHandler):
         if not session:return self.send(401,{'error':'Log eerst in.'})
         if path=='/api/google/status':
             return self.send(200,google_connection.status(DATA))
+        if path=='/api/export-storage':
+            return self.send(200,export_storage.status(SimpleNamespace(**globals())))
         if path=='/api/routes/status':
             return self.send(200,{'configured':bool(os.environ.get('GEOAPIFY_API_KEY','').strip())})
         m=re.fullmatch(r'/files/route/([a-f0-9]{32})',path)
@@ -486,7 +495,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/state':
             with db() as c:
                 rows=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute("SELECT objects.*, COALESCE((SELECT rowid FROM assets WHERE assets.id=json_extract(objects.body,'$.asset')),0) AS uploadOrder FROM objects ORDER BY title")]
-                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at FROM exports e LEFT JOIN export_details d ON d.id=e.id ORDER BY e.rowid DESC")]
+                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at','driveStored')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at,COALESCE(g.verified,0) AS driveStored FROM exports e LEFT JOIN export_details d ON d.id=e.id LEFT JOIN export_drive g ON g.id=e.id ORDER BY e.rowid DESC")]
             for o in rows:
                 if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
             for r in exports:r['report']=json.loads(r['report'])
@@ -511,7 +520,8 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 if not preview.exists():
                     ensure_capacity(20*1024*1024)
-                    subprocess.run([str(POPPLER),'-f',str(page+1),'-l',str(page+1),'-scale-to','1600','-singlefile','-png',str(DATA/'exports'/f'{i}.pdf'),str(preview.with_suffix(''))],check=True,timeout=60,creationflags=0x08000000 if os.name=='nt' else 0)
+                    with export_storage.pdf(SimpleNamespace(**globals()),i) as source:
+                        subprocess.run([str(POPPLER),'-f',str(page+1),'-l',str(page+1),'-scale-to','1600','-singlefile','-png',str(source),str(preview.with_suffix(''))],check=True,timeout=60,creationflags=0x08000000 if os.name=='nt' else 0)
             return self.send(200,preview.read_bytes(),'image/png')
         m=re.fullmatch(r'/files/(asset|export|preview)/([a-f0-9]{32})(?:/(\d+))?',path)
         if m:
@@ -519,9 +529,9 @@ class Handler(BaseHTTPRequestHandler):
             if kind=='export':
                 with db() as c:
                     if export_history.deleted(c,i):return self.send(404,{'error':'Deze drukversie staat in de prullenbak.'})
-                p=DATA/'exports'/f'{i}.pdf'
-                if not p.exists():return self.send(404,{'error':'Niet gevonden.'})
-                return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':f'{"attachment" if parse_qs(urlparse(self.path).query).get("download") else "inline"}; filename="boekje-{i[:8]}.pdf"'})
+                    if not c.execute('SELECT id FROM exports WHERE id=?',(i,)).fetchone():return self.send(404,{'error':'Niet gevonden.'})
+                with export_storage.pdf(SimpleNamespace(**globals()),i) as p:
+                    return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':f'{"attachment" if parse_qs(urlparse(self.path).query).get("download") else "inline"}; filename="boekje-{i[:8]}.pdf"'})
             a=asset(i);p=DATA/'pdfs'/f'{i}.pdf'
             if kind=='asset':return self.send(200,p.read_bytes(),'application/pdf')
             page=int(page or 0)
@@ -627,6 +637,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200,check_layout(b['body'],b.get('values',{})))
             if path=='/api/export-status':
                 return self.send(200,export_history.action(SimpleNamespace(**globals()),b))
+            if path=='/api/export-storage':
+                if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan de opslag wijzigen.'})
+                return self.send(200,export_storage.configure(SimpleNamespace(**globals()),b.get('enabled')))
+            if path=='/api/export-archive':
+                return self.send(200,export_storage.archive(SimpleNamespace(**globals()),b.get('id')))
             if path=='/api/document-duplicates':
                 return self.send(200,{'warnings':document_duplicates.warnings(SimpleNamespace(**globals()),b['body'])})
             if path=='/api/template-status':
