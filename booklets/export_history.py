@@ -53,10 +53,13 @@ def action(s,b):
             if operation=='trash':c.execute('UPDATE export_details SET deleted_at=? WHERE id=?',(s.now(),ident))
             else:
                 if not deleted(c,ident):raise ValueError('Verplaats deze drukversie eerst naar de prullenbak.')
+                import export_storage
+                export_storage.trash(s,ident)
                 pdf=s.DATA/'exports'/(ident+'.pdf');staged=pdf.with_suffix('.removed')
                 if pdf.exists():pdf.replace(staged)
                 try:
-                    c.execute('DELETE FROM exports WHERE id=?',(ident,));c.execute('DELETE FROM export_details WHERE id=?',(ident,));c.commit()
+                    c.execute('DELETE FROM exports WHERE id=?',(ident,));c.execute('DELETE FROM export_details WHERE id=?',(ident,))
+                    c.execute('DELETE FROM export_drive WHERE id=?',(ident,));c.commit()
                 except Exception:
                     if staged.exists():staged.replace(pdf)
                     raise
