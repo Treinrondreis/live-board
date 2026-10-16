@@ -8,6 +8,32 @@ s=test_cloud.cloud.server
 ctx=SimpleNamespace(**vars(s))
 
 class BookingDocumentTests(unittest.TestCase):
+    def test_archived_vouchers_are_searched_alongside_active_folder_and_revalidated_on_load(self):
+        active='fixture-active-folder';archive='fixture-archive-folder';calls=[]
+        voucher={'id':'fixture-archive-pdf','name':'321A-Example-Vienna-0803-1003.pdf','mimeType':'application/pdf','parents':[archive]}
+        def request(url,**kwargs):
+            calls.append(url);path=urlparse(url).path;q=parse_qs(urlparse(url).query).get('q',[''])[0]
+            if path.endswith('/'+active) or path.endswith('/'+archive):return json.dumps({'mimeType':'application/vnd.google-apps.folder'}).encode()
+            if path.endswith('/'+voucher['id']):return b'pdf' if 'alt=media' in url else json.dumps(voucher).encode()
+            return json.dumps({'files':[voucher] if archive in q else []}).encode()
+        settings={'BOOKLETS_VOUCHER_DRIVE_FOLDER_ID':active,'BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID':archive}
+        with patch.dict(os.environ,settings),patch.object(google_connection,'status',return_value={'canReadDrive':True}),patch.object(google_connection,'token',return_value='test-only'),patch.object(google_connection,'request',side_effect=request),patch.object(booking_documents,'store',return_value={'asset':'example'}):
+            found=booking_documents.drive_search(ctx,{'number':'321A','kind':'voucher'})['items']
+            self.assertEqual(len(found),1);self.assertEqual(found[0]['voucherFolder'],archive)
+            result=booking_documents.drive_load(ctx,{'number':'321A','id':voucher['id'],'voucherFolder':archive})
+            self.assertEqual(result['driveDocument']['voucherFolder'],archive)
+            with patch.dict(os.environ,{'BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID':''}):
+                with self.assertRaisesRegex(ValueError,'hotelvouchermap'):booking_documents.drive_load(ctx,{'number':'321A','id':voucher['id'],'voucherFolder':archive})
+        searches=[parse_qs(urlparse(url).query)['q'][0] for url in calls if 'q=' in url]
+        self.assertTrue(any(active in q for q in searches));self.assertTrue(any(archive in q for q in searches))
+        self.assertTrue(all('trashed = false' in q for q in searches))
+
+    def test_voucher_folder_configuration_deduplicates_and_validates_archive(self):
+        with patch.dict(os.environ,{'BOOKLETS_VOUCHER_DRIVE_FOLDER_ID':'fixture-folder','BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID':'fixture-folder'}):
+            self.assertEqual(booking_documents.voucher_folders(),['fixture-folder'])
+            with patch.dict(os.environ,{'BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID':"bad' folder"}):
+                with self.assertRaisesRegex(ValueError,'niet geldig'):booking_documents.voucher_folders()
+
     def test_voucher_search_reads_dedicated_folder_and_does_not_offer_timeline_as_voucher(self):
         folder='fixture-voucher-folder';calls=[]
         timeline={'id':'timeline','name':'321A tijdlijn.pdf','mimeType':'application/pdf'}

@@ -42,6 +42,11 @@ Python variables:
   filename. General search results must explicitly identify a voucher; timelines,
   tickets and invoices are excluded. Multiple distinctly named folder vouchers
   are combined and require the existing customer/hotel/date review before export.
+- Optional BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID: archived hotel-voucher folder.
+  Matching booking files directly in this folder are searched and validated in the
+  same way as the active voucher folder. Restore archived files from Drive Trash
+  before moving them here; trashed files remain excluded. Duplicate filenames
+  require manual selection. Files without a booking number are not auto-matched.
 
 ## Automatische voorstellen
 
