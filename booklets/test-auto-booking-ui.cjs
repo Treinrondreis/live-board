@@ -59,6 +59,31 @@ test('a unique Drive voucher is loaded automatically but must be reviewed before
  await f.exec('documentSlotPages(3)');f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
  assert(!f.slots()[3].selected.reviewRequired);assert(f.slots()[3].selected.reviewedAt);assert.equal(f.slots()[3].selected.driveDocument.id,'drive');
 });
+
+test('distinct hotel-folder vouchers combine chronologically and preserve every source after review',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'}],api:async(path,b)=>{
+  if(path==='/api/booking-documents/drive-search'&&b.kind==='voucher')return {items:[{id:'stay-later',title:'321A-Example-Beta.pdf',recommended:true,voucherFolder:'fixture-folder',updatedAt:'current'},{id:'stay-first',title:'321A-Example-Alpha.pdf',recommended:true,voucherFolder:'fixture-folder',updatedAt:'current'}]};
+  if(path==='/api/booking-documents/drive-load'&&b.id.startsWith('stay-')){assert.equal(b.voucherFolder,'fixture-folder');assert.equal(b.updatedAt,'current');return {asset:b.id,pages:1,driveDocument:{id:b.id}};}
+  if(path==='/api/tickets/inspect'&&b.asset.startsWith('stay-'))return {pages:[{asset:b.asset,page:0,travelDate:b.asset==='stay-first'?'2027-03-08':'2027-03-10',dateSource:'pdf',dateNeedsReview:false}]};
+ }});
+ await f.exec('autoFillBookingDocuments()');let selected=f.slots()[3].selected;
+ assert.equal(selected.pages,2);assert.equal(selected.pageSources[0].asset,'stay-first');assert.equal(selected.driveDocuments.length,2);assert(selected.reviewRequired);
+ await f.exec('documentSlotPages(3)');f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ selected=f.slots()[3].selected;assert.equal(selected.driveDocuments.length,2);assert(!selected.reviewRequired);assert.equal(selected.originalPages.length,2);
+});
+
+test('a failed second Drive voucher never inserts a partial voucher set',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'}],api:async(path,b)=>{
+  if(path==='/api/booking-documents/drive-search'&&b.kind==='voucher')return {items:[{id:'one',title:'First.pdf',recommended:true,voucherFolder:'fixture-folder'},{id:'two',title:'Second.pdf',recommended:true,voucherFolder:'fixture-folder'}]};
+  if(path==='/api/booking-documents/drive-load'&&b.id==='two')throw Error('Voucher changed during import');
+ }});
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/changed during import/);
+});
+
+test('duplicate filenames in the hotel folder require a choice instead of importing both versions',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'}],driveItems:[{id:'one',title:'Same voucher.pdf',recommended:true,voucherFolder:'fixture-folder'},{id:'two',title:'SAME VOUCHER.PDF',recommended:true,voucherFolder:'fixture-folder'}]});
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/Meerdere/);assert(!f.calls.some(c=>c.path==='/api/booking-documents/drive-load'&&['one','two'].includes(c.b.id)));
+});
 test('failure of a second voucher cannot insert an incomplete hotel voucher set',async()=>{
  const f=fixture({api:async(path,b)=>{if(path==='/api/booking-data/document'&&b.documentId==='voucher2')throw Error('Reserveringsnummer ontbreekt');}});
  await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/Reserveringsnummer/);assert(f.slots()[0].selected);

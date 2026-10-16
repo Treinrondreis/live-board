@@ -5,6 +5,14 @@ import test_cloud,ticket_dates
 s=test_cloud.cloud.server
 
 class TicketDateTests(unittest.TestCase):
+    def test_voucher_written_check_in_dates_ignore_check_out_and_incheck_times(self):
+        text='Hotelvoucher\nAankomst: 8 maart 2027\nVertrek: 10 maart 2027\nInchecken: Vanaf 15.00 uur tot middernacht'
+        self.assertEqual(ticket_dates.labelled_date(text,'voucher'),('2027-03-08','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Arrival: 8 March 2027\nDeparture: 10 March 2027','voucher'),('2027-03-08','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Aankomst: 31 februari 2027','voucher'),('','unknown',True))
+        self.assertEqual(ticket_dates.labelled_date('Documentdatum: 8 maart 2027\nVertrek: 10 maart 2027','voucher'),('','unknown',True))
+        self.assertEqual(ticket_dates.iso('8 maart 2027'),'')
+
     def test_mav_train_date_wins_over_validity_issue_and_birth_date(self):
         text='Date of birth: 16.12.1959\nIssue date: 16.09.2026\nERVENYES/VALID: 10.10.2026 - 11.10.2026\nVONAT/TRAIN: 61(10.10.2026 11:40)'
         self.assertEqual(ticket_dates.labelled_date(text,'mav'),('2026-10-10','pdf',False))

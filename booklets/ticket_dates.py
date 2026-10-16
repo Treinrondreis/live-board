@@ -5,6 +5,15 @@ from pypdf import PdfReader
 
 PROVIDERS=('ns','mav','db','obb','cd','voucher')
 DATE=r'(?:20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2}[.\-/]20\d{2})'
+MONTHS={name:n for n,names in enumerate(('januari january','februari february','maart march','april','mei may','juni june','juli july','augustus august','september','oktober october','november','december'),1) for name in names.split()}
+WRITTEN_DATE=r'\d{1,2}\s+(?:'+'|'.join(MONTHS)+r')\s+20\d{2}'
+
+def voucher_iso(value):
+    parsed=iso(value)
+    if parsed:return parsed
+    m=re.fullmatch(r'(\d{1,2})\s+([a-z]+)\s+(20\d{2})',str(value).strip(),re.I)
+    if not m or m[2].lower() not in MONTHS:return ''
+    return iso(f'{m[3]}-{MONTHS[m[2].lower()]:02}-{int(m[1]):02}')
 
 def iso(value):
     m=re.fullmatch(r'(\d{1,4})[.\-/](\d{1,2})[.\-/](\d{1,4})',str(value or '').strip())
@@ -16,12 +25,13 @@ def iso(value):
 
 def labelled_date(text,provider,allowed=()):
     text=text[:100000]
-    if provider=='voucher':labels=r'check[ -]?in|incheck(?:datum|en)?|arrival date|aankomst(?:datum)?'
+    if provider=='voucher':labels=r'check[ -]?in|incheck(?:datum|en)?|arrival(?: date)?|aankomst(?:datum)?'
     else:labels=r'vertrek(?:datum)?|departure(?: date)?|abfahrt(?: am)?|d[eé]part(?: le)?|travel date|reisdatum|odjezd'
-    patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({DATE})']
+    printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider=='voucher' else DATE
+    patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({printed_date})']
     if provider=='mav':patterns.insert(0,rf'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*({DATE})')
     for pattern in patterns:
-        values={iso(m[1]) for m in re.finditer(pattern,text,re.I)}-{''}
+        values={(voucher_iso(m[1]) if provider=='voucher' else iso(m[1])) for m in re.finditer(pattern,text,re.I)}-{''}
         if values:return (next(iter(values)),'pdf',False) if len(values)==1 else ('','ambiguous',True)
     if provider!='voucher':
         # Validity is an anchor, not a birthday or the date the ticket was issued.

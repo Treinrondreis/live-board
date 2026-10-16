@@ -1,5 +1,5 @@
 """Private booking documents rendered into immutable personal PDF assets."""
-import base64,json,re
+import base64,json,os,re
 from urllib.parse import urlencode
 import google_connection as connection
 import google_layout,sanity_sources,ticket_import,booking_letter_layout
@@ -60,28 +60,49 @@ def number(value):
 def drive_search(s,payload):
     drive_access(s.DATA);n=number(payload.get('number',''));kind=payload.get('kind')
     if kind not in ('schedule','voucher'):raise ValueError('Kies reisschema of voucher.')
-    q=f"trashed = false and (mimeType = 'application/pdf' or mimeType = 'application/vnd.google-apps.document') and name contains '{n}'"
-    args={'q':q,'fields':'files(id,name,mimeType,modifiedTime),nextPageToken','pageSize':100,'orderBy':'modifiedTime desc','supportsAllDrives':'true','includeItemsFromAllDrives':'true'}
-    found=[];access=connection.token(s.DATA)
-    for page in range(5):
-        result=json.loads(connection.request('https://www.googleapis.com/drive/v3/files?'+urlencode(args),token=access))
-        for f in result.get('files',[]):
-            if not re.search(r'(?<!\d)'+re.escape(n)+r'[A-Za-z]?(?!\d)',f['name']):continue
-            label=f['name'].lower();recommended=bool(re.search(r'reisschema|tijdlijn|reis.?schema|itinerary',label) if kind=='schedule' else re.search(r'voucher',label))
-            found.append({'id':f['id'],'title':f['name'],'mimeType':f['mimeType'],'updatedAt':f.get('modifiedTime',''),'recommended':recommended})
-        if not result.get('nextPageToken'):break
-        args['pageToken']=result['nextPageToken']
-    else:raise ValueError('Te veel Drive-bestanden gevonden. Upload het juiste document zelf.')
-    return {'items':sorted(found,key=lambda f:not f['recommended'])}
+    folders=voucher_folders() if kind=='voucher' else []
+    found={};access=connection.token(s.DATA)
+    for folder in folders:
+        info=json.loads(connection.request('https://www.googleapis.com/drive/v3/files/'+folder+'?fields=id,mimeType,trashed&supportsAllDrives=true',token=access))
+        if info.get('trashed') or info.get('mimeType')!='application/vnd.google-apps.folder':raise ValueError('De ingestelde hotelvouchermap is geen beschikbare Google Drive-map.')
+    for source_folder in ['',*folders]:
+        q=f"trashed = false and (mimeType = 'application/pdf' or mimeType = 'application/vnd.google-apps.document') and name contains '{n}'"
+        if source_folder:q+=f" and '{source_folder}' in parents"
+        args={'q':q,'fields':'files(id,name,mimeType,modifiedTime),nextPageToken','pageSize':100,'orderBy':'modifiedTime desc','supportsAllDrives':'true','includeItemsFromAllDrives':'true'}
+        for page in range(5):
+            result=json.loads(connection.request('https://www.googleapis.com/drive/v3/files?'+urlencode(args),token=access))
+            for f in result.get('files',[]):
+                if not re.search(r'(?<!\d)'+re.escape(n)+r'[A-Za-z]?(?!\d)',f['name']):continue
+                label=f['name'].lower()
+                if kind=='voucher' and re.search(r'reisschema|tijdlijn|itinerary|factuur|invoice|ticket',label):continue
+                recommended=bool(re.search(r'reisschema|tijdlijn|reis.?schema|itinerary',label) if kind=='schedule' else source_folder or re.search(r'voucher',label))
+                if kind=='voucher' and not recommended:continue
+                found[f['id']]={'id':f['id'],'title':f['name'],'mimeType':f['mimeType'],'updatedAt':f.get('modifiedTime',''),'recommended':recommended,**({'voucherFolder':source_folder} if source_folder else {})}
+            if not result.get('nextPageToken'):break
+            args['pageToken']=result['nextPageToken']
+        else:raise ValueError('Te veel Drive-bestanden gevonden. Upload het juiste document zelf.')
+    return {'items':sorted(found.values(),key=lambda f:not f['recommended'])}
+
+def voucher_folders():
+    folders=[]
+    for key in ('BOOKLETS_VOUCHER_DRIVE_FOLDER_ID','BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID'):
+        folder=os.environ.get(key,'').strip()
+        if folder and not re.fullmatch(r'[A-Za-z0-9_-]{10,150}',folder):raise ValueError('De hotelvouchermap is niet geldig ingesteld.')
+        if folder and folder not in folders:folders.append(folder)
+    return folders
 
 def drive_load(s,payload):
     drive_access(s.DATA);n=number(payload.get('number',''));ident=payload.get('id','');fmt=payload.get('format','A4')
     if not re.fullmatch(r'[A-Za-z0-9_-]{10,150}',ident) or fmt not in s.SIZES:raise ValueError('Ongeldig Drive-bestand.')
     access=connection.token(s.DATA);base='https://www.googleapis.com/drive/v3/files/'+ident
-    info=json.loads(connection.request(base+'?fields=id,name,mimeType&supportsAllDrives=true',token=access))
+    info=json.loads(connection.request(base+'?fields=id,name,mimeType,parents,modifiedTime,trashed&supportsAllDrives=true',token=access))
+    if info.get('trashed'):raise ValueError('Dit Drive-bestand staat in de prullenbak. Kies een actuele voucher.')
     if not re.search(r'(?<!\d)'+re.escape(n)+r'[A-Za-z]?(?!\d)',info['name']):raise ValueError('Dit bestand heeft een ander boekingsnummer. Upload het na handmatige controle.')
+    if payload.get('updatedAt') and payload['updatedAt']!=info.get('modifiedTime'):raise ValueError('Het Drive-document is gewijzigd. Zoek de documenten opnieuw.')
+    folder=payload.get('voucherFolder','')
+    if folder and (folder not in voucher_folders() or folder not in info.get('parents',[])):raise ValueError('Deze voucher staat niet meer in de ingestelde hotelvouchermap. Zoek de documenten opnieuw.')
     if info['mimeType']=='application/vnd.google-apps.document':raw=connection.request(base+'/export?mimeType=application%2Fpdf',token=access,limit=30*1024*1024)
     elif info['mimeType']=='application/pdf':raw=connection.request(base+'?alt=media&supportsAllDrives=true',token=access,limit=30*1024*1024)
     else:raise ValueError('Kies een PDF of Google-document.')
     result=store(s,raw,info['name'])
-    return {**result,'driveDocument':{'id':ident,'title':info['name']}}
+    return {**result,'driveDocument':{'id':ident,'title':info['name'],'updatedAt':info.get('modifiedTime',''),**({'voucherFolder':folder} if folder else {})}}

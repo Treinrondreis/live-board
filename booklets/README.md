@@ -36,6 +36,17 @@ Python variables:
 - Creating route copies in Google Docs additionally requires Drive API enabled
   and explicit OAuth consent for drive.file. Existing documents.readonly access
   continues to work without that extra grant. Copies do not sync back to routes.
+- Optional BOOKLETS_VOUCHER_DRIVE_FOLDER_ID: existing hotel-voucher folder, read
+  through the same Google Drive connection. Voucher search also lists matching
+  booking files directly in this folder, including PDFs without "voucher" in the
+  filename. General search results must explicitly identify a voucher; timelines,
+  tickets and invoices are excluded. Multiple distinctly named folder vouchers
+  are combined and require the existing customer/hotel/date review before export.
+- Optional BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID: archived hotel-voucher folder.
+  Matching booking files directly in this folder are searched and validated in the
+  same way as the active voucher folder. Restore archived files from Drive Trash
+  before moving them here; trashed files remain excluded. Duplicate filenames
+  require manual selection. Files without a booking number are not auto-matched.
 
 ## Automatische voorstellen
 
