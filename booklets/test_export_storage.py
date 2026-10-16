@@ -106,6 +106,7 @@ class ExportStorageTests(unittest.TestCase):
             c.execute('CREATE TABLE assets(id TEXT PRIMARY KEY,title TEXT,pages INTEGER,meta TEXT,created TEXT)')
             s.export_history.initialize(c)
             storage.initialize(c)
+            s.book_activity.initialize(c)
         storage.configure(context(), True)
 
     def export(self, book='synthetic-book'):

@@ -5,7 +5,7 @@ import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
-import export_history,export_storage,km_archive,document_duplicates
+import export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks
 import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
@@ -72,6 +72,7 @@ with db() as c:
     export_history.initialize(c)
     export_storage.initialize(c)
     km_archive.initialize(c)
+    book_activity.initialize(c)
 
 # Interrupted private downloads are disposable, never source PDFs or exports.
 cache=DATA/'export-cache'
@@ -217,6 +218,9 @@ def validate_body(kind,b,prepared=False):
         if b.get('fillerOrder') and (b.get('pages')!=1 or int(b['fillerOrder']) not in (1,2,3)):raise ValueError('Een vulbouwsteen bevat één pagina en heeft volgorde 1, 2 of 3.')
         a=asset(b['asset']);b['pages']=a['pages']; fields_validate(b.get('fields',[]),a['meta'])
     elif kind in ('template','book'):
+        if b.get('outputMode','print') not in ('print','screen'):raise ValueError('Kies drukwerk of een downloadbare PDF.')
+        journey_dates=(b.get('sanityBooking') or {}).get('journeyDates',[])
+        if not isinstance(journey_dates,list) or len(journey_dates)>500 or any(not isinstance(d,str) or ticket_dates.iso(d)!=d for d in journey_dates):raise ValueError('Ongeldige gezamenlijke treinreisdatums.')
         if kind=='template' and b.get('sanityBooking'):raise ValueError('Koppel klantgegevens alleen aan een persoonlijk boekje.')
         if len(b.get('sections',[]))>100: raise ValueError('Maximaal 100 bouwstenen.')
         if b.get('format','A4') not in SIZES:raise ValueError('Kies A4 of A5.')
@@ -248,6 +252,7 @@ def validate_body(kind,b,prepared=False):
                         if not isinstance(sources,list) or not 1<=len(sources)<=5 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot vijf verschillende ticketbronnen.')
                     if slot.get('documentKind')=='combinedTickets' and not slot.get('ticketSources'):raise ValueError('Kies minstens één ticketbron.')
                     if slot.get('ticketSourceMode','all') not in ('all','fallback'):raise ValueError('Kies combineren of de eerste beschikbare ticketbron.')
+                    if slot.get('ticketDateBasis','booking') not in ('booking','source'):raise ValueError('Kies gezamenlijke reisdatums of datums binnen de ticketbron.')
                     if slot.get('options'):raise ValueError('Een documentplek bevat geen bibliotheekkeuzes.')
                     if kind=='template' and slot.get('selected'):raise ValueError('Klantdocumenten horen alleen bij een persoonlijk boekje.')
                     if slot.get('selected'):
@@ -285,7 +290,7 @@ def validate_body(kind,b,prepared=False):
                 if not manual_dates and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
                     moment=slot.get('voucherMoment',0) if slot['documentKind']=='voucher' else slot.get('ticketMoment',0)
                     if moment:
-                        dates=sorted({p.get('travelDate') for p in candidate.get('originalPages',candidate['pageSources']) if p.get('travelDate')})
+                        dates=ticket_dates.moment_dates(b,slot,candidate)
                         if moment>len(dates) or any(p.get('travelDate')!=dates[moment-1] for p in candidate['pageSources']):raise ValueError('De ticket/voucherpagina’s horen niet bij dit reismoment/verblijf.')
                 if candidate.get('sanityText'):
                     source=sanity_sources.settings(candidate['sanityText'])
@@ -329,6 +334,8 @@ def make_export(book,options=None):
     export_started=time.monotonic()
     options=options or {}
     book=copy.deepcopy(book);b=book['body']
+    screen=b.get('outputMode')=='screen'
+    if screen:b['duplex']=False
     with db() as c:objects=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute('SELECT * FROM objects')]
     for o in objects:
         if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
@@ -364,6 +371,7 @@ def make_export(book,options=None):
     toc_at=1 if b.get('contentsAfterFirst',True) and len(sections)>1 else 0
     toc_indices=[];starts={};blank_indices=set()
     for section_index,s in enumerate(sections):
+        export_checks.check()
         if toc and section_index==toc_at:
             for _ in toc:
                 toc_indices.append(len(writer.pages));writer.add_blank_page(width=SIZES[b.get('format','A4')][0],height=SIZES[b.get('format','A4')][1])
@@ -374,6 +382,7 @@ def make_export(book,options=None):
             writer.add_blank_page(width=float(reader.pages[0].mediabox.width),height=float(reader.pages[0].mediabox.height));report['blanks']+=1
         starts[section_index]=len(writer.pages)
         for n in range(s.get('sourceStart',0),s.get('sourceStart',0)+s['pages']):
+            export_checks.check()
             source=reader.pages[n]
             if s.get('numberingConfigured'):configured_pages.add(len(writer.pages))
             w,h=float(source.mediabox.width),float(source.mediabox.height)
@@ -426,18 +435,20 @@ def make_export(book,options=None):
     report['chapterStarts']=[{'title':s.get('tocTitle') or s['title'],'page':starts[n]+1,'hidden':bool(s.get('tocHidden'))} for n,s in enumerate(sections)]
     digital_chapters={}
     for n,section in enumerate(sections):
+        export_checks.check()
         key=section.get('_digitalChapter')
         if key is None:continue
         if key not in digital_chapters:digital_chapters[key]={'title':section.get('tocTitle') or section['title'],'hidden':bool(section.get('tocHidden')),'pageNumbers':[]}
         digital_chapters[key]['pageNumbers'].extend(range(starts[n]+1,starts[n]+section['pages']+1))
     report['digitalChapters']=[{**chapter,'page':chapter['pageNumbers'][0],'end':chapter['pageNumbers'][-1]} for chapter in digital_chapters.values() if not chapter['hidden']]
     report['warnings']=list(dict.fromkeys(report['warnings']+document_duplicates.warnings(SimpleNamespace(**globals()),b)))
-    report['warnings'].append('Geen PDF/X-certificering, kleurconversie of automatische controle van fotoresolutie/afloop. Stem dit af op het gekozen drukproduct en controleer een proefdruk.')
+    report['outputMode']='screen' if screen else 'print'
+    if not screen:report['warnings'].append('Geen PDF/X-certificering, kleurconversie of automatische controle van fotoresolutie/afloop. Stem dit af op het gekozen drukproduct en controleer een proefdruk.')
     report['pages']=len(writer.pages)
     report['fillersAdded']=sum(x['pages'] for x in preparation['fillers']) if options.get('fill') else 0
     report['fillersSkipped']=preparation['droppedFillers'] if options.get('fill') else []
     if preparation['missing']:report['warnings'].append('Niet ingestelde keuzeplekken overgeslagen: '+', '.join(preparation['missing']))
-    if report['pages']%4:report['warnings'].append('Op uw keuze geëxporteerd zonder aanvulling: aantal pagina’s is niet deelbaar door vier.')
+    if not screen and report['pages']%4:report['warnings'].append('Op uw keuze geëxporteerd zonder aanvulling: aantal pagina’s is niet deelbaar door vier.')
     if options.get('dryRun'):return {'report':report}
     i=ident();target=DATA/'exports'/f'{i}.pdf'
     writer.remove_annotations(subtypes='/Link')
@@ -498,7 +509,7 @@ class Handler(BaseHTTPRequestHandler):
         if m:return self.send(200,route_maker.stored(SimpleNamespace(**globals()),m[1],'.png').read_bytes(),'image/png')
         if path=='/api/state':
             with db() as c:
-                rows=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute("SELECT objects.*, COALESCE((SELECT rowid FROM assets WHERE assets.id=json_extract(objects.body,'$.asset')),0) AS uploadOrder FROM objects ORDER BY title")]
+                rows=book_activity.catalogue(c)
                 exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at','driveStored')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at,COALESCE(g.verified,0) AS driveStored FROM exports e LEFT JOIN export_details d ON d.id=e.id LEFT JOIN export_drive g ON g.id=e.id ORDER BY e.rowid DESC")]
             for o in rows:
                 if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
@@ -693,12 +704,16 @@ class Handler(BaseHTTPRequestHandler):
                     b['body'].pop('deletedAt',None)
                     rev=old['revision']+1 if old else 1
                     c.execute('INSERT OR REPLACE INTO objects VALUES(?,?,?,?,?)',(i,kind,title,rev,json.dumps(b['body'],ensure_ascii=False)))
+                    book_activity.touch(c,i)
                 return self.send(200,{'id':i,'revision':rev})
             if path=='/api/export-plan':
                 with db() as c:objects=[{**dict(r),'body':json.loads(r['body'])} for r in c.execute('SELECT * FROM objects')]
                 for o in objects:
                     if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
-                return self.send(200,preflight.check(SimpleNamespace(**globals()),b['body'],objects,bool(b.get('fill'))))
+                with export_checks.begin(b.get('checkId')):
+                    return self.send(200,preflight.check(SimpleNamespace(**globals()),b['body'],objects,bool(b.get('fill'))))
+            if path=='/api/export-cancel':
+                return self.send(200,export_checks.cancel(b.get('checkId')))
             if path=='/api/export':
                 if not isinstance(b.get('note',''),str) or len(b.get('note',''))>1000:raise ValueError('Gebruik maximaal 1000 tekens voor de opmerking.')
                 book=obj(b['id'])

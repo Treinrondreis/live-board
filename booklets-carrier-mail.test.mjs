@@ -1,7 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createBookletsMail,bookingReferences} from './booklets-mail.mjs';
-import {carrierReferences,carrierMessageReferences,referenceDates,referenceContinuationDates,isoDate,carrierSender,safeCarrierPDF,ticketAttachment,carrierSearchQuery} from './booklets-carrier-mail.mjs';
+import {carrierReferences,carrierMessageReferences,referenceDates,referenceContinuationDates,isoDate,carrierSender,safeCarrierPDF,ticketAttachment,carrierSearchQuery,bookingJourneyDates} from './booklets-carrier-mail.mjs';
+
+test('shared journey moments include different carriers and explicit onward ToDos, never hotel checkout',()=>{
+ const booking={todos:[{title:'ÖBB Nightjet',supplierBookingNumber:'1111222233334444',startDate:'2026-10-12',endDate:'2026-10-13'},{title:'NS trein',supplierBookingNumber:'ABCDEFG',startDate:'2026-10-18',endDate:'2026-10-19'},{title:'Hotel Example',supplierBookingNumber:'1111222233334444',startDate:'2026-10-13',endDate:'2026-10-17'},{title:'CORA2',startDate:'2026-10-19'}]};
+ assert.deepEqual(bookingJourneyDates(booking),['2026-10-12','2026-10-18','2026-10-19']);
+});
 
 test('NS continuation hints use only the following day of a matching train ToDo',()=>{
  const booking={todos:[{title:'Nightjet',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-23',endDate:'2027-02-24'},{title:'Hotel',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-24',endDate:'2027-02-25'},{title:'Nightjet',supplierBookingNumber:'HIJKLMN',startDate:'2027-02-26',endDate:'2027-02-27'},{title:'Nightjet',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-23',endDate:'2027-02-28'}]};

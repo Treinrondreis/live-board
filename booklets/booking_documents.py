@@ -26,7 +26,7 @@ def render(s,payload):
         except (ValueError,TypeError):raise ValueError('Ongeldige originele Sanity-PDF.')
         warnings=doc.get('warnings',[])
         if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
-        return {**store(s,raw,doc.get('title','Sanity-document')),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate') if k in doc},'originalPdf':True}}
+        return {**store(s,raw,doc.get('title','Sanity-document')),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate','attachment') if k in doc},'originalPdf':True}}
     m,images=sanity_sources.model([doc],{'title':doc.get('title','Brief'),'columns':1})
     warnings=doc.get('warnings',[])
     if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')

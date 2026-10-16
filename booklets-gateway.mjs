@@ -45,7 +45,7 @@ export function createBookletsGateway({authenticate=adminAuthenticated, bookings
         if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Ongeldige ticketzoekopdracht.');
         const action=url.pathname.split('/').at(-1);
         if(url.pathname.startsWith(prefix+'/api/booking-data/')){
-          if(!['search','documents','document'].includes(action))return fail(404,'Boekingsactie niet gevonden.');
+          if(!['search','documents','document','attachment'].includes(action))return fail(404,'Boekingsactie niet gevonden.');
           const result=await bookings[action](body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;
         }
         if(action==='search'){const result=await mail.search(body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}
