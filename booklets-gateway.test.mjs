@@ -7,12 +7,13 @@ let seen=[];
 const backend=http.createServer((req,res)=>{let bytes=0;req.on('data',b=>bytes+=b.length);req.on('end',()=>{seen.push({url:req.url,headers:req.headers,bytes});res.setHeader('Content-Type','application/pdf');res.setHeader('Set-Cookie','unsafe=1');res.end('private-pdf');});});
 await new Promise(r=>backend.listen(0,'127.0.0.1',r));
 const secret='s'.repeat(48),origin='https://treinbord.up.railway.app';
-const gateway=createBookletsGateway({mail:{search:async body=>({query:body.query,messages:[]}),download:async()=>Buffer.from('%PDF-private-ticket')},authenticate:async req=>req.headers.cookie==='owner=valid',configuration:()=>({upstream:`http://127.0.0.1:${backend.address().port}`,secret,origin})});
+const printCalls=[];
+const gateway=createBookletsGateway({printer:{quote:async body=>{printCalls.push(body);return {id:'synthetic-quote'}}},mail:{search:async body=>({query:body.query,messages:[]}),download:async()=>Buffer.from('%PDF-private-ticket')},authenticate:async req=>req.headers.cookie==='owner=valid',configuration:()=>({upstream:`http://127.0.0.1:${backend.address().port}`,secret,origin})});
 const front=http.createServer(async(req,res)=>{if(!await gateway(req,res,new URL(req.url,'http://test')))res.writeHead(404).end();});
 await new Promise(r=>front.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${front.address().port}`;
 try{
- for(const path of ['/api/state','/files/export/'+ 'a'.repeat(32),'/digital/'+'b'.repeat(32),'/import','/api/mail-tickets/search','/api/mail-tickets/download','/api/booking-data/search','/api/booking-data/documents','/api/booking-data/document']){
+ for(const path of ['/api/state','/files/export/'+ 'a'.repeat(32),'/digital/'+'b'.repeat(32),'/import','/api/mail-tickets/search','/api/mail-tickets/download','/api/booking-data/search','/api/booking-data/documents','/api/booking-data/document','/api/print/quote','/api/print/order']){
    const r=await fetch(base+p+path);assert.equal(r.status,401);assert.equal(r.headers.get('cache-control'),'no-store');
  }
  assert.equal(seen.length,0);
@@ -20,10 +21,15 @@ try{
  assert.equal((await fetch(base+p+'/api/state',{headers:{cookie:'member=valid'}})).status,401);
  const headers={cookie:'owner=valid',origin,'x-booklets':'1','content-type':'application/json','x-booklets-gateway':'attacker'};
  const beforeInternal=seen.length;
- for(const path of ['/internal/km-archive/setup','/%69nternal/km-archive/setup','//internal/km-archive/setup','/%2569nternal/km-archive/setup'])assert.equal((await fetch(base+p+path,{method:'POST',headers,body:'{}'})).status,404);
+ for(const path of ['/internal/print-orders/pdf','/%69nternal/print-orders/claim','/internal/km-archive/setup','/%69nternal/km-archive/setup','//internal/km-archive/setup','/%2569nternal/km-archive/setup'])assert.equal((await fetch(base+p+path,{method:'POST',headers,body:'{}'})).status,404);
  assert.equal(seen.length,beforeInternal);
  for(const change of [{origin:'https://evil.example'},{origin:''},{'x-booklets':'0'}])assert.equal((await fetch(base+p+'/api/save',{method:'POST',headers:{...headers,...change},body:'{}'})).status,403);
  for(const change of [{origin:'https://evil.example'},{'x-booklets':'0'}])assert.equal((await fetch(base+p+'/api/mail-tickets/search',{method:'POST',headers:{...headers,...change},body:'{}'})).status,403);
+ for(const change of [{origin:'https://evil.example'},{'x-booklets':'0'}])assert.equal((await fetch(base+p+'/api/print/quote',{method:'POST',headers:{...headers,...change},body:'{}'})).status,403);
+ const quote=await fetch(base+p+'/api/print/quote',{method:'POST',headers,body:'{}'});assert.equal(quote.status,200);assert.equal((await quote.json()).id,'synthetic-quote');assert.equal(printCalls.length,1);
+ assert.equal((await fetch(base+p+'/api/print/quote',{headers})).status,405);
+ assert.equal((await fetch(base+p+'/api/print/unknown',{method:'POST',headers,body:'{}'})).status,404);
+ assert.equal((await fetch(base+p+'/api/print/quote',{method:'POST',headers,body:'[]'})).status,400);
  const search=await fetch(base+p+'/api/mail-tickets/search',{method:'POST',headers,body:JSON.stringify({query:'ABCDEFG'})});assert.equal(search.status,200);assert.equal((await search.json()).query,'ABCDEFG');
  const ticket=await fetch(base+p+'/api/mail-tickets/download',{method:'POST',headers,body:'{}'});assert.equal(ticket.status,200);assert.equal(await ticket.text(),'%PDF-private-ticket');
  const ok=await fetch(base+p+'/files/export/'+'c'.repeat(32),{headers});

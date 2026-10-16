@@ -5,7 +5,7 @@ import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
-import export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks
+import export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks,print_orders
 import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
@@ -73,6 +73,7 @@ with db() as c:
     export_storage.initialize(c)
     km_archive.initialize(c)
     book_activity.initialize(c)
+    print_orders.initialize(c)
 
 # Interrupted private downloads are disposable, never source PDFs or exports.
 cache=DATA/'export-cache'

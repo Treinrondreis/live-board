@@ -1,5 +1,6 @@
 import {bookletsMail} from './booklets-mail.mjs';
 import {bookletsBookings} from './booklets-bookings.mjs';
+import {bookletPrinter} from './booklets-print.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import {Transform} from 'node:stream';
@@ -7,7 +8,7 @@ import {adminAuthenticated} from './admin-security.mjs';
 
 export const BOOKLETS_PREFIX='/seinhuis/boekjesmaker';
 const MAX_UPLOAD=50*1024*1024;
-export function createBookletsGateway({authenticate=adminAuthenticated, bookings=bookletsBookings, mail=bookletsMail, configuration=()=>({upstream:process.env.BOOKLETS_INTERNAL_URL,secret:process.env.BOOKLETS_GATEWAY_SECRET,origin:process.env.BOOKLETS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'})}={}) {
+export function createBookletsGateway({authenticate=adminAuthenticated, bookings=bookletsBookings, mail=bookletsMail, printer=bookletPrinter, configuration=()=>({upstream:process.env.BOOKLETS_INTERNAL_URL,secret:process.env.BOOKLETS_GATEWAY_SECRET,origin:process.env.BOOKLETS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'})}={}) {
   return async function handleBooklets(req,res,url) {
     const prefix=BOOKLETS_PREFIX;
     if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
@@ -36,6 +37,13 @@ export function createBookletsGateway({authenticate=adminAuthenticated, bookings
     const length=Number(req.headers['content-length']||0);
     if(!Number.isSafeInteger(length)||length<0||length>MAX_UPLOAD)return fail(413,'Maximaal 50 MB per upload.');
     if(req.method==='POST'&&!req.headers['content-length'])return fail(411,'De uploadlengte ontbreekt.');
+    if(url.pathname.startsWith(prefix+'/api/print/')){
+      if(req.method!=='POST')return fail(405,'Gebruik POST voor drukwerk.');
+      if(length>32768)return fail(413,'Bestelopdracht te groot.');
+      const action=url.pathname.slice((prefix+'/api/print/').length);
+      if(!['prepare','quote','order','status'].includes(action))return fail(404,'Bestelactie niet gevonden.');
+      try{const parts=[];let received=0;for await(const chunk of req){received+=chunk.length;if(received>32768)throw Error('Bestelopdracht te groot.');parts.push(chunk);}let body;try{body=JSON.parse(Buffer.concat(parts).toString('utf8'));}catch{throw Error('Ongeldige bestelopdracht.');}if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Ongeldige bestelopdracht.');const result=await printer[action](body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}catch(error){return fail(400,error.message||'De drukwerkactie is niet bevestigd.');}
+    }
     if(url.pathname.startsWith(prefix+'/api/mail-tickets/')||url.pathname.startsWith(prefix+'/api/booking-data/')){
       if(req.method!=='POST')return fail(405,'Gebruik POST voor ticketimport.');
       if(length>32768)return fail(413,'Ticketzoekopdracht te groot.');
