@@ -4,6 +4,7 @@
 import {S3Client,PutObjectCommand,GetObjectCommand,HeadObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3';
 import {getSignedUrl} from '@aws-sdk/s3-request-presigner';
 import {testEdition} from './kk-edition-context.mjs';
+import {archivedPhotoUrl,archivedPhotoStream,photoArchive} from './kk-photo-drive.mjs';
 let client;
 const names=['KK_S3_BUCKET','KK_S3_ENDPOINT','KK_S3_ACCESS_KEY_ID','KK_S3_SECRET_ACCESS_KEY'];
 export function mediaReady(env=process.env){return names.every(k=>!!env[k]);}
@@ -30,8 +31,10 @@ export async function putValidatedMedia({owner,id,type,size,stream}){
 }
 export async function inspectStoredMedia(owner,id){const {client,bucket}=connection();return client.send(new HeadObjectCommand({Bucket:bucket,Key:mediaKey(owner,id)}),{abortSignal:AbortSignal.timeout(10000)});}
 // No public bucket; handlers grant short-lived links only to authorized viewers.
-export async function authorizedMediaUrl(owner,id,downloadName=null){const {client,bucket}=connection();return getSignedUrl(client,new GetObjectCommand({Bucket:bucket,Key:mediaKey(owner,id),ResponseCacheControl:'private, no-store',...(downloadName?{ResponseContentDisposition:"attachment; filename*=UTF-8''"+encodeURIComponent(downloadName)}:{})}),{expiresIn:120});}
+export async function authorizedMediaUrl(owner,id,downloadName=null){const archived=await archivedPhotoUrl(owner,id);if(archived)return archived;const {client,bucket}=connection();return getSignedUrl(client,new GetObjectCommand({Bucket:bucket,Key:mediaKey(owner,id),ResponseCacheControl:'private, no-store',...(downloadName?{ResponseContentDisposition:"attachment; filename*=UTF-8''"+encodeURIComponent(downloadName)}:{})}),{expiresIn:120});}
 
-export async function storedMediaStream(owner,id){const {client,bucket}=connection();const result=await client.send(new GetObjectCommand({Bucket:bucket,Key:mediaKey(owner,id)}),{abortSignal:AbortSignal.timeout(30000)});return result.Body;}
+export async function storedS3MediaStream(owner,id){const {client,bucket}=connection();const result=await client.send(new GetObjectCommand({Bucket:bucket,Key:mediaKey(owner,id)}),{abortSignal:AbortSignal.timeout(30000)});return result.Body;}
+export async function storedMediaStream(owner,id){return await archivedPhotoStream(owner,id)||storedS3MediaStream(owner,id);}
 
-export async function deleteStoredMedia(owner,id){const {client,bucket}=connection();await client.send(new DeleteObjectCommand({Bucket:bucket,Key:mediaKey(owner,id)}),{abortSignal:AbortSignal.timeout(30000)});}
+export async function deleteS3Media(owner,id){const {client,bucket}=connection();await client.send(new DeleteObjectCommand({Bucket:bucket,Key:mediaKey(owner,id)}),{abortSignal:AbortSignal.timeout(30000)});}
+export async function deleteStoredMedia(owner,id){if(await photoArchive.deleteArchived(owner,id))return;await deleteS3Media(owner,id);}

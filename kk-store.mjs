@@ -93,3 +93,18 @@ export async function kkScoringProofs(owner=null){
 }
 
 function editionValue(kind,value){if(!testEdition()||kind!=='participant')return value;return {...value,editionId:'test-2026',competitionYear:2026,scoringVersion:`2026-${Number(value.edition)||24}-v1`,networkVersion:testEdition().network.revision};}
+
+// Archive originals only. Previews have no media record and stay in S3.
+export async function kkPhotoArchiveRows(limit=20){
+ const field=(a,k)=>db.pool?a+".payload::jsonb->>'"+k+"'":"json_extract("+a+".payload,'$."+k+"')";
+ return (await query("SELECT m.* FROM kk_records m LEFT JOIN kk_records a ON a.kind='media-drive' AND a.id=m.id LEFT JOIN kk_records p ON p.kind='participant' AND p.id=m.owner WHERE m.kind='media' AND "+field('m','kind')+"='image' AND COALESCE("+field('a','status')+",'') NOT IN ('removed','error') AND COALESCE(CAST("+field('a','retryBlocked')+" AS TEXT),'false') NOT IN ('true','1') AND COALESCE(CAST("+field('p','deleting')+" AS TEXT),'false') NOT IN ('true','1') ORDER BY m.id LIMIT "+Math.max(1,Math.min(50,Math.floor(limit))))).map(r=>({...r,value:JSON.parse(r.payload)}));
+}
+export async function kkPhotoArchiveCounts(){
+ const field=(a,k)=>db.pool?a+".payload::jsonb->>'"+k+"'":"json_extract("+a+".payload,'$."+k+"')";
+ const [r]=await query("SELECT COUNT(*) AS total,COALESCE(SUM(CAST("+field('m','size')+" AS BIGINT)),0) AS bytes,COALESCE(SUM(CASE WHEN "+field('a','status')+"='removed' THEN 1 ELSE 0 END),0) AS archived,COALESCE(SUM(CASE WHEN "+field('a','status')+"='removed' THEN CAST("+field('m','size')+" AS BIGINT) ELSE 0 END),0) AS freed FROM kk_records m LEFT JOIN kk_records a ON a.kind='media-drive' AND a.id=m.id WHERE m.kind='media' AND "+field('m','kind')+"='image'");
+ return Object.fromEntries(Object.entries(r).map(([k,v])=>[k,Number(v)]));
+}
+export async function kkPhotoArchiveRetry(){
+ const sql=db.pool?"UPDATE kk_records SET payload=(payload::jsonb || '{\"retryBlocked\":false}'::jsonb || CASE WHEN payload::jsonb->>'status'='error' THEN '{\"status\":\"pending\"}'::jsonb ELSE '{}'::jsonb END)::text WHERE kind='media-drive' RETURNING id":"UPDATE kk_records SET payload=json_set(payload,'$.retryBlocked',0,'$.status',CASE WHEN json_extract(payload,'$.status')='error' THEN 'pending' ELSE json_extract(payload,'$.status') END) WHERE kind='media-drive' RETURNING id";
+ await query(sql);
+}

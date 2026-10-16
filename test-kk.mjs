@@ -27,6 +27,9 @@ try{
  const journey=await request('/kilometerkampioen/api/journey?owner=other',null,cookie);assert.equal(journey.status,200);assert.equal(journey.data.summary.name,'Jamie');assert.ok(!JSON.stringify(journey.data).includes('Private Other'));
 
  assert.equal((await request('/treinhuis/api/participants')).status,401);
+ assert.equal((await request('/treinhuis/api/photo-archive')).status,401);
+ assert.equal((await request('/treinhuis/api/photo-archive-start',{})).status,401);
+ assert.equal((await request('/kilometerkampioen/api/archived-photo')).status,403);
  assert.equal((await request('/treinhuis/api/blog')).status,401);
  assert.equal((await request('/kilometerkampioen/api/updates')).status,401);
  assert.equal((await request('/kilometerkampioen/api/update-media?id=x&update=y')).status,401);

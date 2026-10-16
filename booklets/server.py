@@ -5,7 +5,7 @@ import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
-import export_history,export_storage,document_duplicates
+import export_history,export_storage,km_archive,document_duplicates
 import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
@@ -71,11 +71,15 @@ with db() as c:
     ''')
     export_history.initialize(c)
     export_storage.initialize(c)
+    km_archive.initialize(c)
 
 # Interrupted private downloads are disposable, never source PDFs or exports.
 cache=DATA/'export-cache'
 if cache.is_dir():
     for path in cache.glob('export-*.tmp'):path.unlink(missing_ok=True)
+photo_cache=DATA/'km-transfer'
+if photo_cache.is_dir():
+    for path in photo_cache.glob('photo-*.tmp'):path.unlink(missing_ok=True)
 def ident(): return uuid.uuid4().hex
 def now(): return time.strftime('%Y-%m-%d %H:%M')
 def pw(p,s): return hashlib.pbkdf2_hmac('sha256',p.encode(),bytes.fromhex(s),300000).hex()
