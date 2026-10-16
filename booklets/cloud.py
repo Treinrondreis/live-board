@@ -84,6 +84,8 @@ def application(environ,start_response):
         return response(413,{'error':'Maximaal 50 MB per upload.'})
     if path.startswith('/internal/km-archive/'):
         return server.km_archive.handle(server,path,environ,response)
+    if path.startswith('/internal/print-orders/'):
+        return server.print_orders.handle(server,path,environ,response,ExportStream,start_response)
     # Stream immutable PDFs without retaining the document in memory.
     match=re.fullmatch(r'/files/(asset|export)/([a-f0-9]{32})',path)
     if match and method in ('GET','HEAD'):

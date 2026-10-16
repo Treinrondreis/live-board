@@ -86,6 +86,12 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
   const by=new Map(docs.map(d=>[d._id,d]));b.docs=refs.map(id=>by.get(id)).filter(Boolean);return b;
  }
  return {
+  async address(p){
+   if(!idPattern.test(p.bookingId||'')||p.bookingId.startsWith('drafts.'))throw Error('Selecteer een Sanity-boeking.');
+   const rows=current(await query('*[_type=="tourBooking" && _id in [$id,"drafts."+$id]][0...3]{_id,firstName,lastName,address,postalCode,city,country}',{id:p.bookingId}));
+   const b=rows.find(r=>r._id===p.bookingId);if(!b)throw Error('Het afleveradres kon niet uit de gekoppelde Sanity-boeking worden gelezen.');
+   return {firstName:b.firstName||'',lastName:b.lastName||'',address:b.address||'',postalCode:b.postalCode||'',city:b.city||'',country:b.country||''};
+  },
   async search(p){const number=cleanNumber(p.number);const bookings=await query(`*[_type=="tourBooking" && index==$number] | order(_id asc)[0...101]{_id,index,firstName,lastName,dateDeparture,dateReturn,status,_updatedAt,trip->{title}}`,{number:Number(number)});const unique=current(bookings);if(bookings.length>100||unique.length>50)throw Error('Te veel boekingen gevonden voor dit nummer.');return {items:unique.map(b=>{const item=bookingSummary(b);item.sameNumberBookings=unique.length;item.number=String(p.number).trim().toUpperCase();item.values.boekingsnummer=item.number;return item;})};},
   async documents(p){const b=await selected(p);return {booking:{...bookingSummary(b),todos:(b.todos||[]).slice(0,500).map(t=>({title:String(t.title||'').slice(0,2000),description:String(t.description||'').slice(0,4000),startDate:isoDate(t.startDate),endDate:isoDate(t.endDate)}))},attachments:voucherAttachments(b),items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
   async attachment(p){
