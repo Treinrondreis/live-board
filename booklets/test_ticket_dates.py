@@ -46,6 +46,18 @@ class TicketDateTests(unittest.TestCase):
         self.assertEqual([p['travelDate'] for p in r['pages']],['2026-11-11','2026-11-14','2026-11-15'])
         self.assertEqual([p['dateNeedsReview'] for p in r['pages']],[False,False,True])
         self.assertEqual(r['pages'][2]['dateSource'],'pdf-conflict')
+
+    def test_ns_onward_ticket_on_arrival_day_keeps_its_own_printed_date(self):
+        a,_=self.upload(['Geldig: 20.02.2027 - 20.02.2027','Geldig: 23.02.2027\n23.02 18:20 Alpha -> Beta 24.02 09:30','Geldig: 24.02.2027 - 24.02.2027','No readable departure date','Departure: 25.02.2027'])
+        payload={'asset':a['id'],'provider':'ns','suggestedDates':['2027-02-20','2027-02-23'],'continuationDates':['2027-02-21','2027-02-24'],'travelDates':['2027-02-20','2027-02-23']}
+        pages=ticket_dates.inspect(SimpleNamespace(**vars(s)),payload)['pages']
+        self.assertEqual([p['travelDate'] for p in pages[:3]],['2027-02-20','2027-02-23','2027-02-24'])
+        self.assertFalse(any(p['dateNeedsReview'] for p in pages[:3]))
+        self.assertEqual(pages[3]['travelDate'],'')
+        self.assertTrue(pages[3]['dateNeedsReview'])
+        self.assertEqual(pages[4]['dateSource'],'pdf-conflict')
+        for invalid in (None,'2027-02-24',['not-a-date']):
+            with self.assertRaisesRegex(ValueError,'reisdatums'):ticket_dates.inspect(SimpleNamespace(**vars(s)),{**payload,'continuationDates':invalid})
     def test_saved_selection_checks_source_bounds_moment_and_review_before_export(self):
         a,_=self.upload(['Departure: 10.10.2026','Departure: 16.10.2026'])
         import ticket_import
@@ -62,3 +74,28 @@ class TicketDateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Controleer eerst'):s.make_export({'id':'test','body':body},{'skipChoices':True,'allowUneven':True,'dryRun':True})
         for extra in ({'ticketMoment':True},{'ticketMoment':100},{'ticketMoment':-1},{'sortByDate':'yes'}):
             with self.assertRaises(ValueError):s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':'mavTickets',**extra}]})
+
+    def test_manual_placement_keeps_warning_and_source_validation_without_requiring_dates(self):
+        a,_=self.upload(['Ticket without a readable date','Unused source page'])
+        import ticket_import
+        selected=ticket_import.compose(SimpleNamespace(**vars(s)),{'format':'A4','pages':[{'asset':a['id'],'page':0}]})
+        selected.update(fields=[],manualDatePlacement=True,pageSources=[{'asset':a['id'],'page':0,'dateNeedsReview':True}],originalPages=[{'asset':a['id'],'page':n,'dateNeedsReview':True} for n in range(2)])
+        body={'format':'A4','sections':[{'choice':'document','documentKind':'nsTickets','ticketMoment':2,'selected':selected}]}
+        s.validate_body('book',body)
+        self.assertFalse(selected.get('reviewRequired',False))
+        self.assertIn('handmatig geplaatst',selected['warnings'][0])
+        selected['warnings']=[]
+        s.validate_body('book',body)
+        self.assertEqual(len(selected['warnings']),1)
+        self.assertNotIn('travelDate',selected['pageSources'][0])
+        selected['title']='Handmatig gekozen tickets'
+        report=s.make_export({'id':'test','body':body},{'skipChoices':True,'allowUneven':True,'dryRun':True})['report']
+        self.assertTrue(any('handmatig geplaatst' in w for w in report['warnings']))
+        selected['pageSources'][0]['page']=99
+        with self.assertRaisesRegex(ValueError,'documentpagina'):s.validate_body('book',body)
+        selected['pageSources'][0]['page']=0
+        selected['manualDatePlacement']='yes'
+        with self.assertRaisesRegex(ValueError,'handmatige'):s.validate_body('book',body)
+        selected['manualDatePlacement']=False
+        s.validate_body('book',body)
+        self.assertTrue(selected['reviewRequired'])

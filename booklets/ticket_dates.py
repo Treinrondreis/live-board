@@ -53,15 +53,15 @@ def inspect(s,payload):
     if provider not in PROVIDERS:raise ValueError('Onbekende vervoerder voor datumcontrole.')
     ident=payload.get('asset');asset=s.asset(ident)
     if not 1<=asset['pages']<=100:raise ValueError('Controleer één tot honderd documentpagina’s.')
-    suggested=payload.get('suggestedDates',[]);allowed=payload.get('travelDates',[])
-    if not isinstance(suggested,list) or not isinstance(allowed,list) or len(suggested)>100 or len(allowed)>500 or any(not isinstance(d,str) or not iso(d) for d in [*suggested,*allowed]):raise ValueError('Ongeldige reisdatums.')
+    suggested=payload.get('suggestedDates',[]);allowed=payload.get('travelDates',[]);continuations=payload.get('continuationDates',[])
+    if not isinstance(suggested,list) or not isinstance(allowed,list) or not isinstance(continuations,list) or len(suggested)>100 or len(allowed)>500 or len(continuations)>100 or any(not isinstance(d,str) or not iso(d) for d in [*suggested,*allowed,*continuations]):raise ValueError('Ongeldige reisdatums.')
     reader=PdfReader(s.DATA/'pdfs'/f'{ident}.pdf');pages=[];deadline=time.monotonic()+20
     for n,page in enumerate(reader.pages):
         if time.monotonic()>deadline:raise ValueError('Datumcontrole duurt te lang. Upload minder pagina’s tegelijk.')
         text=page.extract_text() or ''
         value,source,review=labelled_date(text,provider,allowed)
         if not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
-        if value and suggested and value not in suggested:review=True;source='pdf-conflict'
+        if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
         pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.
     dates={p['travelDate'] for p in pages if p['travelDate']}

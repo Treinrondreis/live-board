@@ -122,3 +122,35 @@ test('missing and conflicting dates block moment selection until confirmed, manu
 test('voucher moments use check-in dates, sort within the chapter and preserve native source pages',async()=>{
  const f=fixture({api:async(path,b)=>{if(path==='/api/booking-data/document'&&b.documentId.startsWith('voucher'))return {bookingId:b.bookingId,documentId:b.documentId,kind:'voucher',approved:true,travelDate:b.documentId==='voucher1'?'2026-10-13':'2026-10-08'};}});f.exec('draft.body.sections[3].voucherMoment=1');await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected.pages,2);assert.equal(f.slots()[3].selected.pageSources[0].asset,'voucher2');assert.equal(f.slots()[3].selected.bookingDocuments.length,2);assert.equal(f.slots()[3].selected.originalPages.length,4);assert.equal(f.slots()[3].selected.pageSources[0].travelDate,'2026-10-08');
 });
+
+test('explicit manual placement saves chosen pages despite an unselected source with an unknown date',async()=>{
+ const f=fixture({api:async(path,b)=>{if(path==='/api/tickets/inspect')return {pages:[{asset:b.asset,page:0,travelDate:'',dateSource:'unknown',dateNeedsReview:true}]};}});
+ f.exec('draft.body.sections[2].ticketMoment=1');await f.exec('autoFillBookingDocuments()');await f.exec('documentSlotPages(2)');
+ f.exec(`changePickerDate('document',0,'2027-03-04');documentPageRemove(2);documentPageRemove(1);documentPagesSave({disabled:false})`);
+ await assert.rejects(f.ctx.lastRun,/bronpagina/);
+ assert.match(f.node('#modal').innerHTML,/handmatig gebruiken zonder automatische datumindeling/);
+ f.exec('documentPages.manualDatePlacement=true;documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ const selected=f.slots()[2].selected;assert.equal(selected.pages,1);assert.equal(selected.manualDatePlacement,true);assert.equal(selected.originalPages.length,3);assert.equal(selected.originalPages[2].dateNeedsReview,true);assert(!selected.reviewRequired);assert(selected.warnings.some(w=>w.includes('handmatig geplaatst')));
+ await f.exec('documentSlotPages(2)');assert.equal(f.exec('documentPages.manualDatePlacement'),true);
+ f.exec('documentPages.manualDatePlacement=false;documentPagesSave({disabled:false})');await assert.rejects(f.ctx.lastRun,/bronpagina/);
+});
+
+test('ticket import can explicitly keep an unknown date without inventing a date or changing its sources',async()=>{
+ const f=fixture();f.exec(`ticketPick={book:draft,bookingId:draft.body.sanityBooking.id,slot:draft.body.sections[2],provider:'ns',query:'fixture',pages:[{asset:'source',page:0,dateNeedsReview:true}],originalPages:[{asset:'source',page:0,dateNeedsReview:true}],manualDatePlacement:false};ticketAddToBook({disabled:false})`);
+ await assert.rejects(f.ctx.lastRun,/reisdatums/);
+ f.exec('ticketPick.manualDatePlacement=true;ticketAddToBook({disabled:false})');await f.ctx.lastRun;
+ const selected=f.slots()[2].selected;assert.equal(selected.manualDatePlacement,true);assert.equal(selected.pageSources[0].travelDate,undefined);assert.equal(selected.pageSources[0].dateNeedsReview,true);assert(selected.warnings.some(w=>w.includes('handmatig geplaatst')));
+});
+
+test('manual voucher date placement still requires the independent voucher review',async()=>{
+ const f=fixture();await f.exec('autoFillBookingDocuments()');await f.exec('documentSlotPages(3)');
+ f.exec('documentPages.manualDatePlacement=true');f.node('#voucherReviewed').checked=false;
+ f.exec('documentPagesSave({disabled:false})');await assert.rejects(f.ctx.lastRun,/bevestig eerst de voucher/);
+ f.node('#voucherReviewed').checked=true;f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;assert.equal(f.slots()[3].selected.manualDatePlacement,true);
+});
+
+test('a dated onward connection is a third travel moment and receives only its own reference hints',async()=>{
+ const f=fixture({mail:{references:['ABCDEFG'],referenceDates:[{reference:'ABCDEFG',dates:['2027-02-20','2027-02-23']}],referenceContinuationDates:[{reference:'ABCDEFG',dates:['2027-02-24']},{reference:'HIJKLMN',dates:['2027-03-01']}],messages:[{id:'desk',reference:'ABCDEFG',latest:true,tickets:[{id:'connection',title:'Tickets'}]}]},api:async(path,b)=>{if(path==='/api/tickets/inspect'){assert.deepEqual(Array.from(b.continuationDates),['2027-02-24']);return {pages:['2027-02-20','2027-02-23','2027-02-24','2027-02-24'].map((d,page)=>({asset:b.asset,page,travelDate:d,dateSource:'pdf-validity',dateNeedsReview:false}))};}}});
+ f.exec('draft.body.sections[2].ticketMoment=3');await f.exec('autoFillBookingDocuments()');
+ assert.equal(f.slots()[2].selected.pages,2);assert(f.slots()[2].selected.pageSources.every(p=>p.travelDate==='2027-02-24'));assert(!f.slots()[2].selected.reviewRequired);assert(!f.slots()[2].issue);
+});
