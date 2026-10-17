@@ -1,4 +1,5 @@
 import {floraTrains} from './flora-trains.mjs';
+import {floraRegister} from './flora-register.mjs';
 import {floraMail} from './flora-mail.mjs';
 import {floraGoogle} from './flora-google.mjs';
 import {readFile} from 'node:fs/promises';
@@ -19,7 +20,7 @@ export function parseCSV(text){
  if(quoted)throw Error('Niet afgesloten aanhalingstekens in CSV.');row.push(value);if(row.some(Boolean))rows.push(row);
  const headers=(rows.shift()||[]).map(x=>x.trim().replace(/^\uFEFF/,''));if(new Set(headers).size!==headers.length)throw Error('Dubbele kolomnamen in CSV.');return rows.map(r=>{if(r.length!==headers.length)throw Error('CSV-regel heeft een afwijkend aantal kolommen.');return Object.fromEntries(headers.map((h,i)=>[h,r[i]]));});
 }
-export function createFloraHandler({authenticate=req=>adminAuthenticated(req,'flora'),read=readFlora,write=writeFlora,sync=fetchBookings,actor=authenticatedActor,configuration=sanityConfig,google=floraGoogle,mail=floraMail,trains=floraTrains}={}){
+export function createFloraHandler({authenticate=req=>adminAuthenticated(req,'flora'),read=readFlora,write=writeFlora,sync=fetchBookings,actor=authenticatedActor,configuration=sanityConfig,google=floraGoogle,mail=floraMail,trains=floraTrains,register=floraRegister}={}){
  return async(req,res,url)=>{
   if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
   for(const [k,v] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}))res.setHeader(k,v);
@@ -33,7 +34,8 @@ export function createFloraHandler({authenticate=req=>adminAuthenticated(req,'fl
     if(path.startsWith('/brand/')&&brandAssets.includes(path.slice(7))){const file=path.slice(7),ext=file.split('.').pop();res.writeHead(200,{'Content-Type':({svg:'image/svg+xml',webp:'image/webp',woff2:'font/woff2'})[ext],'Cache-Control':'private, max-age=86400'});res.end(await readFile(new URL('./flora-brand/'+file,import.meta.url)));return true;}
     const files={'':'flora.html','/':'flora.html','/flora.js':'flora.js','/flora.css':'flora.css','/flora-trains.js':'flora-trains.js'};
     if(files[path]){const ext=files[path].split('.').pop();res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});res.end(await readFile(new URL('./'+files[path],import.meta.url)));return true;}
-    if(path==='/api/trains')return reply(200,{...await trains.data(),job:await trains.status(),schedule:trains.importSchedule?await trains.importSchedule():null});
+    if(path==='/api/trains')return reply(200,{...await trains.data(),job:await trains.status(),schedule:trains.importSchedule?await trains.importSchedule():null,registry:await register.summary()});
+    if(path==='/api/register')return reply(200,await register.summary());
     if(path==='/api/trains/board'){const d=await trains.data();return reply(200,{trains:d.rows.filter(r=>r.status==='Bevestigd'),connections:d.connections.filter(c=>c.status==='Bevestigd'&&[c.fromId,c.toId].every(id=>d.rows.some(r=>r.id===id&&r.status==='Bevestigd')))});}
     if(path==='/api/mail/status')return reply(200,await mail.status());
     if(path==='/api/state'){const data=await read(),gmail=await google.status();data.state.findings=data.state.findings.map(f=>{const next={...f,reviewSignature:reviewSignature(f)};return {...next,viewStatus:alarmView(next),comparison:findingComparison(data.state,f)};});return reply(200,{...data,gmail,schedule:scheduleInfo(data.state),connection:{sanityConfigured:!!configuration().token,lastSync:data.state.lastSync,syncError:data.state.syncError||null,email:gmail.email,payment:'Betaallink aanwezig: hotelbevestiging wordt gecontroleerd'}});}
@@ -48,6 +50,7 @@ export function createFloraHandler({authenticate=req=>adminAuthenticated(req,'fl
    if(path==='/api/trains/october'){const result=await trains.startOctober(input.retry===true);void trains.tick();return reply(202,result);}
    if(path==='/api/trains/start'){if(['queued','running'].includes((await mail.status()).status))return reply(409,{error:'Stop eerst de algemene e-mailcontrole.'});const result=await trains.start(input.trips);void trains.tick();return reply(202,result);}
    if(path==='/api/trains/review')return reply(200,await trains.review(input));
+   if(path==='/api/register/check')return reply(200,await register.recordCheck(input));
    if(path==='/api/mail/stop')return reply(200,await mail.stop());
    if(path==='/api/mail/start'){if(input.mode&&!['attention','rules-only','manual','targeted','dfds'].includes(input.mode))return reply(400,{error:'Onbekende controle.'});const result=await mail.start({pilot:input.pilot===true,mode:input.mode||'manual',trips:input.trips,findingIds:input.findingIds});void mail.tick();return reply(202,result);}
    if(path==='/api/google/start')return reply(200,{url:await google.start(googleSession(req))});
@@ -95,3 +98,4 @@ export function createFloraHandler({authenticate=req=>adminAuthenticated(req,'fl
  };
 }
 export const handleFlora=createFloraHandler();
+
