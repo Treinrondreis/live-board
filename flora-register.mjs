@@ -33,6 +33,7 @@ export function createFloraRegister({env=process.env,fetcher=fetch,clock=Date.no
     const result=await configuredClient().recordLegEvent(versionId,kind,event);
     cached=null;expires=0;return result;
   }
-  return Object.freeze({summary,recordCheck,recordLegEvent});
+  async function notificationContexts(){return configuredClient().notificationContexts();}
+  return Object.freeze({summary,recordCheck,recordLegEvent,notificationContexts});
 }
 export const floraRegister=createFloraRegister();

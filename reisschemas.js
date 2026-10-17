@@ -29,15 +29,16 @@
  function changeState(r){
   const o=r.observation;
   if(!o)return {alert:false,changed:false,communicated:false};
-  const changed=o.departure_time!==r.departure_time||o.departure_date!==r.travel_date||o.arrival_time!==r.arrival_time||o.arrival_date!==(r.arrival_date||r.travel_date)||o.cancelled||o.connection_broken;
+  const changed=o.departure_time!==r.departure_time||o.departure_date!==r.travel_date||o.arrival_time!==r.arrival_time||o.arrival_date!==(r.arrival_date||r.travel_date)||o.cancelled||o.connection_broken||o.station_changed;
   const earlier=minute(r.travel_date,r.departure_time)-minute(o.departure_date,o.departure_time);
-  return {changed,earlier,alert:earlier>=4||o.cancelled||(o.connection_broken&&!o.backup_communicated),communicated:changed&&r.communication?.change_key===o.change_key};
+  return {changed,earlier,alert:earlier>=4||o.cancelled||o.station_changed||(o.connection_broken&&!o.backup_communicated),communicated:changed&&r.communication?.change_key===o.change_key};
  }
  const safeLink=value=>{try{const u=new URL(value);return u.protocol==='https:'&&['drive.google.com','docs.google.com'].includes(u.hostname)&&!u.username&&!u.password?u.href:null;}catch{return null;}};
  const documentLink=(value,label='Reisschema openen',primary=false)=>{const url=safeLink(value);return url?'<a class="'+(primary?'document-button':'')+'" target="_blank" rel="noopener noreferrer" href="'+escape(url)+'">'+escape(label)+' ↗</a>':'<span class="muted">Geen documentlink beschikbaar</span>';};
  const sortLegs=rows=>[...rows].sort((a,b)=>String(a.travel_date||'').localeCompare(String(b.travel_date||''))||Number(a.sequence||0)-Number(b.sequence||0)||String(a.departure_time||'').localeCompare(String(b.departure_time||'')));
- let state=null,selected=null,choices=[],mode='trains',generation=0;
+ let state=null,selected=null,choices=[],mode='trains',generation=0,controlFilter='all';
  const legs=()=>state?.available&&Array.isArray(state.legs)?state.legs:[];
+ const notificationRows=()=>state?.available&&Array.isArray(state.notifications)?state.notifications:[];
  const ready=()=>state?.configured&&state?.available;
  function table(rows,withBooking=false){
   const heads=withBooking?['Melding','Boeking','Reisdatum','Trein / vervoer','Vertrek','Traject','Aankomst','Reisschema','Controle']:['Melding','Trein / vervoer','Vertrek','Traject','Aankomst','Controle'];
@@ -52,14 +53,23 @@
    const c=changeState(r),messages=[];
    if(c.alert)messages.push('<span class="attention" role="img" aria-label="Aandacht nodig" title="'+escape(r.observation.cancelled?'Trein vervalt':r.observation.connection_broken&&!r.observation.backup_communicated?'Aansluiting niet haalbaar; geen back-up gecommuniceerd':'Vertrek minimaal vier minuten vervroegd')+'">!</span>');
    if(c.communicated)messages.push('<span class="communicated" role="img" aria-label="Wijziging gecommuniceerd" title="Gecommuniceerd op '+escape(new Date(r.communication.communicated_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'">✓</span>');
-   const source=r.observation?'<span class="source-note">'+escape(r.observation.source)+' · gecontroleerd '+escape(new Date(r.observation.observed_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>':'<span class="source-note">Nog geen gekoppelde controle</span>';
+   let source=r.observation?'<span class="source-note">'+escape(r.observation.source)+' · bron geraadpleegd '+escape(new Date(r.observation.observed_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>':'<span class="source-note">Nog geen gekoppelde controle</span>';
+   if(r.control){source+='<span class="source-note">Controle '+escape(new Date(r.control.checked_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';if(r.control.outcome==='manual')source+='<strong class="manual-task">Handmatig controleren: '+escape(r.control.reason)+' <a href="https://int.bahn.de/nl" target="_blank" rel="noopener noreferrer">DB openen ↗</a></strong>';else if(r.control.assessment?.tightConnectionReview)source+='<strong class="manual-task">Aansluiting en eerder gecommuniceerde back-up beoordelen</strong>';}
+   if(r.draft)source+='<span class="source-note">Concept aangemaakt; verzending afzonderlijk registreren</span>';
+   if(r.control?.assessment?.reservationReview)source+='<strong class="manual-task">Reservering beoordelen</strong>';
+   if(r.control?.assessment?.backupReview)source+='<span class="source-note">Eerder gecommuniceerde back-up opnieuw beoordelen</span>';
+   if(r.control?.assessment?.draftRequired&&!c.communicated)source+='<strong class="manual-task">Conceptmail voorbereiden</strong>';
+   if(r.control?.assessment?.arrival>0)source+='<span class="source-note">Latere aankomst: reisgevolgen beoordelen</span>';
+   if(r.last_planning_ok_at)source+='<span class="source-note">Laatst zonder vastgestelde afwijking: '+escape(new Date(r.last_planning_ok_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';
+   if(r.observation?.station_changed)source+='<strong class="manual-task">Nieuw traject: '+escape(r.observation.departure_station)+' → '+escape(r.observation.arrival_station)+(/^NJ\s/i.test(r.train_number)&&r.observation.departure_station!==r.from_station?' · Nightjet-instapstation gewijzigd: Newrest informeren ter voorkoming van no-show':'')+'</strong>';
+   if(r.receipt)source+='<span class="source-note">Ontvangst bevestigd '+escape(new Date(r.receipt.confirmed_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';
    return '<tr class="'+(c.alert?'needs-attention':'')+'"><td class="status-cell">'+messages.join(' ')+'</td>'+(withBooking?'<td><button class="text-button" data-booking="'+escape(bookingId(r))+'">'+escape(r.dossier)+'</button>'+(r.booking_key?'<br><span class="muted">'+escape(r.booking_key)+'</span>':'')+'</td><td>'+escape(date(r.travel_date))+'</td>':'')+'<td class="train-cell"><strong>'+escape(r.train_number||r.transport_type||'Onbekend')+'</strong>'+(r.role==='backup'?'<span class="badge">Back-up</span>':'')+(r.observation?.cancelled?'<span class="badge">Vervalt</span>':'')+'</td>'+timeCell(r,'departure')+'<td class="route-cell"><span class="station">'+escape(r.from_station)+'</span><span class="route-arrow" aria-label="naar">→</span><span class="station">'+escape(r.to_station)+'</span>'+source+(r.observation?.connection_broken?'<span class="connection-note">Aansluiting niet haalbaar'+(r.observation.backup_communicated?' · back-up gecommuniceerd':'')+'</span>':'')+'</td>'+timeCell(r,'arrival')+(withBooking?'<td>'+documentLink(r.document_url)+'</td>':'')+'<td>'+(r.leg_id?'<button class="small-button" data-edit-leg="'+escape(r.leg_id)+'">Controleren / communicatie</button>':'')+'</td></tr>';
   }).join('')+'</tbody></table>';
  }
  function renderTrains(){
   el('register').innerHTML='';el('summary').textContent='';if(!ready())return;
   const q=normalized(el('search').value),day=el('train-date').value,until=el('train-until').value;
-  const rows=legs().filter(r=>trainMatches(r.train_number,el('train-number').value)&&inPeriod(r,day,until)&&(normalized([r.dossier,r.booking_key].join(' ')).includes(q)||routeMatches(r,q)));
+  const rows=legs().filter(r=>(controlFilter==='all'||controlFilter==='manual'&&r.control?.outcome==='manual'||controlFilter==='changes'&&changeState(r).changed&&!changeState(r).communicated)&&trainMatches(r.train_number,el('train-number').value)&&inPeriod(r,day,until)&&(normalized([r.dossier,r.booking_key].join(' ')).includes(q)||routeMatches(r,q)));
   el('summary').textContent=count(rows.length,'rit','ritten')+' · '+count(new Set(rows.map(bookingId)).size,'boeking','boekingen');
   el('register').innerHTML=rows.length?table(rows,true):'<p>Geen ritten gevonden met deze combinatie van filters.</p>';
  }
@@ -95,7 +105,7 @@
   if(selected&&choices.some(([id])=>id===selected))showBooking();else selected=null;
  }
  function setMode(next){mode=next;el('trains-panel').hidden=mode!=='trains';el('bookings-panel').hidden=mode!=='bookings';el('mode-trains').setAttribute('aria-pressed',String(mode==='trains'));el('mode-bookings').setAttribute('aria-pressed',String(mode==='bookings'));}
- function render(){renderTrains();renderBookings();}
+ function render(){renderTrains();renderBookings();const rows=notificationRows();el('notification-panel').hidden=!rows.length;el('notification-rows').innerHTML=rows.length?table(rows,true):'';}
  async function load(){
   const current=++generation;el('refresh').disabled=true;state=null;render();el('status').textContent='Register laden…';
   try{const r=await fetch('/seinhuis/reisschemas/api/register',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(current!==generation)return;if(!Array.isArray(data.legs))throw Error();state=data;
@@ -107,6 +117,7 @@
  for(const id of ['booking-date','booking-until','booking-route','booking-train'])el(id).oninput=renderDays;
  el('booking-number').oninput=()=>{selected=null;resetBookingFilters();renderBookings();};
  el('mode-trains').onclick=()=>setMode('trains');el('mode-bookings').onclick=()=>setMode('bookings');
+ for(const filter of ['manual','changes','all'])el('filter-'+filter).onclick=()=>{controlFilter=filter;renderTrains();};
  el('clear-trains').onclick=()=>{for(const id of ['train-number','train-date','train-until','search'])el(id).value='';renderTrains();};
  el('clear-booking').onclick=()=>{resetBookingFilters();renderDays();};
  el('booking-results').onclick=e=>{const button=e.target.closest('[data-choice]');if(button&&choices[Number(button.dataset.choice)])selectBooking(choices[Number(button.dataset.choice)][0]);};
@@ -114,15 +125,19 @@
  el('register').onclick=e=>{const edit=e.target.closest('[data-edit-leg]');if(edit){openEditor(edit.dataset.editLeg);return;}const button=e.target.closest('[data-booking]');if(!button)return;const row=legs().find(r=>bookingId(r)===button.dataset.booking);if(!row)return;el('booking-number').value=row.dossier;selected=bookingId(row);resetBookingFilters();setMode('bookings');renderBookings();};
  let editing=null;
  function openEditor(id){
-  editing=legs().find(r=>r.leg_id===id);if(!editing)return;
+  editing=[...legs(),...notificationRows()].find(r=>r.leg_id===id);if(!editing)return;
   const r=editing,o=r.observation||{};
+  el('observation-form').hidden=!!r.notification_context;
   el('change-editor').hidden=false;el('editor-leg').textContent=r.dossier+' · '+r.train_number+' · '+r.from_station+' → '+r.to_station;
   el('new-departure-date').value=o.departure_date||r.travel_date;el('new-departure').value=o.departure_time||r.departure_time;
   el('new-arrival-date').value=o.arrival_date||r.arrival_date||r.travel_date;el('new-arrival').value=o.arrival_time||r.arrival_time;
   el('change-source').value=o.source||'';el('change-cancelled').checked=!!o.cancelled;el('change-connection').checked=!!o.connection_broken;el('change-backup').checked=!!o.backup_communicated;
+  el('new-from-station').value=o.departure_station||r.from_station;el('new-to-station').value=o.arrival_station||r.to_station;
   const now=new Date(),p=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(now);
   el('communicated-at').value=p.replace(' ','T');el('communication-method').value='email';el('communication-reference').value='';
   el('communication-form').hidden=!changeState(r).changed;
+  el('draft-form').hidden=!changeState(r).changed||!r.observation_revision;
+  el('draft-to').value='';el('draft-destination').value='';el('draft-advice').value='';
   el('communication-change').textContent=o.departure_time?'Getoonde planning: '+o.departure_time+' – '+o.arrival_time+(o.connection_broken?' · aansluiting niet haalbaar':''):'';
   el('editor-status').textContent='';el('change-editor').scrollIntoView?.({behavior:'smooth',block:'start'});
  }
@@ -137,13 +152,19 @@
  }
  el('observation-form').onsubmit=e=>{
   e.preventDefault();if(!editing)return;
-  void save('observation',{versionId:editing.version_id,event:{leg_id:editing.leg_id,request_id:crypto.randomUUID(),departure_date:el('new-departure-date').value,departure_time:el('new-departure').value,arrival_date:el('new-arrival-date').value,arrival_time:el('new-arrival').value,cancelled:el('change-cancelled').checked,connection_broken:el('change-connection').checked,backup_communicated:el('change-backup').checked,source:el('change-source').value,observed_at:new Date().toISOString()}});
+  void save('observation',{versionId:editing.version_id,event:{leg_id:editing.leg_id,request_id:crypto.randomUUID(),departure_date:el('new-departure-date').value,departure_time:el('new-departure').value,arrival_date:el('new-arrival-date').value,arrival_time:el('new-arrival').value,cancelled:el('change-cancelled').checked,connection_broken:el('change-connection').checked,backup_communicated:el('change-backup').checked,departure_station:el('new-from-station').value,arrival_station:el('new-to-station').value,station_changed:el('new-from-station').value!==editing.from_station||el('new-to-station').value!==editing.to_station,source:el('change-source').value,observed_at:new Date().toISOString()}});
  };
  el('communication-form').onsubmit=e=>{
   e.preventDefault();if(!editing?.observation)return;
   void save('communication',{versionId:editing.version_id,legId:editing.leg_id,changeKey:editing.observation.change_key,communicatedAt:new Date(el('communicated-at').value).toISOString(),method:el('communication-method').value,reference:el('communication-reference').value,requestId:crypto.randomUUID()});
  };
  el('close-editor').onclick=()=>{editing=null;el('change-editor').hidden=true;};
+ el('notification-rows').onclick=e=>{const button=e.target.closest('[data-edit-leg]');if(button)openEditor(button.dataset.editLeg);};
  for(const pre of ['train','booking'])for(const [name,offset] of [['today',0],['tomorrow',1],['after',2]])el(pre+'-'+name).onclick=()=>{el(pre+'-date').value=amsterdamDay(offset);el(pre+'-until').value=amsterdamDay(offset);if(pre==='train')renderTrains();else renderDays();};
- el('refresh').onclick=load;setMode(mode);void load();
+ async function controlAction(path,data){const response=await fetch('/seinhuis/reisschemas/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Reisschemas':'1'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw Error(result.error||'Actie niet bevestigd');return result;}
+ let controlState;
+ async function loadControls(){try{const r=await fetch('/seinhuis/reisschemas/api/controls',{cache:'no-store'});if(!r.ok)throw Error();controlState=await r.json();el('controls-status').textContent=(controlState.enabled?'Dagelijkse controles ingeschakeld. ':'Dagelijkse controles uitgeschakeld. ')+(controlState.running?'Controle loopt. ':'')+(controlState.lastRun?'Laatste ronde: '+new Date(controlState.lastRun).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'})+'. ':'')+(controlState.error||'')+' Gmail-concepten: '+(controlState.gmail.connected?'gekoppeld.':'nog niet gekoppeld.');el('toggle-controls').textContent=controlState.enabled?'Dagelijkse controles uitschakelen':'Dagelijkse controles inschakelen';}catch{el('controls-status').textContent='Controlestatus niet bereikbaar.';}}
+ for(const id of ['toggle-controls','run-controls','connect-drafts'])el(id).onclick=async()=>{const button=el(id);button.disabled=true;try{const path=id==='toggle-controls'?'controls':id==='run-controls'?'run-controls':'google-start',data=id==='toggle-controls'?{enabled:!controlState?.enabled}:{};const result=await controlAction(path,data);if(result.url){const u=new URL(result.url);if(u.origin!=='https://accounts.google.com')throw Error('Ongeldige Google-link');location.assign(u.href);return;}el('control-action-status').textContent=id==='run-controls'?'Controle aangevraagd. Vernieuw later voor de resultaten.':'Instelling opgeslagen.';await loadControls();}catch(e){el('control-action-status').textContent=e.message;}finally{button.disabled=false;}};
+ el('draft-form').onsubmit=async e=>{e.preventDefault();if(!editing?.observation_revision)return;el('create-draft').disabled=true;try{const result=await controlAction('draft',{legId:editing.leg_id,changeKey:editing.observation.change_key,observationRevision:editing.observation_revision,to:el('draft-to').value,destination:el('draft-destination').value,advice:el('draft-advice').value});el('editor-status').textContent=result.existing?'Er bestaat al een concept voor deze wijziging. Controleer Gmail.':'Concept in Gmail aangemaakt. Controleer en verstuur het daar; registreer daarna de communicatie.';}catch(e){el('editor-status').textContent=e.message;}finally{el('create-draft').disabled=false;}};
+ el('refresh').onclick=async()=>{await Promise.all([load(),loadControls()]);};setMode(mode);void load();void loadControls();
 })();

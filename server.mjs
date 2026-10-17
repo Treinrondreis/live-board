@@ -8,6 +8,7 @@ import {handleAdminHub} from './admin-hub.mjs';
 import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
 import {handleReisschemas} from './reisschemas.mjs';
+import {startReisschemaControls,handleReisschemaReceipt} from './reisschema-runtime.mjs';
 import {handleReishuis} from './reishuis.mjs';
 import {handleExpedia} from './expedia.mjs';
 import {startFlora} from './flora-schedule.mjs';
@@ -1092,6 +1093,7 @@ const server=http.createServer(async(req,res)=>{
     if(await rinkelIncoming.receive(req,res,url))return;
     if(await handleReishuis(req,res,url))return;
     if(await handleExpedia(req,res,url))return;
+    if(await handleReisschemaReceipt(req,res,url))return;
     if(await handleReisschemas(req,res,url))return;
     if(await handleFlora(req,res,url))return;
     if(await handleBooklets(req,res,url))return;
@@ -1258,6 +1260,7 @@ for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>D
 server.listen(PORT,async()=>{
   startReishuisCatalogSync();
   startFlora();
+  startReisschemaControls();
   void checkNdovAccess();
   void startNdov();
   startBelgium();
