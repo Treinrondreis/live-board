@@ -57,6 +57,8 @@ class CloudTests(unittest.TestCase):
         finally:cloud.BUSY.release()
     def test_stream_pdf(self):
         path=cloud.server.DATA/'exports'/('a'*32+'.pdf');path.write_bytes(b'private pdf')
+        with cloud.server.db() as c:
+            c.execute('INSERT OR REPLACE INTO exports VALUES(?,?,?,?,?,?)',('a'*32,'synthetic-book','Test',cloud.server.now(),'{}','{"pages":1}'))
         self.assertEqual(request('/files/export/'+'a'*32)[2],b'private pdf')
         self.assertEqual(request('/files/export/'+'a'*32,authorized=False)[0],401)
     def test_google_encryption(self):

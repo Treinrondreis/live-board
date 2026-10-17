@@ -1,14 +1,22 @@
 import {sanityConfig} from './flora-sanity.mjs';
 import {createHash} from 'node:crypto';
-import {isoDate} from './booklets-carrier-mail.mjs';
+import {isoDate,bookingJourneyDates} from './booklets-carrier-mail.mjs';
 
 const idPattern=/^[A-Za-z0-9_.-]{1,128}$/;
 const cleanNumber=value=>{const n=String(value||'').trim().toUpperCase();if(!/^\d{3,8}[A-Z]?$/.test(n))throw Error('Vul een Treinrondreis-boekingsnummer in, bijvoorbeeld 6031A.');return n.replace(/[A-Z]$/,'');};
 const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'')?value.split('-').reverse().join('-'):'';
-const projection='_id,_rev,index,firstName,lastName,address,postalCode,city,dateDeparture,dateReturn,status,notes,todos,trip->{title},docs';
+const projection='_id,_rev,index,firstName,lastName,address,postalCode,city,dateDeparture,dateReturn,status,notes,todos,trip->{title},docs,documents[]{title,asset->{_id,mimeType,size,originalFilename,url}}';
+
+export function voucherAttachments(b){
+ const stays=(b.todos||[]).filter(t=>isoDate(t.startDate)&&isoDate(t.endDate)&&t.endDate>t.startDate&&!/trein|train|nightjet|railjet|ticket|\b(?:EUN|RIT|RITAD|RITAM|CORA\d*|NS|DB|OBB|ÖBB)\b/i.test(t.title||''));
+ const compact=d=>d.slice(8,10)+d.slice(5,7);
+ return (b.documents||[]).filter(d=>d.asset?.mimeType==='application/pdf'&&/^file-[a-f0-9]{40}-pdf$/.test(d.asset._id||''))
+ .filter(d=>!/factuur|invoice|rechnung|ticket|fahrkarte|reisschema|tijdlijn|itinerary/i.test((d.title||'')+' '+(d.asset.originalFilename||'')))
+ .map(d=>{const title=d.title||d.asset.originalFilename||'PDF-bijlage',name=title+' '+(d.asset.originalFilename||'');const matching=stays.filter(t=>new RegExp(compact(t.startDate)+'[-_ ]+'+compact(t.endDate)).test(name)),dates=[...new Set(matching.map(t=>isoDate(t.startDate)))];return {id:d.asset._id,title,kind:'voucher',attachment:true,requiresReview:true,recommended:/voucher|hotel|accommodation/i.test(name)||matching.length>0,...(dates.length===1?{travelDate:dates[0]}:{})};});
+}
 
 function current(rows){const by=new Map();for(const row of rows||[]){const id=row._id.replace(/^drafts\./,'');if(!by.has(id)||row._id.startsWith('drafts.'))by.set(id,{...row,_id:id});}return [...by.values()];}
-export function bookingSummary(b){return {id:b._id,number:String(b.index),name:[b.firstName,b.lastName].filter(Boolean).join(' '),departure:b.dateDeparture||'',returnDate:b.dateReturn||'',trip:b.trip?.title||'',values:{klantvoornaam:b.firstName||'',klantachternaam:b.lastName||'',vertrekdatum:date(b.dateDeparture),terugkomstdatum:date(b.dateReturn),reisnaam:b.trip?.title||'',boekingsnummer:String(b.index)}};}
+export function bookingSummary(b){return {id:b._id,number:String(b.index),name:[b.firstName,b.lastName].filter(Boolean).join(' '),departure:b.dateDeparture||'',returnDate:b.dateReturn||'',journeyDates:bookingJourneyDates(b),trip:b.trip?.title||'',values:{klantvoornaam:b.firstName||'',klantachternaam:b.lastName||'',vertrekdatum:date(b.dateDeparture),terugkomstdatum:date(b.dateReturn),reisnaam:b.trip?.title||'',boekingsnummer:String(b.index)}};}
 export function documentKind(d){if(d._type!=='doc'||d.template!=='doc')return '';if(/^brief(?:ing)?\s*:/i.test(d.title||''))return 'letter';if(/voucher/i.test(d.title||''))return 'voucher';return '';}
 export function voucherDate(content){const values=new Set();const add=text=>{const m=String(text).match(/\b(?:20\d{2}-\d{2}-\d{2}|\d{1,2}[.\/-]\d{1,2}[.\/-]20\d{2})\b/);if(m&&isoDate(m[0]))values.add(isoDate(m[0]));};for(const block of content||[]){if(block._type==='table')for(const row of block.rows||[])if(/^(?:check[ -]?in|incheck(?:datum|en)?|arrival date)\s*:?$/i.test(row.cells?.[0]?.trim()||''))add(row.cells.slice(1).join(' '));if(block._type==='block'){const text=(block.children||[]).map(s=>s.text||'').join('');const m=text.match(/(?:check[ -]?in|incheck(?:datum|en)?|arrival date)\s*:?\s*([^\n]{0,80})/i);if(m)add(m[1]);}}return values.size===1?[...values][0]:'';}
 
@@ -79,7 +87,21 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
  }
  return {
   async search(p){const number=cleanNumber(p.number);const bookings=await query(`*[_type=="tourBooking" && index==$number] | order(_id asc)[0...101]{_id,index,firstName,lastName,dateDeparture,dateReturn,status,_updatedAt,trip->{title}}`,{number:Number(number)});const unique=current(bookings);if(bookings.length>100||unique.length>50)throw Error('Te veel boekingen gevonden voor dit nummer.');return {items:unique.map(b=>{const item=bookingSummary(b);item.sameNumberBookings=unique.length;item.number=String(p.number).trim().toUpperCase();item.values.boekingsnummer=item.number;return item;})};},
-  async documents(p){const b=await selected(p);return {booking:{...bookingSummary(b),todos:(b.todos||[]).slice(0,500).map(t=>({title:String(t.title||'').slice(0,2000),description:String(t.description||'').slice(0,4000),startDate:isoDate(t.startDate),endDate:isoDate(t.endDate)}))},items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
+  async documents(p){const b=await selected(p);return {booking:{...bookingSummary(b),todos:(b.todos||[]).slice(0,500).map(t=>({title:String(t.title||'').slice(0,2000),description:String(t.description||'').slice(0,4000),startDate:isoDate(t.startDate),endDate:isoDate(t.endDate)}))},attachments:voucherAttachments(b),items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
+  async attachment(p){
+   const b=await selected(p),item=voucherAttachments(b).find(d=>d.id===p.documentId);if(!item)throw Error('Deze PDF-bijlage hoort niet bij de geselecteerde boeking of is geen mogelijke hotelvoucher.');
+   const asset=b.documents.find(d=>d.asset?._id===item.id).asset,c=configuration(),u=new URL(asset.url);
+   const expected='/files/'+c.project+'/'+c.dataset+'/'+item.id.slice(5,-4)+'.pdf';
+   if(u.protocol!=='https:'||u.hostname!=='cdn.sanity.io'||u.port||u.username||u.password||u.search||u.hash||u.pathname!==expected)throw Error('De Sanity-bijlage heeft geen geldige bestandslocatie.');
+   if(!(asset.size>0&&asset.size<=30*1024*1024))throw Error('De PDF-bijlage mag maximaal 30 MB zijn.');
+   const meta={bookingId:b._id,documentId:item.id,kind:'voucher',title:item.title,attachment:true,approved:false,content:[],...(item.travelDate?{travelDate:item.travelDate}:{}),revision:item.id,digest:createHash('sha256').update(item.id).digest('hex'),loadedAt:new Date().toISOString(),warnings:['Originele PDF-bijlage bij de Sanity-boeking. Controleer klant, hotel, verblijfdatums en reserveringsnummer.']};
+   if(p.metadataOnly===true)return meta;
+   const response=await fetcher(u,{method:'GET',headers:{Authorization:'Bearer '+c.token},redirect:'error',signal:AbortSignal.timeout(25000)});
+   if(!response.ok)throw Error('De originele hotelbijlage kon niet worden gelezen. Controleer de Sanity-leestoegang of upload de PDF.');
+   const chunks=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>30*1024*1024)throw Error('De hotelbijlage is te groot.');chunks.push(chunk);}
+   const raw=Buffer.concat(chunks);if(raw.length!==Number(asset.size)||!raw.subarray(0,1024).includes(Buffer.from('%PDF-')))throw Error('De hotelbijlage is geen volledige PDF.');
+   return {...meta,originalPdf:raw.toString('base64')};
+  },
   async document(p){const b=await selected(p),doc=(b.docs||[]).find(d=>d?._id===p.documentId&&documentKind(d));if(!doc)throw Error('Dit document hoort niet bij de geselecteerde boeking.');if(documentKind(doc)==='voucher'&&doc.approved!==true)throw Error('Deze voucher is nog niet gecontroleerd in Sanity. Vink hem eerst aan in Sanity of kies een gecontroleerde PDF uit Google Drive.');
    const cache=new Map();const read=async id=>{if(cache.size>=60&&!cache.has(id))throw Error('De brief bevat te veel standaardteksten.');if(!cache.has(id))cache.set(id,await query('*[_type=="reusableText" && _id==$id][0]{_id,_type,_rev,content}',{id},'published'));return cache.get(id);};
    const warnings=[],options=documentKind(doc)==='voucher'?{preserveTables:true,onMissingReservation:()=>warnings.push(doc.title+': het reserveringsnummer kon niet worden ingevuld en is leeg gelaten. De voucher is wel gecontroleerd in Sanity.')}:{};

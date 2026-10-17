@@ -5,6 +5,15 @@ from pypdf import PdfReader
 
 PROVIDERS=('ns','mav','db','obb','cd','voucher')
 DATE=r'(?:20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2}[.\-/]20\d{2})'
+MONTHS={name:n for n,names in enumerate(('januari january','februari february','maart march','april','mei may','juni june','juli july','augustus august','september','oktober october','november','december'),1) for name in names.split()}
+WRITTEN_DATE=r'\d{1,2}\s+(?:'+'|'.join(MONTHS)+r')\s+20\d{2}'
+
+def voucher_iso(value):
+    parsed=iso(value)
+    if parsed:return parsed
+    m=re.fullmatch(r'(\d{1,2})\s+([a-z]+)\s+(20\d{2})',str(value).strip(),re.I)
+    if not m or m[2].lower() not in MONTHS:return ''
+    return iso(f'{m[3]}-{MONTHS[m[2].lower()]:02}-{int(m[1]):02}')
 
 def iso(value):
     m=re.fullmatch(r'(\d{1,4})[.\-/](\d{1,2})[.\-/](\d{1,4})',str(value or '').strip())
@@ -16,12 +25,13 @@ def iso(value):
 
 def labelled_date(text,provider,allowed=()):
     text=text[:100000]
-    if provider=='voucher':labels=r'check[ -]?in|incheck(?:datum|en)?|arrival date|aankomst(?:datum)?'
+    if provider=='voucher':labels=r'check[ -]?in|incheck(?:datum|en)?|arrival(?: date)?|aankomst(?:datum)?'
     else:labels=r'vertrek(?:datum)?|departure(?: date)?|abfahrt(?: am)?|d[eé]part(?: le)?|travel date|reisdatum|odjezd'
-    patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({DATE})']
+    printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider=='voucher' else DATE
+    patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({printed_date})']
     if provider=='mav':patterns.insert(0,rf'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*({DATE})')
     for pattern in patterns:
-        values={iso(m[1]) for m in re.finditer(pattern,text,re.I)}-{''}
+        values={(voucher_iso(m[1]) if provider=='voucher' else iso(m[1])) for m in re.finditer(pattern,text,re.I)}-{''}
         if values:return (next(iter(values)),'pdf',False) if len(values)==1 else ('','ambiguous',True)
     if provider!='voucher':
         # Validity is an anchor, not a birthday or the date the ticket was issued.
@@ -48,20 +58,31 @@ def labelled_date(text,provider,allowed=()):
         if len(values)>1:return '','ambiguous',True
     return '','unknown',True
 
+
+def moment_dates(body,slot,candidate):
+    dates={p.get('travelDate') for p in candidate.get('originalPages',candidate.get('pageSources',[])) if iso(p.get('travelDate'))}
+    if slot.get('documentKind')!='voucher' and slot.get('ticketDateBasis','booking')=='booking':
+        dates.update((body.get('sanityBooking') or {}).get('journeyDates',[]))
+        for other in body.get('sections',[]):
+            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets'):continue
+            source=other.get('selected') or {}
+            dates.update(p['travelDate'] for p in source.get('originalPages',source.get('pageSources',[])) if iso(p.get('travelDate')))
+    return sorted(d for d in dates if iso(d))
+
 def inspect(s,payload):
     provider=payload.get('provider','ns')
     if provider not in PROVIDERS:raise ValueError('Onbekende vervoerder voor datumcontrole.')
     ident=payload.get('asset');asset=s.asset(ident)
     if not 1<=asset['pages']<=100:raise ValueError('Controleer één tot honderd documentpagina’s.')
-    suggested=payload.get('suggestedDates',[]);allowed=payload.get('travelDates',[])
-    if not isinstance(suggested,list) or not isinstance(allowed,list) or len(suggested)>100 or len(allowed)>500 or any(not isinstance(d,str) or not iso(d) for d in [*suggested,*allowed]):raise ValueError('Ongeldige reisdatums.')
+    suggested=payload.get('suggestedDates',[]);allowed=payload.get('travelDates',[]);continuations=payload.get('continuationDates',[])
+    if not isinstance(suggested,list) or not isinstance(allowed,list) or not isinstance(continuations,list) or len(suggested)>100 or len(allowed)>500 or len(continuations)>100 or any(not isinstance(d,str) or not iso(d) for d in [*suggested,*allowed,*continuations]):raise ValueError('Ongeldige reisdatums.')
     reader=PdfReader(s.DATA/'pdfs'/f'{ident}.pdf');pages=[];deadline=time.monotonic()+20
     for n,page in enumerate(reader.pages):
         if time.monotonic()>deadline:raise ValueError('Datumcontrole duurt te lang. Upload minder pagina’s tegelijk.')
         text=page.extract_text() or ''
         value,source,review=labelled_date(text,provider,allowed)
         if not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
-        if value and suggested and value not in suggested:review=True;source='pdf-conflict'
+        if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
         pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.
     dates={p['travelDate'] for p in pages if p['travelDate']}

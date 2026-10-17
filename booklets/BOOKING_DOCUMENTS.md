@@ -202,3 +202,33 @@ slot's moment requires a fresh page confirmation. Dates and original page bounds
 are validated on save; unresolved dates block export through reviewRequired.
 Missing moments do not silently use another date. Old snapshots without date
 metadata remain readable and acquire inspection metadata when their picker opens.
+
+## Shared catalogue, attachments and output mode
+
+The overview refreshes every five seconds while visible and on focus, without
+replacing an open draft or modal. Creation order is recorded separately from
+revision updates. Only the exact Sanity booking ID groups older booklets; a
+shared booking number never merges customers. Deleted booklets remain recoverable
+in the existing trash, and their PDF history is retained.
+
+Hotel PDF attachments in a booking's `documents` are separate from approved
+Sanity voucher documents. The reader excludes invoices and obvious train/itinerary
+files, proposes likely hotel attachments, and retains the original PDF. It only
+downloads an asset owned by the selected booking from the configured Sanity CDN
+project/dataset, with redirect, type and size checks. Every attachment requires
+explicit local voucher review; this never changes Sanity approval or writes to
+Sanity. Approved vouchers and attachments may coexist; a duplicate warning asks
+the user to review both. Ambiguous attachments remain manually selectable.
+
+Ticket moments default to joint train departure dates from the booking's ToDos
+and loaded ticket sources, across carriers. Hotel checkout is not a substitute
+for a train departure. The optional `ticketDateBasis: source` retains local source
+numbering. Vouchers continue to use their own check-in dates. Existing booklets
+can refresh the booking data before reloading their tickets.
+
+`outputMode: screen` creates a downloadable PDF without recto blanks, print filler
+addition/removal or divisibility-by-four/PDF-X warnings. Content/source validation
+still applies. The default remains `print`; stored binding and duplex choices
+are preserved when switching back. Closing a read-only export check sends a
+bounded, authenticated cancellation and ignores late results. It never cancels
+an already requested saved PDF export.

@@ -44,6 +44,14 @@ Een succesvolle overgang naar een goedgekeurde Google-sessie sluit de bestaande 
 - Het overzicht toont browser/user-agent, laatste activiteit, IP-adres en geschatte stad/land. Browserinformatie is door de client opgegeven; IP-locatie is onnauwkeurig. Activiteit wordt maximaal eenmaal per minuut bijgewerkt. Alleen beheerders zien het overzicht; maximaal 500 toegangsacties blijven in het logboek.
 - Intrekken verhindert nieuwe aanvragen. Reeds geladen of gedownloade gegevens en al gestarte acties worden niet teruggehaald. Uitloggen bij Google beëindigt niet automatisch de Seinhuis-sessie.
 
-## Validatie
+## Controle vóór activering
+
+- Controleer op de actieve Node-service alleen of beide `SEINHUIS_GOOGLE_CLIENT_*` instellingen aanwezig zijn; druk hun inhoud nooit af. Nog niet uitgerolde Railway-wijzigingen zijn geen bewijs dat de actieve service is ingesteld.
+- Controleer vóór publicatie dat de redirect-URI exact overeenkomt en dat beide Workspace-domeinen worden toegelaten. Laat de bestaande eigenaarlogin en herstelroute beschikbaar.
+- Test na afzonderlijk akkoord voor publicatie eerst de bestaande eigenaarlogin, daarna de expliciete beheerderskoppeling en vervolgens een collega met beperkte onderdeelrechten. Goedkeuren van een echte browser of wijzigen van echte rechten vereist afzonderlijke toestemming voor die actie.
+- Controleer met die collega dat Boekjesmaker bereikbaar is en dat algemeen beveiligingsbeheer en niet-toegekende onderdelen worden geweigerd. Controleer intrekking uitsluitend met toestemming en een afgesproken testbrowser.
+- Rond de overstap pas af nadat de echte Google-aanmelding is bevestigd. Een geslaagde lokale test of GitHub-controle bevestigt geen productieconfiguratie.
+
+## Testdekking
 
 `google-login.test.mjs` controleert echte RSA-handtekeningen, issuer, client, nonce, tijdslimieten en Workspace-identiteit. `google-access.test.mjs` gebruikt echte SQLite-persistentie voor onboarding, rollen, CSRF, browserbinding, state-hergebruik, sessieverloop, intrekken, blokkeren en een blokkade tijdens de Google-netwerkaanvraag. `test-google-access-browser.mjs` controleert het scherm en de bediening met API-fixtures op desktop en mobiel. Een volledige Google-login met de productieclient moet na configuratie nog worden getest; fixtures bevestigen geen live OAuth-configuratie.

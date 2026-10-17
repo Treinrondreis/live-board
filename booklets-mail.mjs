@@ -4,9 +4,10 @@ import {fetchBookings} from './flora-sanity.mjs';
 import {readFlora} from './flora-store.mjs';
 import {safeTicketURL,decodeEntities,plainHTML} from './flora-mail-source.mjs';
 import {nsOption} from './flora-options.mjs';
-import {createCarrierMail,providerKey,safeCarrierPDF,referenceDates,isoDate,carrierReferences} from './booklets-carrier-mail.mjs';
+import {createCarrierMail,providerKey,safeCarrierPDF,referenceDates,referenceContinuationDates,isoDate,carrierReferences,bookingJourneyDates} from './booklets-carrier-mail.mjs';
 
-const sender='no-reply@confirmation.nsinternational.nl';
+const senders=['no-reply@confirmation.nsinternational.nl','ns@treinrondreis.nl'];
+export const nsTicketSender=from=>/^(?:[^<>]*<)?(?:no-reply@confirmation\.nsinternational\.nl|ns@treinrondreis\.nl)>?$/i.test(String(from||'').trim());
 const header=(m,n)=>(m.payload?.headers||[]).find(h=>h.name.toLowerCase()===n)?.value||'';
 const walk=p=>[p,...(p?.parts||[]).flatMap(walk)];
 export function bookingReferences(booking){
@@ -31,10 +32,10 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
    else {const cached=await state();const matches=(cached.state?.bookings||[]).filter(b=>bookingReferences(b).includes(term));if(matches.length===1)booking=matches[0];}
    if(queries.size>20)throw Error('Deze boeking heeft te veel referenties. Zoek op één NS-referentie tegelijk.');
    const ids=new Set();
-   for(const q of queries){checkTime();const result=await get('messages',{q:`from:${sender} "${q}" -in:spam -in:trash`,maxResults:'50'});if(result.nextPageToken)throw Error('Meer dan vijftig mails gevonden voor een referentie. Zoek op een specifiekere NS-referentie.');for(const m of result.messages||[])ids.add(m.id);}
+   for(const q of queries){checkTime();const result=await get('messages',{q:`{${senders.map(s=>'from:'+s).join(' ')}} "${q}" -in:spam -in:trash`,maxResults:'50'});if(result.nextPageToken)throw Error('Meer dan vijftig mails gevonden voor een referentie. Zoek op een specifiekere NS-referentie.');for(const m of result.messages||[])ids.add(m.id);}
    if(ids.size>100)throw Error('Te veel mails gevonden. Zoek op een NS-referentie.');
    const messages=[];
-   for(const id of ids){checkTime();const m=await get('messages/'+id,{format:'full'});const from=header(m,'from'),subject=header(m,'subject');if(!/^(?:[^<>]*<)?no-reply@confirmation\.nsinternational\.nl>?$/i.test(from.trim()))continue;if(nsOption({from,subject}))continue;
+   for(const id of ids){checkTime();const m=await get('messages/'+id,{format:'full'});const from=header(m,'from'),subject=header(m,'subject');if(!nsTicketSender(from))continue;if(nsOption({from,subject}))continue;
     let ref=subject.match(/boekingscode\s*:\s*([A-Z0-9]+)/i)?.[1]?.toUpperCase()||'';
     const own=subject.match(/naam\s*:\s*([^,]+)/i)?.[1]?.trim()||'';const links=[];
     for(const part of walk(m.payload)){if(!/^text\//.test(part.mimeType||''))continue;const data=part.body?.data||(part.body?.attachmentId?(await get(`messages/${id}/attachments/${part.body.attachmentId}`)).data:'');const body=Buffer.from(data||'','base64url').toString('utf8');if(!ref)ref=plainHTML(body).match(/\b(?:DNR|boekingscode)\s*:\s*([A-Z0-9]{6,8})\b/i)?.[1]?.toUpperCase()||'';
@@ -46,7 +47,7 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
    }
    messages.sort((a,b)=>b.date.localeCompare(a.date));const latest=new Set();
    for(const m of messages){const group=m.reference||m.id;m.latest=!latest.has(group);latest.add(group);m.selected=m.latest&&!!m.reference&&!m.cancelled&&m.tickets.length>0;}
-   return {provider:'NS International',providerKey:'ns',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],referenceDates:booking?referenceDates(booking,bookingReferences(booking)):[],travelDates:booking?[...new Set((booking.todos||[]).map(t=>isoDate(t.startDate)).filter(Boolean))]:[],messages};
+   return {provider:'NS International',providerKey:'ns',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],referenceDates:booking?referenceDates(booking,bookingReferences(booking)):[],referenceContinuationDates:booking?referenceContinuationDates(booking,bookingReferences(booking)):[],journeyDates:booking?bookingJourneyDates(booking):[],travelDates:booking?[...new Set((booking.todos||[]).map(t=>isoDate(t.startDate)).filter(Boolean))]:[],messages};
   },
   async download(payload){
    clean();const item=tickets.get(payload.ticket);if(!item)throw Error('Deze ticketselectie is verlopen. Zoek de mails opnieuw.');if(busy){const e=Error('Er wordt al een ticket opgehaald. Probeer zo opnieuw.');e.status=429;throw e;}busy=true;

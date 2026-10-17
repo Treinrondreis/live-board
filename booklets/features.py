@@ -74,7 +74,7 @@ def count_pages(b,sections):
     n=0
     for i,s in enumerate(sections):
         if i==at:n+=len(toc)
-        if b.get('duplex',True) and s.get('recto') and n%2:n+=1
+        if b.get('outputMode')!='screen' and b.get('duplex',True) and s.get('recto') and n%2:n+=1
         n+=s['pages']
     return n
 def insert_fillers(sections,fillers):
@@ -87,6 +87,8 @@ def insert_fillers(sections,fillers):
 def plan(b,objects):
     sections=resolved(b)
     if not sections:raise ValueError('Kies of voeg ten minste één bouwsteen toe.')
+    if b.get('outputMode')=='screen':
+        return dict(pages=count_pages(b,sections),needed=0,missing=[s['title'] for s in b.get('sections',[]) if s.get('choice') and not s.get('selected') and document_condition(s,b) is not False and not (s.get('choice')=='document' and s.get('omitted'))],fillers=[],canFill=False,sections=sections,adjustedSections=sections,droppedFillers=[],droppedFillerIndices=[],fillerWarnings=[],tripDays=trip_fillers.trip_days(b))
     pages=count_pages(b,sections);needed=(-pages)%4
     in_trip=trip_fillers.choose(b,sections,count_pages)
     adjusted=in_trip['sections'];adjusted_needed=(-count_pages(b,adjusted))%4

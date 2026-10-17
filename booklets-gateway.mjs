@@ -26,6 +26,10 @@ export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,
       if(req.method==='GET'&&(url.pathname===prefix||url.pathname===prefix+'/')){res.writeHead(303,{Location:'/seinhuis'});res.end();return true;}
       return fail(401,'Log eerst in bij Seinhuis.');
     }
+    // Internal storage calls are never exposed through the browser gateway,
+    // including encoded paths and duplicate-slash aliases.
+    let storagePath;try{storagePath=decodeURIComponent(url.pathname.slice(prefix.length)).replace(/\/+/g,'/');}catch{return fail(404,'Niet gevonden.');}
+    if(storagePath.includes('%')||storagePath.startsWith('/internal/'))return fail(404,'Niet gevonden.');
     if(!['GET','POST','HEAD'].includes(req.method))return fail(405,'Deze methode is niet toegestaan.');
     const config=configuration();
     if(req.method==='POST'&&(req.headers.origin!==config.origin||req.headers['x-booklets']!=='1'))return fail(403,'Ongeldige oorsprong. Open de boekjesmaker vanuit Seinhuis.');
@@ -41,7 +45,7 @@ export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,
         if(!body||typeof body!=='object'||Array.isArray(body))throw Error('Ongeldige ticketzoekopdracht.');
         const action=url.pathname.split('/').at(-1);
         if(url.pathname.startsWith(prefix+'/api/booking-data/')){
-          if(!['search','documents','document'].includes(action))return fail(404,'Boekingsactie niet gevonden.');
+          if(!['search','documents','document','attachment'].includes(action))return fail(404,'Boekingsactie niet gevonden.');
           const result=await bookings[action](body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;
         }
         if(action==='search'){const result=await mail.search(body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}

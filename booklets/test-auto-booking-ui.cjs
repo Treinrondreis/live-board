@@ -39,11 +39,25 @@ test('retry preserves edited documents and deliberately omitted places',async()=
 });
 test('ambiguous letters, Drive files and unapproved vouchers require a choice while other chapters continue',async()=>{
  const f=fixture({items:[{id:'a',kind:'letter'},{id:'b',kind:'letter'},{id:'v',kind:'voucher',approved:false}],driveItems:[{id:'a',recommended:true},{id:'b',recommended:true}]});
- await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[0].issue,/Meerdere Sanity-brieven/);assert.match(f.slots()[1].issue,/Meerdere reisschema/);assert.match(f.slots()[3].issue,/Geen gecontroleerde Sanity-vouchers/);assert(f.slots()[2].selected);
+ await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[0].issue,/Meerdere Sanity-brieven/);assert.match(f.slots()[1].issue,/Meerdere reisschema/);assert.match(f.slots()[3].issue,/Meerdere voucherdocumenten/);assert(f.slots()[2].selected);
  assert(!f.calls.some(c=>c.path==='/api/booking-data/document'||c.path==='/api/booking-documents/drive-load'));
 });
 test('duplicate booking numbers never pick a Drive customer document automatically',async()=>{
  const f=fixture();f.exec('draft.body.sanityBooking.sameNumberBookings=2');await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[1].issue,/niet uniek/);assert(!f.calls.some(c=>c.path.includes('drive-')));assert(f.slots()[0].selected);
+});
+
+test('approved vouchers and original attachments combine with mandatory review; attachment failure rolls back the whole replacement',async()=>{
+ for(const fail of [false,true]){
+  const f=fixture({api:async(path)=>{
+   if(path==='/api/booking-data/documents')return {booking:{todos:[]},items:[{id:'voucher',kind:'voucher',approved:true}],attachments:[{id:'attached',title:'Hotel',recommended:true}]};
+   if(path==='/api/booking-data/attachment'){if(fail)throw Error('Attachment unavailable');return {kind:'voucher',documentId:'attached',attachment:true,travelDate:'2026-10-12'};}
+  }});
+  f.exec('draft.body.sections=draft.body.sections.filter(s=>s.documentKind==="voucher")');
+  await f.exec('autoFillBookingDocuments()');
+  const slot=f.slots()[0];
+  if(fail){assert.equal(slot.selected,null);assert.match(slot.issue,/Attachment unavailable/);}
+  else{assert.equal(slot.selected.pages,4);assert.equal(slot.selected.reviewRequired,true);assert.equal(slot.selected.bookingDocuments.length,2);assert(slot.selected.warnings.some(w=>w.includes('dubbel')));}
+ }
 });
 test('NS cancellation, missing reference and unavailable PDF never leave partial tickets in the book',async()=>{
  for(const options of [{mail:{references:['ABCDEF'],messages:[{reference:'ABCDEF',latest:true,cancelled:true,tickets:[]}]}},{mail:{references:[],messages:[]}},{failTicket:'b'}]){
@@ -58,6 +72,31 @@ test('a unique Drive voucher is loaded automatically but must be reviewed before
  assert.equal(f.slots()[3].selected.documentOrigin,'drive');assert.equal(f.slots()[3].selected.reviewRequired,true);assert.match(f.slots()[3].issue,/Controleer klant/);
  await f.exec('documentSlotPages(3)');f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
  assert(!f.slots()[3].selected.reviewRequired);assert(f.slots()[3].selected.reviewedAt);assert.equal(f.slots()[3].selected.driveDocument.id,'drive');
+});
+
+test('distinct hotel-folder vouchers combine chronologically and preserve every source after review',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'}],api:async(path,b)=>{
+  if(path==='/api/booking-documents/drive-search'&&b.kind==='voucher')return {items:[{id:'stay-later',title:'321A-Example-Beta.pdf',recommended:true,voucherFolder:'fixture-folder',updatedAt:'current'},{id:'stay-first',title:'321A-Example-Alpha.pdf',recommended:true,voucherFolder:'fixture-folder',updatedAt:'current'}]};
+  if(path==='/api/booking-documents/drive-load'&&b.id.startsWith('stay-')){assert.equal(b.voucherFolder,'fixture-folder');assert.equal(b.updatedAt,'current');return {asset:b.id,pages:1,driveDocument:{id:b.id}};}
+  if(path==='/api/tickets/inspect'&&b.asset.startsWith('stay-'))return {pages:[{asset:b.asset,page:0,travelDate:b.asset==='stay-first'?'2027-03-08':'2027-03-10',dateSource:'pdf',dateNeedsReview:false}]};
+ }});
+ await f.exec('autoFillBookingDocuments()');let selected=f.slots()[3].selected;
+ assert.equal(selected.pages,2);assert.equal(selected.pageSources[0].asset,'stay-first');assert.equal(selected.driveDocuments.length,2);assert(selected.reviewRequired);
+ await f.exec('documentSlotPages(3)');f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ selected=f.slots()[3].selected;assert.equal(selected.driveDocuments.length,2);assert(!selected.reviewRequired);assert.equal(selected.originalPages.length,2);
+});
+
+test('a failed second Drive voucher never inserts a partial voucher set',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'}],api:async(path,b)=>{
+  if(path==='/api/booking-documents/drive-search'&&b.kind==='voucher')return {items:[{id:'one',title:'First.pdf',recommended:true,voucherFolder:'fixture-folder'},{id:'two',title:'Second.pdf',recommended:true,voucherFolder:'fixture-folder'}]};
+  if(path==='/api/booking-documents/drive-load'&&b.id==='two')throw Error('Voucher changed during import');
+ }});
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/changed during import/);
+});
+
+test('duplicate filenames in the hotel folder require a choice instead of importing both versions',async()=>{
+ const f=fixture({items:[{id:'letter',kind:'letter'}],driveItems:[{id:'one',title:'Same voucher.pdf',recommended:true,voucherFolder:'fixture-folder'},{id:'two',title:'SAME VOUCHER.PDF',recommended:true,voucherFolder:'fixture-folder'}]});
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/Meerdere/);assert(!f.calls.some(c=>c.path==='/api/booking-documents/drive-load'&&['one','two'].includes(c.b.id)));
 });
 test('failure of a second voucher cannot insert an incomplete hotel voucher set',async()=>{
  const f=fixture({api:async(path,b)=>{if(path==='/api/booking-data/document'&&b.documentId==='voucher2')throw Error('Reserveringsnummer ontbreekt');}});
@@ -121,4 +160,36 @@ test('missing and conflicting dates block moment selection until confirmed, manu
 });
 test('voucher moments use check-in dates, sort within the chapter and preserve native source pages',async()=>{
  const f=fixture({api:async(path,b)=>{if(path==='/api/booking-data/document'&&b.documentId.startsWith('voucher'))return {bookingId:b.bookingId,documentId:b.documentId,kind:'voucher',approved:true,travelDate:b.documentId==='voucher1'?'2026-10-13':'2026-10-08'};}});f.exec('draft.body.sections[3].voucherMoment=1');await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected.pages,2);assert.equal(f.slots()[3].selected.pageSources[0].asset,'voucher2');assert.equal(f.slots()[3].selected.bookingDocuments.length,2);assert.equal(f.slots()[3].selected.originalPages.length,4);assert.equal(f.slots()[3].selected.pageSources[0].travelDate,'2026-10-08');
+});
+
+test('explicit manual placement saves chosen pages despite an unselected source with an unknown date',async()=>{
+ const f=fixture({api:async(path,b)=>{if(path==='/api/tickets/inspect')return {pages:[{asset:b.asset,page:0,travelDate:'',dateSource:'unknown',dateNeedsReview:true}]};}});
+ f.exec('draft.body.sections[2].ticketMoment=1');await f.exec('autoFillBookingDocuments()');await f.exec('documentSlotPages(2)');
+ f.exec(`changePickerDate('document',0,'2027-03-04');documentPageRemove(2);documentPageRemove(1);documentPagesSave({disabled:false})`);
+ await assert.rejects(f.ctx.lastRun,/bronpagina/);
+ assert.match(f.node('#modal').innerHTML,/handmatig gebruiken zonder automatische datumindeling/);
+ f.exec('documentPages.manualDatePlacement=true;documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ const selected=f.slots()[2].selected;assert.equal(selected.pages,1);assert.equal(selected.manualDatePlacement,true);assert.equal(selected.originalPages.length,3);assert.equal(selected.originalPages[2].dateNeedsReview,true);assert(!selected.reviewRequired);assert(selected.warnings.some(w=>w.includes('handmatig geplaatst')));
+ await f.exec('documentSlotPages(2)');assert.equal(f.exec('documentPages.manualDatePlacement'),true);
+ f.exec('documentPages.manualDatePlacement=false;documentPagesSave({disabled:false})');await assert.rejects(f.ctx.lastRun,/bronpagina/);
+});
+
+test('ticket import can explicitly keep an unknown date without inventing a date or changing its sources',async()=>{
+ const f=fixture();f.exec(`ticketPick={book:draft,bookingId:draft.body.sanityBooking.id,slot:draft.body.sections[2],provider:'ns',query:'fixture',pages:[{asset:'source',page:0,dateNeedsReview:true}],originalPages:[{asset:'source',page:0,dateNeedsReview:true}],manualDatePlacement:false};ticketAddToBook({disabled:false})`);
+ await assert.rejects(f.ctx.lastRun,/reisdatums/);
+ f.exec('ticketPick.manualDatePlacement=true;ticketAddToBook({disabled:false})');await f.ctx.lastRun;
+ const selected=f.slots()[2].selected;assert.equal(selected.manualDatePlacement,true);assert.equal(selected.pageSources[0].travelDate,undefined);assert.equal(selected.pageSources[0].dateNeedsReview,true);assert(selected.warnings.some(w=>w.includes('handmatig geplaatst')));
+});
+
+test('manual voucher date placement still requires the independent voucher review',async()=>{
+ const f=fixture();await f.exec('autoFillBookingDocuments()');await f.exec('documentSlotPages(3)');
+ f.exec('documentPages.manualDatePlacement=true');f.node('#voucherReviewed').checked=false;
+ f.exec('documentPagesSave({disabled:false})');await assert.rejects(f.ctx.lastRun,/bevestig eerst de voucher/);
+ f.node('#voucherReviewed').checked=true;f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;assert.equal(f.slots()[3].selected.manualDatePlacement,true);
+});
+
+test('a dated onward connection is a third travel moment and receives only its own reference hints',async()=>{
+ const f=fixture({mail:{references:['ABCDEFG'],referenceDates:[{reference:'ABCDEFG',dates:['2027-02-20','2027-02-23']}],referenceContinuationDates:[{reference:'ABCDEFG',dates:['2027-02-24']},{reference:'HIJKLMN',dates:['2027-03-01']}],messages:[{id:'desk',reference:'ABCDEFG',latest:true,tickets:[{id:'connection',title:'Tickets'}]}]},api:async(path,b)=>{if(path==='/api/tickets/inspect'){assert.deepEqual(Array.from(b.continuationDates),['2027-02-24']);return {pages:['2027-02-20','2027-02-23','2027-02-24','2027-02-24'].map((d,page)=>({asset:b.asset,page,travelDate:d,dateSource:'pdf-validity',dateNeedsReview:false}))};}}});
+ f.exec('draft.body.sections[2].ticketMoment=3');await f.exec('autoFillBookingDocuments()');
+ assert.equal(f.slots()[2].selected.pages,2);assert(f.slots()[2].selected.pageSources.every(p=>p.travelDate==='2027-02-24'));assert(!f.slots()[2].selected.reviewRequired);assert(!f.slots()[2].issue);
 });

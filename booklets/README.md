@@ -14,9 +14,9 @@ Set healthcheck `/health`, port 8080, restart on failure (5 retries) in Railway.
 Do not use the root railway.json (that starts Node). New services can no longer
 opt into legacy Config as Code after 2026-08-28; configure this service in the UI.
 Use one replica in the same region as live-board, a dedicated volume at `/data`,
-and no public domain/TCP proxy. Limits: 2 GB RAM, 1 CPU, 5 GB application storage
-quota. Railway provisioned a 50 GB volume and does not offer shrinking in this UI;
-it bills used space. The app enforces the agreed 5 GB usage in upload/render/import
+and no public domain/TCP proxy. Limits: 2 GB RAM, 1 CPU, application storage
+quota (5 GB default, explicitly approved production setting: 10 GB). Railway provisioned a 50 GB volume and does not offer shrinking in this UI;
+it bills used space. The app enforces the configured BOOKLETS_STORAGE_LIMIT usage in upload/render/import
 paths with metadata headroom. Obtain cost agreement before raising limits. Enable daily
 volume backups. No PostgreSQL schema or KM-media bucket changes are required.
 
@@ -36,6 +36,17 @@ Python variables:
 - Creating route copies in Google Docs additionally requires Drive API enabled
   and explicit OAuth consent for drive.file. Existing documents.readonly access
   continues to work without that extra grant. Copies do not sync back to routes.
+- Optional BOOKLETS_VOUCHER_DRIVE_FOLDER_ID: existing hotel-voucher folder, read
+  through the same Google Drive connection. Voucher search also lists matching
+  booking files directly in this folder, including PDFs without "voucher" in the
+  filename. General search results must explicitly identify a voucher; timelines,
+  tickets and invoices are excluded. Multiple distinctly named folder vouchers
+  are combined and require the existing customer/hotel/date review before export.
+- Optional BOOKLETS_VOUCHER_ARCHIVE_DRIVE_FOLDER_ID: archived hotel-voucher folder.
+  Matching booking files directly in this folder are searched and validated in the
+  same way as the active voucher folder. Restore archived files from Drive Trash
+  before moving them here; trashed files remain excluded. Duplicate filenames
+  require manual selection. Files without a booking number are not auto-matched.
 
 ## Automatische voorstellen
 
@@ -154,6 +165,56 @@ BOOKLETS_IMPORT_ENABLED, then create an initial volume backup. Local originals
 remain untouched. Each local snapshot needs a new empty output directory.
 
 ## Resource and recovery limits
+
+### Finished PDF exports in Google Drive
+
+In a book, choose **PDF-opslag in Drive** and enable storage. This uses the
+existing server-side Google OAuth connection with `drive.file` (the same extra
+permission used for creating routes). No broad Drive-write scope or public
+sharing is requested. The app creates **Treinrondreis - Reisboekjes** in the
+connected account. Keep that account connected; a different account cannot
+replace it silently. Google reconnect/disconnect does not delete Drive files.
+
+Only finished `exports/*.pdf` files move. Building blocks, source PDFs, saved
+book definitions, export snapshots and notes remain on the private volume.
+Fresh exports are registered before a Drive transfer. A failed transfer returns
+a usable local export with a visible retry warning, never an instruction to
+generate the whole booklet again. Slow generations can finish locally and be
+transferred separately. Transfers support PDFs up to 512 MB in bounded chunks.
+
+The app reserves and commits the exact Drive file ID before uploading. Retrying
+after a timeout checks that ID, avoiding duplicate uploads and overwrites.
+Metadata, size and checksums are verified before the mapping is committed and
+the local PDF is removed. No file is evicted on ambiguous or failed verification.
+Use **Eerdere PDF’s naar Drive verplaatsen** for existing versions (including
+soft-deleted versions). This moves one PDF per request and can stop/resume.
+Cleanup and transfer remain available when the application quota is full.
+
+Existing authenticated PDF and digital-preview URLs remain unchanged. A Drive
+PDF is downloaded to a quota-checked private temporary file, SHA-256 verified,
+served/rendered and removed when the stream closes. One Drive download is allowed
+at a time. Interrupted temporary downloads are cleaned on service startup.
+Preview PNGs remain disposable local caches. No OAuth token, upload session URI
+or direct bearer download URL is returned to the browser or logged.
+
+Soft deletion only hides the export in Boekjesmaker. Restoring it works without
+moving its Drive file. Explicit permanent removal of an older, already-deleted
+export sends its exact verified app-created PDF to the **Drive trash**, confirms
+that operation, then removes its local history. It never empties Drive trash.
+If Drive is unavailable, the history is retained for retry. The newest export
+remains protected by the existing rule.
+
+Back up the private volume database and keep the Drive folder: after migration
+the volume alone no longer contains finished PDF bytes. The initial local-only
+`prepare_import.py` tool is not a backup/export mechanism for a Drive-backed
+library; it requires every PDF locally and fails rather than silently omitting
+remote exports. Restoring such a service requires its database, encrypted Google
+connection and the original Google OAuth application/account. Turning Drive
+storage off affects new exports only; previously moved PDFs stay in Drive.
+
+Protocol references: [Drive resumable uploads and pre-generated IDs](https://developers.google.com/workspace/drive/api/guides/manage-uploads),
+[Drive file metadata/checksums](https://developers.google.com/workspace/drive/api/reference/rest/v3/files),
+[per-file OAuth scope](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
 
 PDF downloads stream in chunks. Upload limit is 50 MB. One mutation or preview
 render runs at a time; further requests get 429 and a retry message. One Gunicorn

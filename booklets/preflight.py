@@ -2,6 +2,7 @@
 import io
 from features import document_condition,omitted_document_warnings
 import document_duplicates
+import export_checks
 
 def check(s,body,objects,fill=False):
     b=s.refresh_blocks(body,objects);errors=[];missing=[]
@@ -13,6 +14,7 @@ def check(s,body,objects,fill=False):
     except ValueError:pass
     if not b.get('sections'):error(None,'Boekje','Voeg eerst een bouwsteen toe.')
     for i,slot in enumerate(b.get('sections',[])):
+        export_checks.check()
         if fill and preparation and i in preparation.get('droppedFillerIndices',[]):continue
         condition=document_condition(slot,b)
         if condition is False:continue
@@ -48,6 +50,7 @@ def check(s,body,objects,fill=False):
     except ValueError as e:
         if not errors:error(None,'Boekje',e)
     if not errors:
+        export_checks.check()
         try:
             report=s.make_export({'id':'preview','title':'Controle','body':b},{'skipChoices':True,'allowUneven':True,'fill':fill and result['canFill'],'dryRun':True,'libraryStamp':result['libraryStamp']})
             result['checkedPages']=report['report']['pages']

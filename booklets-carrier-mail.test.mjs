@@ -1,7 +1,18 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createBookletsMail,bookingReferences} from './booklets-mail.mjs';
-import {carrierReferences,carrierMessageReferences,referenceDates,isoDate,carrierSender,safeCarrierPDF,ticketAttachment,carrierSearchQuery} from './booklets-carrier-mail.mjs';
+import {carrierReferences,carrierMessageReferences,referenceDates,referenceContinuationDates,isoDate,carrierSender,safeCarrierPDF,ticketAttachment,carrierSearchQuery,bookingJourneyDates} from './booklets-carrier-mail.mjs';
+
+test('shared journey moments include different carriers and explicit onward ToDos, never hotel checkout',()=>{
+ const booking={todos:[{title:'ÖBB Nightjet',supplierBookingNumber:'1111222233334444',startDate:'2026-10-12',endDate:'2026-10-13'},{title:'NS trein',supplierBookingNumber:'ABCDEFG',startDate:'2026-10-18',endDate:'2026-10-19'},{title:'Hotel Example',supplierBookingNumber:'1111222233334444',startDate:'2026-10-13',endDate:'2026-10-17'},{title:'CORA2',startDate:'2026-10-19'}]};
+ assert.deepEqual(bookingJourneyDates(booking),['2026-10-12','2026-10-18','2026-10-19']);
+});
+
+test('NS continuation hints use only the following day of a matching train ToDo',()=>{
+ const booking={todos:[{title:'Nightjet',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-23',endDate:'2027-02-24'},{title:'Hotel',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-24',endDate:'2027-02-25'},{title:'Nightjet',supplierBookingNumber:'HIJKLMN',startDate:'2027-02-26',endDate:'2027-02-27'},{title:'Nightjet',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-23',endDate:'2027-02-28'}]};
+ assert.deepEqual(referenceContinuationDates(booking,['ABCDEFG']),[{reference:'ABCDEFG',dates:['2027-02-24']}]);
+ assert.deepEqual(referenceDates(booking,['ABCDEFG']),[{reference:'ABCDEFG',dates:['2027-02-23']}]);
+});
 test('shared NS reference in an outbound description and return field includes both departure dates',async()=>{const booking={_id:'private.fixture',index:1234,todos:[{title:'40421 (EUN)(RIT) | RITAD',description:'GVLNNLH',startDate:'2026-11-11',endDate:'2026-11-12'},{title:'NJ (EUN)(RIT)(40490) | RITAD',supplierBookingNumber:'GVLNNLH',description:'1d x 1 x 400.00 = €400.00',startDate:'2026-11-14',endDate:'2026-11-15'}]};assert.deepEqual(bookingReferences(booking),['GVLNNLH']);assert.deepEqual(referenceDates(booking,['GVLNNLH']),[{reference:'GVLNNLH',dates:['2026-11-11','2026-11-14']}]);const queries=[];const control=createBookletsMail({bookings:async()=>[booking],google:{status:async()=>({connected:true}),reader:async()=>async(path,args)=>{queries.push(args.q);return {messages:[]};}}});const result=await control.search({query:'1234A',bookingId:booking._id});assert.deepEqual(result.referenceDates,[{reference:'GVLNNLH',dates:['2026-11-11','2026-11-14']}]);assert(queries.some(q=>q.includes('GVLNNLH')));});
 test('description references are restricted to an exact uppercase NS code on a train ToDo with an empty reference field',()=>{const booking={todos:[{title:'Hotel',description:'GVLNNLH',startDate:'2026-11-12'},{title:'Treinticket',description:'Betaald'},{title:'Treinticket',description:'Reis op GVLNNLH'},{title:'Treinticket',description:'1d x 1 x 400.00 = €400.00'},{title:'Treinticket',description:'GVLNNLH',supplierBookingNumber:'ABCDEFG',startDate:'2026-11-14'},{title:'Treinticket',description:'  HIJKLMN  ',startDate:'2026-11-11'}]};assert.deepEqual(bookingReferences(booking),['ABCDEFG','HIJKLMN']);assert.deepEqual(referenceDates(booking,['GVLNNLH']),[{reference:'GVLNNLH',dates:[]}]);assert.deepEqual(referenceDates(booking,['HIJKLMN']),[{reference:'HIJKLMN',dates:['2026-11-11']}]);});
 const refs={mav:'2397475954',db:'232946008891',obb:'0897058378330938',cd:'20197059000'};
