@@ -57,7 +57,18 @@ body.sc-ui{margin:0;background:#f5f4ee;color:#2c3033;font:16px/1.5 'Segoe UI',sa
 .sc-ui #stations button.active,.sc-ui .tabs button.active{color:var(--module-hover);background:var(--module-soft);border-color:var(--module-color)}
 .sc-ui .sc-main .savebar{position:sticky;bottom:0;left:auto;width:auto;border:1px solid #dedfda;border-radius:10px;margin-top:20px;padding:14px 18px;z-index:5;background:white;flex-wrap:wrap}
 .sc-ui .sc-main :where(.savebar,#status,#message){overflow-wrap:anywhere}
-.sc-ui.sc-page-borden .layout{grid-template-columns:170px minmax(0,1fr) minmax(300px,.85fr);gap:18px}
+.sc-ui.sc-page-borden .sc-main{padding:16px 24px 40px}
+.sc-ui.sc-page-borden .sc-breadcrumb,.sc-ui.sc-page-borden .sc-main>header small{display:none}
+.sc-ui.sc-page-borden .sc-main>header{justify-content:flex-start;gap:16px;padding:0 0 12px;min-height:40px}
+.sc-ui.sc-page-borden .sc-main>header h1{font-size:24px;margin:0}
+.sc-ui.sc-page-borden .sc-main>header>a{margin-left:auto;font-size:14px}
+.sc-ui.sc-page-borden .sc-main>header button{min-height:36px;padding:6px 12px;font-size:14px}
+.sc-ui.sc-page-borden #message:empty{display:none}
+.sc-ui.sc-page-borden #message:not(:empty){min-height:0;padding:8px 12px;margin:0 0 12px;border-radius:8px;font-size:14px}
+.sc-ui.sc-page-borden .layout{grid-template-columns:150px minmax(300px,.75fr) minmax(0,1.25fr);gap:18px;grid-template-areas:'stations editor preview'}
+.sc-ui.sc-page-borden .layout>aside{grid-area:stations}
+.sc-ui.sc-page-borden .layout>section:not(.preview){grid-area:editor;min-width:0}
+.sc-ui.sc-page-borden .layout>.preview{grid-area:preview;min-width:0}
 .sc-ui.sc-page-borden [data-sc-content] :where(aside,.preview){top:20px}
 .sc-ui.sc-page-perrons .layout{grid-template-columns:180px minmax(0,1fr) 270px;gap:18px}
 .sc-ui.sc-page-perrons :where(.layout>*,.row>*,.tabs){min-width:0}
@@ -69,9 +80,11 @@ body.sc-ui{margin:0;background:#f5f4ee;color:#2c3033;font:16px/1.5 'Segoe UI',sa
 .sc-ui.sc-page-treinbord td{min-width:0;overflow-wrap:anywhere}
 .sc-ui.sc-page-treinbord td :where(input,select){max-width:100%}
 @media(max-width:1450px){
- .sc-ui.sc-page-borden .layout,.sc-ui.sc-page-perrons .layout{grid-template-columns:170px minmax(0,1fr)}
- .sc-ui.sc-page-borden .preview,.sc-ui.sc-page-perrons .test{grid-column:2;position:static}
+ .sc-ui.sc-page-perrons .layout{grid-template-columns:170px minmax(0,1fr)}
+ .sc-ui.sc-page-perrons .test{grid-column:2;position:static}
 }
+@media(min-width:1201px) and (max-width:1600px){.sc-ui.sc-page-borden .layout>section:not(.preview) .fields{grid-template-columns:minmax(0,1fr)}}
+@media(min-width:851px) and (max-width:1200px){.sc-ui.sc-page-borden .layout{grid-template-columns:150px minmax(0,1fr);grid-template-areas:'stations preview' 'stations editor'}.sc-ui.sc-page-borden .preview{position:static}}
 @media(min-width:851px) and (max-width:1100px){.sc-ui .sc-layout{grid-template-columns:190px minmax(0,1fr)}.sc-ui .sc-main{padding:22px 18px}.sc-ui .sc-sidebar{padding:24px 10px}}
 @media(max-width:850px){
  .sc-ui .sc-layout{grid-template-columns:minmax(0,1fr);min-height:calc(100dvh - 64px)}
@@ -85,6 +98,7 @@ body.sc-ui{margin:0;background:#f5f4ee;color:#2c3033;font:16px/1.5 'Segoe UI',sa
  .sc-ui .sc-breadcrumb{display:none}
  .sc-ui .sc-tiles{grid-template-columns:1fr;gap:14px}
  .sc-ui.sc-page-borden .layout,.sc-ui.sc-page-perrons .layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+ .sc-ui.sc-page-borden .layout{grid-template-areas:'stations' 'preview' 'editor'}
  .sc-ui.sc-page-borden .preview,.sc-ui.sc-page-perrons .test{grid-column:auto}
  .sc-ui .layout>aside{position:static;max-height:270px;overflow:auto}
  .sc-ui .fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
