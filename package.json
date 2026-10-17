@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "preview:admin-ui": "node scripts/preview-admin-ui.mjs",
     "start": "node server.mjs",
     "check": "node scripts/check.mjs all",
     "check:syntax": "node scripts/check.mjs syntax",

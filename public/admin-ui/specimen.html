@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Gezamenlijke stijlbasis · Seinhuis</title>
+  <link rel="stylesheet" href="./fonts.css">
+  <link rel="stylesheet" href="./tokens.css">
+  <link rel="stylesheet" href="./components.css">
+  <link rel="stylesheet" href="./specimen.css">
+  <script defer src="./specimen.js"></script>
+</head>
+<body class="tr-ui">
+  <a class="tr-skip" href="#inhoud">Naar de inhoud</a>
+  <header class="tr-header">
+    <img class="tr-logo" src="./logo.svg" width="220" height="31" alt="Treinrondreis.nl">
+    <span class="tr-header-title">Seinhuis <span aria-hidden="true">/</span> Stijlbasis</span>
+    <span class="tr-header-note">Eén herkenbare omgeving</span>
+    <button class="tr-button tr-menu-button" type="button" aria-controls="onderdelen" aria-expanded="false">Onderdelen</button>
+  </header>
+  <div class="tr-layout">
+    <aside class="tr-sidebar" id="onderdelen">
+      <nav class="tr-nav" aria-label="Onderdelen · voorbeeld">
+        <a href="#overzicht" aria-current="page"><span class="spec-nav-symbol" aria-hidden="true">⌂</span>Seinhuis</a>
+        <a href="#werkoverzicht"><span class="spec-nav-symbol" aria-hidden="true">⇄</span>Stationschef</a>
+        <a href="#werkoverzicht"><span class="spec-nav-symbol" aria-hidden="true">⚑</span>KM-trein</a>
+        <a href="#bediening"><span class="spec-nav-symbol" aria-hidden="true">▤</span>Treinreiziger</a>
+        <a href="#formulieren"><span class="spec-nav-symbol" aria-hidden="true">▥</span>Boekjesmaker</a>
+        <a href="#statussen"><span class="spec-nav-symbol" aria-hidden="true">✓</span>FloRA</a>
+      </nav>
+      <p class="tr-sidebar-note">Dit is de gezamenlijke stijlbasis. De links tonen voorbeelden van de bediening.</p>
+    </aside>
+    <main class="tr-main tr-stack" id="inhoud" tabindex="-1">
+      <section id="overzicht">
+        <div class="tr-breadcrumb">Ontwerpvoorstel / Gezamenlijke basis</div>
+        <div class="tr-page-heading">
+          <div class="tr-split"><p class="tr-eyebrow">SEINHUIS · STIJLBASIS 1.0</p><span class="tr-badge">Voorbeeld met fictieve gegevens</span></div>
+          <h1 class="tr-title tr-gradient-title">Alles op één vertrouwde plek.</h1>
+          <p class="tr-muted">Dezelfde kleuren, duidelijke knoppen en goed leesbare schermen voor alle zes onderdelen.</p>
+        </div>
+        <div class="tr-stats">
+          <article class="tr-card tr-stat tr-stat--alarm"><span>Alarmen</span><strong>1</strong><span class="tr-muted">Een concrete afwijking</span></article>
+          <article class="tr-card tr-stat tr-stat--attention"><span>Aandachtspunten</span><strong>2</strong><span class="tr-muted">Nog te beoordelen</span></article>
+          <article class="tr-card tr-stat tr-stat--success"><span>Gecontroleerd</span><strong>12</strong><span class="tr-muted">Controle afgerond</span></article>
+        </div>
+      </section>
+      <section class="tr-card tr-stack" id="werkoverzicht" aria-labelledby="werk-titel">
+        <div class="tr-split"><div><h2 class="tr-section-title" id="werk-titel">Een duidelijk werkoverzicht</h2><span class="tr-muted">Zoeken, filteren en bekijken werken straks overal hetzelfde.</span></div><button class="tr-button" id="density" type="button" aria-pressed="false">Compacte weergave</button></div>
+        <div class="tr-toolbar">
+          <label class="tr-field">Zoeken<input type="search" id="search" placeholder="Zoek een voorbeeld" aria-describedby="filter-help"></label>
+          <label class="tr-field">Status<select id="status"><option value="">Alle statussen</option><option value="alarm">Alarm</option><option value="attention">Aandachtspunt</option><option value="checked">Gecontroleerd</option></select></label>
+          <button type="button" class="tr-button tr-button--quiet" id="reset-filters">Filters wissen</button>
+        </div>
+        <span class="tr-help" id="filter-help">De onderstaande voorbeelden bevatten geen echte boekingen of reizigers.</span>
+        <div class="tr-table-wrap" tabindex="0" role="region" aria-label="Voorbeeldoverzicht, horizontaal schuifbaar">
+          <table class="tr-table" id="example-table"><caption class="spec-caption">Fictieve voorbeelden</caption><thead><tr><th scope="col">Voorbeeld</th><th scope="col">Onderdeel</th><th scope="col">Status</th><th scope="col">Actie</th></tr></thead><tbody>
+            <tr data-state="alarm"><td><strong>Voorbeeldreis Noord</strong><br><span class="tr-muted">DEMO-01</span></td><td>FloRA</td><td><span class="tr-badge tr-badge--alarm">! Alarm</span></td><td><button class="tr-button" type="button" data-example="Voorbeeldreis Noord">Bekijken</button></td></tr>
+            <tr data-state="attention"><td><strong>Voorbeeldbord Midden</strong><br><span class="tr-muted">DEMO-02</span></td><td>Stationschef</td><td><span class="tr-badge tr-badge--attention">! Aandachtspunt</span></td><td><button class="tr-button" type="button" data-example="Voorbeeldbord Midden">Bekijken</button></td></tr>
+            <tr data-state="checked"><td><strong>Voorbeeldboekje Zuid</strong><br><span class="tr-muted">DEMO-03</span></td><td>Boekjesmaker</td><td><span class="tr-badge tr-badge--success">✓ Gecontroleerd</span></td><td><button class="tr-button" type="button" data-example="Voorbeeldboekje Zuid">Bekijken</button></td></tr>
+          </tbody></table>
+        </div>
+        <div class="tr-empty" id="empty" hidden>Geen voorbeelden gevonden. Pas de zoekterm of het filter aan.</div>
+        <p class="tr-muted" id="result-count" role="status" aria-live="polite">3 voorbeelden</p>
+        <div class="tr-notice" id="example-detail" role="status" hidden></div>
+      </section>
+      <div class="tr-grid">
+        <section class="tr-card tr-stack" id="bediening" aria-labelledby="bediening-titel">
+          <h2 class="tr-section-title" id="bediening-titel">Herkenbare bediening</h2>
+          <p class="tr-muted">Eén hoofdactie per werkvlak. Rustige nevenacties en een herkenbare risicoknop.</p>
+          <div class="tr-row"><button class="tr-button tr-button--primary" id="example-save" type="button">Voorbeeld opslaan</button><button class="tr-button" type="button" id="example-cancel">Annuleren</button></div>
+          <div class="tr-row"><button class="tr-button tr-button--danger" type="button" disabled>Verwijderen</button><button class="tr-button" type="button" disabled>Niet beschikbaar</button></div>
+          <p class="tr-help">De risicoknop is hier uitgeschakeld. De voorbeeldpagina slaat niets op.</p>
+          <p class="tr-muted" id="save-feedback" role="status" aria-live="polite">Probeer de knoppen om de terugkoppeling te bekijken.</p>
+          <div class="spec-swatches" aria-label="Basiskleuren"><span class="spec-swatch spec-swatch--blue">Blauw</span><span class="spec-swatch spec-swatch--green">Groen</span><span class="spec-swatch spec-swatch--paper">Lichtblauw</span></div>
+        </section>
+        <section class="tr-card tr-stack" id="formulieren" aria-labelledby="formulier-titel">
+          <h2 class="tr-section-title" id="formulier-titel">Leesbare formulieren</h2>
+          <label class="tr-field">Naam van het voorbeeld<input type="text" value="Voorbeeldinstelling" aria-describedby="name-help"><span class="tr-help" id="name-help">Een vast label blijft zichtbaar wanneer je begint te typen.</span></label>
+          <label class="tr-field">Voorbeeld met validatie<input value="" aria-invalid="true" aria-describedby="validation-message"><span class="tr-field-error" id="validation-message">Vul een naam in. Dit is een voorbeeld van een foutmelding.</span></label>
+          <label class="tr-check"><input type="checkbox" checked>Informatie in het overzicht tonen</label>
+        </section>
+      </div>
+      <section class="tr-card tr-stack" id="statussen" aria-labelledby="status-titel">
+        <h2 class="tr-section-title" id="status-titel">Kleur met een duidelijke betekenis</h2>
+        <div class="tr-notice tr-notice--alarm"><strong>Alarm · concrete afwijking</strong><p>Gebruik rood wanneer er een probleem is dat actie vereist.</p></div>
+        <div class="tr-notice tr-notice--attention"><strong>Aandachtspunt · beoordeling nodig</strong><p>Gebruik oranje voor een open vraag die iemand moet bekijken.</p></div>
+        <div class="tr-notice tr-notice--success"><strong>Gecontroleerd · afgerond</strong><p>Gebruik groen voor een aantoonbaar geslaagde controle.</p></div>
+        <p class="tr-help">Statussen hebben altijd een tekstlabel. De betekenis hangt niet alleen van kleur af.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
