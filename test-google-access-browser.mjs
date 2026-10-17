@@ -20,7 +20,7 @@ try{
   if(path.startsWith('/api/seinhuis-access/')){
    const action=path.split('/').at(-1),body=req.postDataJSON();requests.push({action,body});
    if(action==='status')return respond(state);
-   if(action==='overview')return respond({appScopes:{stations:'Stationschef',booklets:'Boekjesmaker',flora:'FloRA'},accounts:[{email:'admin@example.test',role:'admin',active:true,linked:true,apps:[]},{email:device.email,role:'user',apps:['booklets','flora'],active:true,linked:true}],devices:[device,adminDevice],sessions:[{id:'session',email:device.email,device:device.id,created:time,lastSeen:time,expires:time+30*86400000}],audit:[]});
+   if(action==='overview')return respond({appScopes:{stations:'Stationschef',booklets:'Boekjesmaker',flora:'FloRA',reishuis:'Reishuis'},accounts:[{email:'admin@example.test',role:'admin',active:true,linked:true,apps:[]},{email:device.email,role:'user',apps:['booklets','flora'],active:true,linked:true}],devices:[device,adminDevice],sessions:[{id:'session',email:device.email,device:device.id,created:time,lastSeen:time,expires:time+30*86400000}],audit:[]});
    if(action==='reauth')return respond({url:'https://accounts.google.com/fake-confirmation?channel='+encodeURIComponent(body.channel)});
    if(failAction)return respond({error:'Fictieve fout: de gegevens zijn gewijzigd. Probeer opnieuw.'},409);
    if(state.legacyOwner&&body.code!=='123456')return respond({error:'Gebruik een verse Authenticator-code.',confirmationRequired:true},403);
@@ -31,6 +31,7 @@ try{
   return route.fulfill({status:file?200:404,contentType:path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html',body:file?await readFile(file,'utf8'):''});
  });
  await page.goto(origin+'/seinhuis/toegang');await page.getByRole('heading',{name:'Accounts en computers',exact:true}).waitFor();
+ await page.locator('#accounts summary').filter({hasText:'admin@example.test'}).click();const adminRights=page.getByRole('group',{name:'Onderdelen voor admin@example.test',exact:true});assert.equal(await adminRights.getByRole('checkbox').count(),1);assert.equal(await adminRights.getByRole('checkbox',{name:'Reishuis',exact:true}).isChecked(),false);await page.locator('#accounts summary').filter({hasText:'admin@example.test'}).click();
  assert.equal(await page.locator('#requests .request-card').count(),1);assert.equal(await page.locator('#devices .device-account').count(),2);assert.equal(await page.getByText('Deze browser',{exact:true}).count(),1);
  await page.getByLabel('Zoek account of computer').fill('colleague');assert.equal(await page.locator('#devices .device-account').count(),1);await page.getByLabel('Zoek account of computer').fill('');
  await page.getByRole('button',{name:'Goedkeuren',exact:true}).click();await page.getByText('Browser goedgekeurd.',{exact:false}).waitFor();assert.equal(device.status,'approved');assert.equal(await page.getByRole('dialog').isVisible(),false,'fresh confirmation needs no login');

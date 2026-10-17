@@ -44,6 +44,9 @@ export async function adminAuthenticated(req,scope='owner'){
   if(v.lastSeen<now-60000){v.lastSeen=now;d.lastSeen=now;d.location=locationFor(req);try{await writeAdminSecurity(s,record.revision);}catch{const fresh=(await readAdminSecurity()).value;return googleHasScope(googleSessionFor(req,fresh,countryFor(req)),scope);}}
   return true;
  }
+ // Reishuis always needs an explicit live account grant. Legacy owner/member
+ // cookies cannot bypass it; recovery and country/device checks still apply.
+ if(scope==='reishuis')return false;
  const session=sessionFor(req,s,countryFor(req));return !!session&&!session.recovery&&(!session.username||session.username===s.user.name||scope==='treinhuis'&&s.members?.[session.username]?.scope==='treinhuis');
 }
 export async function authenticatedActor(req){const s=(await readAdminSecurity()).value;return googleSessionFor(req,s,countryFor(req))?.email||sessionFor(req,s,countryFor(req))?.username||s?.user?.name||'Seinhuis-beheerder';}
