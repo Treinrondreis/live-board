@@ -1,3 +1,4 @@
+import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {readFile} from 'node:fs/promises';
 import {randomUUID,createHmac,timingSafeEqual} from 'node:crypto';
 import {fetchReishuisBookings,selectRows,defaultRows,statuses} from './reishuis-data.mjs';
@@ -48,7 +49,7 @@ export function applyChange(state,input,bookings,actor){
  state.history.push({at:new Date().toISOString(),actor,action:input.action,...(input.action==='merge'?{from:input.from,to:input.to}:{})});state.history=state.history.slice(-500);
  return state;
 }
-export function createReishuisHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req,'reishuis'),actor=async req=>(await import('./admin-security.mjs')).authenticatedActor(req),read=readReishuis,write=writeReishuis,readSnapshot=readBookingSnapshot,writeSnapshot=writeBookingSnapshot,fetchBookings=fetchReishuisBookings,readDossier=readDossierSnapshot,writeDossier=writeDossierSnapshot,fetchDossier=fetchReishuisDossier,fetcher=fetch,origin=process.env.SEINHUIS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app',clock=Date.now}={}){
+export function createReishuisHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req,'reishuis'),actor=async req=>(await import('./admin-security.mjs')).authenticatedActor(req),read=readReishuis,write=writeReishuis,readSnapshot=readBookingSnapshot,writeSnapshot=writeBookingSnapshot,fetchBookings=fetchReishuisBookings,readDossier=readDossierSnapshot,writeDossier=writeDossierSnapshot,fetchDossier=fetchReishuisDossier,rinkel=rinkelIncoming,fetcher=fetch,origin=process.env.SEINHUIS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app',clock=Date.now}={}){
  const bookingCache=createBookingsCache({readSnapshot,writeSnapshot,fetchBookings,clock});
  const bookings=async()=>(await bookingCache.get()).bookings;
  const dossiers=createDossierCache({readSnapshot:readDossier,writeSnapshot:writeDossier,fetchDossier,clock});
@@ -77,7 +78,8 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    const path=url.pathname.slice(prefix.length);
    if(req.method==='GET'){
     if(path==='/api/access')return reply(200,{ok:true});
-    const files={'':'reishuis.html','/':'reishuis.html','/reishuis.js':'reishuis.js','/reishuis.css':'reishuis.css','/reishuis-view.mjs':'reishuis-view.mjs','/reishuis-payments.mjs':'reishuis-payments.mjs','/reishuis-dossier-ui.js':'reishuis-dossier-ui.js'};
+    if(path==='/api/rinkel'){if(!rinkel.configured)return reply(200,{enabled:false});const [list,record]=await Promise.all([bookings(),read()]);return reply(200,await rinkel.poll({cursor:url.searchParams.get('cursor'),bookings:list,state:record.state}));}
+    const files={'':'reishuis.html','/':'reishuis.html','/reishuis.js':'reishuis.js','/reishuis.css':'reishuis.css','/reishuis-view.mjs':'reishuis-view.mjs','/reishuis-payments.mjs':'reishuis-payments.mjs','/reishuis-dossier-ui.js':'reishuis-dossier-ui.js','/reishuis-rinkel-ui.js':'reishuis-rinkel-ui.js'};
     if(files[path]){const file=files[path],ext=file.split('.').pop();res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});res.end(await readFile(new URL('./'+file,import.meta.url)));return true;}
     if(path==='/api/dossier'){
      const id=key(url.searchParams.get('id'));if(!(await bookings()).some(b=>b.id===id))return reply(404,{error:'Boeking niet gevonden.'});

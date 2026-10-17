@@ -1,3 +1,4 @@
+import {createIncomingCalls} from './reishuis-rinkel-ui.js';
 import {createDossierUI} from './reishuis-dossier-ui.js';
 import {selectRows,statusLabel,bookingDay} from './reishuis-view.mjs';
 import {paymentLabels,matchesPayment} from './reishuis-payments.mjs';
@@ -9,7 +10,7 @@ const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?new Date(v+'T12:00:00Z').toLocaleDat
 const button=(caption,fn)=>{const b=node('button',caption);b.type='button';b.onclick=()=>run(fn);return b;};
 function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';}
 async function run(fn){if(busy)return;busy=true;try{await fn();}catch(e){message(e.message,true);}finally{busy=false;}}
-function clearState(){dossierUI.clear();state=null;cardPool.clear();$('rows').replaceChildren();$('customer-list').replaceChildren();$('detail-body').replaceChildren();$('detail-title').textContent='';$('detail').close();$('preferences').close();$('customer-panel').hidden=true;$('new-customer').reset();}
+function clearState(){incomingCalls.clear();dossierUI.clear();state=null;cardPool.clear();$('rows').replaceChildren();$('customer-list').replaceChildren();$('detail-body').replaceChildren();$('detail-title').textContent='';$('detail').close();$('preferences').close();$('customer-panel').hidden=true;$('new-customer').reset();}
 async function checkAccess(){const r=await fetch(base+'/api/access',{cache:'no-store'});if(r.status===401||r.status===403){clearState();throw Error('Je toegang is verlopen of ingetrokken. Meld je opnieuw aan via Seinhuis.');}if(!r.ok)throw Error('Toegang controleren lukt tijdelijk niet.');}
 async function load(){
  const seq=++sequence,params=new URLSearchParams(state?{bookingVersion:state.bookingVersion,revision:String(state.revision)}:{});
@@ -62,4 +63,5 @@ $('settings').onclick=()=>{if(!state)return;$('row-fields').replaceChildren();fo
 $('row-form').onsubmit=e=>{e.preventDefault();run(async()=>{const rows=[...$('row-fields').children].map(d=>({status:d.children[1].value,sort:d.children[2].value}));await change({action:'rows',rows});$('preferences').close();});};
 $('refresh').onclick=()=>run(load);function resetSelection(){pages=[0,0,0,0,0];renderSelection();}$('search').oninput=resetSelection;$('status-filter').onchange=resetSelection;$('payment-filter').onchange=resetSelection;$('customer-search').oninput=renderCustomers;
 $('customers').onclick=()=>{$('customer-panel').hidden=false;$('customer-panel').scrollIntoView({behavior:'smooth'});};$('close-customers').onclick=()=>{$('customer-panel').hidden=true;};$('detail').addEventListener('close',()=>dossierUI.clear());$('close-detail').onclick=()=>{dossierUI.clear();$('detail').close();};$('cancel-settings').onclick=()=>$('preferences').close();
-run(load);
+const incomingCalls=createIncomingCalls({node,open:id=>run(()=>showBooking(id)),isEditing:()=>busy||$('detail').open||$('preferences').open||!$('customer-panel').hidden,onDenied:clearState});
+run(async()=>{await load();incomingCalls.start();});

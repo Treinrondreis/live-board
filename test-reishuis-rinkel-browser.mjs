@@ -1,0 +1,27 @@
+import http from 'node:http';
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+import {createReishuisHandler} from './reishuis.mjs';
+import {createRinkelIncoming} from './reishuis-rinkel.mjs';
+import {normalizeDossier} from './reishuis-dossier.mjs';
+import {emptyReishuis} from './reishuis-store.mjs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const secret='a'.repeat(64),to='+31990000001',from='+31990000002';let allowed=true,origin,handler,snapshot;
+const rows=[{id:'fixture-one',index:'9901',name:'Fictieve Een',status:'te verwerken',departure:'2027-01-01',return:'2027-01-02',created:'2026-10-17',payments:[]},{id:'fixture-two',index:'9902',name:'Fictieve Twee',status:'te verwerken',departure:'2027-01-01',return:'2027-01-02',created:'2026-10-16',payments:[]}];
+const service=createRinkelIncoming({enabled:true,secret,allowedNumbers:to,fetchPhones:async()=>[{id:'fixture-one',phone:from},{id:'fixture-one',phone:from}]});
+const dossier=normalizeDossier({_id:'fixture',firstName:'Fictieve',address:'Voorbeeldstraat 1'}),dossiers=new Map();
+const server=http.createServer(async(req,res)=>{const u=new URL(req.url,origin);if(await service.receive(req,res,u))return;await handler(req,res,u);});await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
+handler=createReishuisHandler({origin,rinkel:service,authenticate:async req=>allowed&&req.headers.cookie?.includes('fixture=yes'),actor:async()=> 'fixture',read:async()=>({state:emptyReishuis(),revision:0}),readSnapshot:async()=>snapshot,writeSnapshot:async v=>{snapshot=v;},fetchBookings:async()=>rows,readDossier:async id=>dossiers.get(id),writeDossier:async(id,v)=>{dossiers.set(id,v);},fetchDossier:async()=>dossier});
+const send=async(id,caller=from)=>{const r=await fetch(origin+'/integrations/rinkel/incoming/'+secret,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,datetime:new Date().toISOString(),to,from:caller})});assert.equal(r.status,200);};
+let browser;
+try{
+ browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.install();await page.context().addCookies([{name:'fixture',value:'yes',url:origin}]);const first=page.waitForResponse(r=>r.url().includes('/api/rinkel'));await page.goto(origin+'/seinhuis/reishuis/');await first;await page.locator('.card').first().waitFor();
+ await send('call-one');await page.clock.fastForward(3500);await page.locator('#detail').waitFor({state:'visible'});await page.getByRole('textbox',{name:'Adres',exact:true}).waitFor();assert.match(await page.locator('#detail-title').textContent(),/9901/,'one exact match opens its dossier');
+ await page.getByRole('textbox',{name:'Adres',exact:true}).fill('Nog niet opgeslagen');await send('call-two');await page.clock.fastForward(3500);await page.locator('#detail #incoming-call').waitFor({state:'visible'});assert.equal(await page.getByRole('textbox',{name:'Adres',exact:true}).inputValue(),'Nog niet opgeslagen','incoming call never replaces an editor');
+ await page.screenshot({path:process.env.REISHUIS_RINKEL_SCREENSHOT||join(tmpdir(),'reishuis-rinkel-test.png')});
+ await page.getByRole('button',{name:'Melding sluiten',exact:true}).click();await page.getByRole('button',{name:'Sluiten',exact:true}).click();await send('call-anon','anonymous');await page.clock.fastForward(3500);await page.getByText('Anonieme oproep: geen dossierherkenning mogelijk.',{exact:true}).waitFor();assert.equal(await page.locator('#detail').isVisible(),false);
+ await send('call-unknown','+31990000009');await page.clock.fastForward(3500);await page.getByText('Geen passend dossier gevonden voor dit nummer.',{exact:true}).waitFor();assert.equal(await page.locator('#detail').isVisible(),false);
+ allowed=false;await page.clock.fastForward(3500);await page.waitForFunction(()=>document.querySelectorAll('.card').length===0);assert.equal(await page.locator('#incoming-call').textContent(),'');assert.equal(await page.locator('#rinkel-state').textContent(),'');assert.deepEqual(errors,[]);
+ console.log('PASS Rinkel browser: exact match screen pop, protected unsaved editor, anonymous/unmatched calls, role revocation');
+}finally{await browser?.close();await new Promise(r=>server.close(r));}
