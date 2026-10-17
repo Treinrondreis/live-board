@@ -1,0 +1,107 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {Readable} from 'node:stream';
+import {DatabaseSync} from 'node:sqlite';
+import {initBoardCache,readAdminSecurity,writeAdminSecurity} from './board-cache.mjs';
+import {createGoogleAccess} from './google-access.mjs';
+import {adminAuthenticated,seal,totp} from './admin-security.mjs';
+import {hash,googleSessionFor,accessState} from './google-access-state.mjs';
+const origin='https://example.test',secret='JBSWY3DPEHPK3PXP';
+process.env.BOARD_ADMIN_PASSWORD='fixture-key';process.env.RAILWAY_ENVIRONMENT_ID='test';
+test('Google onboarding, least privilege, lasting approvals and immediate revocation',async()=>{
+ const db=new DatabaseSync(':memory:');await initBoardCache({sqlite:db});let now=Date.now();const original=Date.now;Date.now=()=>now;
+ try{
+  const legacy='legacy-owner-token',admin={},user={};admin.tr_admin_session=legacy;
+  await writeAdminSecurity({user:{name:'owner',secret:seal(secret),lastStep:-1,recovery:[]},pending:{},sessions:{[hash(legacy)]:{created:now,expires:now+12*3600000,country:'NL',username:'owner'}},devices:{},attempts:{},countries:[{code:'NL',until:null}]},0);
+  let identity={email:'hildebrand@treinreiziger.nl',sub:'111111'},duringFinish=null;
+  const handler=createGoogleAccess({configuration:()=>({origin,id:'id',secret:'secret'}),now:()=>now,login:{configured:()=>true,start:p=>origin+'/fake-google?state='+p.state,finish:async()=>{if(duringFinish)await duringFinish();return identity;}}});
+  const request=(jar,method,ip='145.100.100.100')=>{const req=Readable.from([]);req.method=method;req.headers={host:'example.test',origin,'content-type':'application/json','x-real-ip':ip,'user-agent':'Test browser',cookie:Object.entries(jar).map(([k,v])=>k+'='+v).join('; ')};req.socket={remoteAddress:'127.0.0.1'};return req;};
+  async function call(jar,path,data,overrides={}){const req=request(jar,data?'POST':'GET');if(data){const stream=Readable.from([Buffer.from(JSON.stringify(data))]);req[Symbol.asyncIterator]=stream[Symbol.asyncIterator].bind(stream);}Object.assign(req.headers,overrides);let status,text,headers={};const res={setHeader:(k,v)=>headers[k]=v,getHeader:k=>headers[k],writeHead:(s,h)=>{status=s;Object.assign(headers,h)},end:t=>text=t};const handled=await handler(req,res,new URL(path.startsWith('/')?path:'/api/seinhuis-access/'+path,origin));assert.equal(handled,true);for(const c of headers['Set-Cookie']||[]){const [k,v]=c.split(';')[0].split('=');jar[k]=v;}return {status,data:text?JSON.parse(text):null,headers};}
+  async function login(jar,action='start'){const r=await call(jar,action,{code:totp(secret,now),label:'Laptop'});assert.equal(r.status,200);const state=new URL(r.data.url).searchParams.get('state');return call(jar,'/seinhuis/google/callback?state='+state+'&code=test');}
+  assert.equal((await call({},'start',{}, {origin:'https://evil.test'})).status,403,'CSRF blocked');
+  assert.equal((await call({},'link',{code:totp(secret,now)})).status,403,'first admin cannot self-approve without legacy owner');
+  const unapprovedAdmin={};assert.equal((await login(unapprovedAdmin)).status,303);assert.equal((await call(unapprovedAdmin,'status')).data.device.status,'pending');assert.equal((await call(unapprovedAdmin,'overview')).status,403,'allowlisted admin still needs browser approval');
+  assert.equal((await login(admin,'link')).status,303);assert.equal(admin.tr_admin_session,'','legacy cookie cleared on Google switch');
+  assert.equal(await adminAuthenticated(request(admin,'GET')),true);
+  assert.equal((await call(admin,'overview')).data.accounts.length,4);
+  identity={email:'tickets@treinrondreis.nl',sub:'222222'};
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'pending');
+  assert.equal(await adminAuthenticated(request(user,'GET'),'booklets'),false);
+  assert.equal((await call(user,'overview')).status,403);
+  let id=hash(user.tr_google_device);
+  assert.equal((await call(admin,'approve',{id})).status,200);
+  assert.equal((await call(user,'continue',{})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'booklets'),true);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true);
+  const abroad={'x-real-ip':'8.8.8.8'},unknown={'x-real-ip':'127.0.0.1','x-country':'NL'};
+  for(const headers of [abroad,unknown]){
+   assert.equal((await call(user,'status',null,headers)).data.countryAllowed,false);
+   assert.equal((await call(user,'continue',{},headers)).status,403,'approval continuation cannot bypass the country list');
+   assert.equal((await call(user,'start',{},headers)).status,403,'Google login starts only from a known permitted country');
+   assert.equal((await call(admin,'overview',null,headers)).status,403,'Google administrators are also bound by country rules');
+   for(const scope of ['owner','seinhuis','booklets','flora','stations','treinhuis','treinreiziger'])assert.equal(await adminAuthenticated(request(admin,'GET',headers['x-real-ip']),scope),false,'country restriction applies to '+scope);
+  }
+  assert.equal(await adminAuthenticated(request(user,'GET','8.8.8.8'),'flora'),false,'existing approved session blocked abroad');
+  assert.equal((await call(user,'status')).data.device.status,'approved','country denial does not revoke browser approval');
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true,'returning to an allowed country restores valid access');
+  const travel=await readAdminSecurity();travel.value.countries.push({code:'US',until:now+1000});await writeAdminSecurity(travel.value,travel.revision);
+  assert.equal(await adminAuthenticated(request(user,'GET','8.8.8.8'),'flora'),true,'temporary travel country works');
+  const savedNow=now;now+=1001;assert.equal(await adminAuthenticated(request(user,'GET','8.8.8.8'),'flora'),false,'travel permission expiry blocks an existing session');now=savedNow;
+  const restore=await readAdminSecurity();restore.value.countries=[{code:'NL',until:null}];await writeAdminSecurity(restore.value,restore.revision);
+  const changedCountry={},begin=await call(changedCountry,'start',{}),beginState=new URL(begin.data.url).searchParams.get('state');
+  assert.equal((await call(changedCountry,'/seinhuis/google/callback?state='+beginState+'&code=test',null,abroad)).status,403,'country checked again on Google return');
+  assert.ok(!changedCountry.tr_google_session);
+  now+=61000;assert.deepEqual(await Promise.all([adminAuthenticated(request(user,'GET'),'flora'),adminAuthenticated(request(user,'GET'),'flora')]),[true,true],'parallel activity writes do not reject valid requests');
+  assert.equal(await adminAuthenticated(request(user,'GET')),false);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'treinhuis'),false);
+  assert.equal((await call(user,'permissions',{email:'tickets@treinrondreis.nl',apps:['stations']})).status,403,'users cannot grant themselves parts');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['owner']})).status,400,'owner privilege is never an app scope');
+  assert.equal((await call(admin,'permissions',{email:'hildebrand@treinreiziger.nl',apps:[]})).status,400,'admin roles cannot be changed through app permissions');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['stations','treinhuis','treinreiziger']})).status,200);
+  for(const scope of ['stations','treinhuis','treinreiziger'])assert.equal(await adminAuthenticated(request(user,'GET'),scope),true,'granted scope '+scope);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false,'removing a scope stops existing session access immediately');
+  assert.equal(await adminAuthenticated(request(user,'GET')),false,'all operational scopes still cannot administer accounts');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:[]})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'stations'),false);assert.equal(await adminAuthenticated(request(user,'GET'),'seinhuis'),true,'zero scopes still permit the account landing page');
+  assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['booklets','flora']})).status,200);
+  assert.equal((await call(user,'approve',{id})).status,403);
+  const sessions=(await call(admin,'overview')).data.sessions,userSession=sessions.find(v=>v.email==='tickets@treinrondreis.nl');assert.equal((await call(admin,'revoke-session',{id:userSession.id})).status,200);assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);assert.equal((await call(user,'continue',{})).status,401,'session revocation cannot be undone by pending approval continuation');await login(user);
+  assert.equal(await adminAuthenticated(request({tr_google_session:user.tr_google_session},'GET'),'booklets'),false,'session needs device cookie');
+  assert.equal((await call(admin,'revoke',{id})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'booklets'),false,'existing session denied immediately');
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'revoked','Google login cannot undo revocation');
+  assert.equal((await call(user,'continue',{})).status,403);
+  assert.equal((await call(admin,'approve',{id})).status,200);assert.equal((await login(user)).status,303);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true);
+  assert.equal((await call(admin,'block',{email:identity.email})).status,200);
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);
+  assert.equal((await login(user)).status,403,'blocked account stays blocked');
+  assert.equal((await call(admin,'enable',{email:identity.email})).status,200);
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'revoked');
+  assert.equal((await call(admin,'approve',{id})).status,200);await login(user);
+  identity={email:'tickets@treinrondreis.nl',sub:'333333'};assert.equal((await login(user)).status,403,'changed Google subject cannot take over pinned account');
+  identity={email:'tickets@treinrondreis.nl',sub:'222222'};
+  now+=31*86400000;assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false);
+  assert.equal((await login(user)).status,303);assert.equal((await call(user,'status')).data.device.status,'approved','approval survives session expiry');
+  assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),true);
+  identity={email:'hildebrand@treinreiziger.nl',sub:'111111'};await login(admin);now+=11*60000;
+  assert.equal((await call(admin,'revoke',{id})).status,401,'sensitive actions require recent Google confirmation');
+  await login(admin);assert.equal((await call(admin,'revoke',{id})).status,200);
+  // A revocation during Google's network response must not be overwritten.
+  duringFinish=async()=>{const r=await readAdminSecurity();r.value.googleAccess.accounts['tickets@treinrondreis.nl'].active=false;await writeAdminSecurity(r.value,r.revision);};
+  identity={email:'tickets@treinrondreis.nl',sub:'222222'};assert.equal((await login(user)).status,403);duringFinish=null;
+  identity={email:'hildebrand@treinreiziger.nl',sub:'111111'};
+  duringFinish=async()=>{const r=await readAdminSecurity();r.value.countries=[];await writeAdminSecurity(r.value,r.revision);};
+  assert.equal((await login(admin)).status,403,'country removal during the Google response prevents session issuance');duringFinish=null;
+  const restoreCountry=await readAdminSecurity();restoreCountry.value.countries=[{code:'NL',until:null}];await writeAdminSecurity(restoreCountry.value,restoreCountry.revision);
+  // Browser-bound OAuth state is required and single use.
+  const start=await call(admin,'start',{}),state=new URL(start.data.url).searchParams.get('state');
+  assert.equal((await call({},'/seinhuis/google/callback?state='+state+'&code=test')).status,400);
+  identity={email:'hildebrand@treinreiziger.nl',sub:'111111'};
+  assert.equal((await call(admin,'/seinhuis/google/callback?state='+state+'&code=test')).status,303);
+  assert.equal((await call(admin,'/seinhuis/google/callback?state='+state+'&code=test')).status,400);
+  const persisted=(await readAdminSecurity()).value;assert.ok(!JSON.stringify(persisted).includes(admin.tr_google_session));assert.ok(!JSON.stringify(persisted).includes(user.tr_google_device));
+  assert.equal(googleSessionFor(request(admin,'GET'),persisted,'NL').role,'admin');assert.equal(accessState(persisted).accounts['tickets@treinrondreis.nl'].active,false);
+  assert.equal(googleSessionFor(request(admin,'GET'),persisted),null,'missing country information fails closed');
+ }finally{Date.now=original;db.close();}
+});

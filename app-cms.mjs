@@ -99,7 +99,7 @@ export async function handleAppCms(req,res,url){
   if(publicAssets[p]){res.writeHead(200,{'Content-Type':p.endsWith('.js')?'text/javascript':'text/css'});res.end(await readFile(new URL(publicAssets[p],import.meta.url)));return true;}
   const record=await readAppContent(),value=record.value||{draft:defaultContent(),published:null};
   if(req.method==='GET'&&p==='/api/app-content/public'){json(res,200,value.published||{pages:[]});return true;}
-  const authenticated=await adminAuthenticated(req);
+  const authenticated=await adminAuthenticated(req,'treinreiziger');
   if(p==='/api/app-content/feed'&&req.method==='GET'){
    const feed=url.searchParams.get('url'),config=authenticated&&url.searchParams.get('preview')==='1'?value.draft:value.published;
    if(!config?.pages.some(p=>p.sections.some(s=>s.kind==='feed'&&s.feed===feed))){json(res,403,{error:'Feed is niet gepubliceerd.'});return true;}

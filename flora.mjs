@@ -2,8 +2,7 @@ import {floraTrains} from './flora-trains.mjs';
 import {floraMail} from './flora-mail.mjs';
 import {floraGoogle} from './flora-google.mjs';
 import {readFile} from 'node:fs/promises';
-import {adminAuthenticated} from './admin-security.mjs';
-import {readAdminSecurity} from './board-cache.mjs';
+import {adminAuthenticated,authenticatedActor} from './admin-security.mjs';
 import {readFlora,writeFlora} from './flora-store.mjs';
 import {evaluate,validateEvidence,hash,twoMonthsBefore,reviewSignature,alarmView} from './flora-engine.mjs';
 import {fetchBookings,sanityConfig} from './flora-sanity.mjs';
@@ -13,14 +12,14 @@ import {findingComparison,applyBulkReview} from './flora-review.mjs';
 import {confirmSource} from './flora-source-review.mjs';
 
 const prefix='/seinhuis/flora';
-const googleSession=req=>String(req.headers.cookie||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('tr_admin_session='))||'';
+const googleSession=req=>{const cookies=String(req.headers.cookie||'').split(';').map(c=>c.trim());return cookies.find(c=>c.startsWith('tr_google_session='))||cookies.find(c=>c.startsWith('tr_admin_session='))||'';};
 export function parseCSV(text){
  const rows=[];let row=[],value='',quoted=false;const delimiter=text.split(/\r?\n/)[0].includes(';')?';':',';
  for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(!quoted&&c===delimiter){row.push(value);value='';}else if(!quoted&&(c==='\n'||c==='\r')){if(c==='\r'&&text[i+1]==='\n')i++;row.push(value);if(row.some(Boolean))rows.push(row);row=[];value='';}else value+=c;}
  if(quoted)throw Error('Niet afgesloten aanhalingstekens in CSV.');row.push(value);if(row.some(Boolean))rows.push(row);
  const headers=(rows.shift()||[]).map(x=>x.trim().replace(/^\uFEFF/,''));if(new Set(headers).size!==headers.length)throw Error('Dubbele kolomnamen in CSV.');return rows.map(r=>{if(r.length!==headers.length)throw Error('CSV-regel heeft een afwijkend aantal kolommen.');return Object.fromEntries(headers.map((h,i)=>[h,r[i]]));});
 }
-export function createFloraHandler({authenticate=adminAuthenticated,read=readFlora,write=writeFlora,sync=fetchBookings,actor=async()=>((await readAdminSecurity()).value?.user?.name||'Seinhuis-beheerder'),configuration=sanityConfig,google=floraGoogle,mail=floraMail,trains=floraTrains}={}){
+export function createFloraHandler({authenticate=req=>adminAuthenticated(req,'flora'),read=readFlora,write=writeFlora,sync=fetchBookings,actor=authenticatedActor,configuration=sanityConfig,google=floraGoogle,mail=floraMail,trains=floraTrains}={}){
  return async(req,res,url)=>{
   if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
   for(const [k,v] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}))res.setHeader(k,v);
@@ -54,10 +53,10 @@ export function createFloraHandler({authenticate=adminAuthenticated,read=readFlo
    if(path==='/api/google/start')return reply(200,{url:await google.start(googleSession(req))});
    if(path==='/api/google/test')return reply(200,await google.test());
    if(path==='/api/archive'){
-    const user=await actor();for(let attempt=0;attempt<5;attempt++){const fresh=await read(),count=applyBulkReview(fresh.state,input,user);try{const revision=await write(fresh.state,fresh.revision);return reply(200,{ok:true,count,revision});}catch(e){if(e.status!==409||attempt===4)throw e;}}
+    const user=await actor(req);for(let attempt=0;attempt<5;attempt++){const fresh=await read(),count=applyBulkReview(fresh.state,input,user);try{const revision=await write(fresh.state,fresh.revision);return reply(200,{ok:true,count,revision});}catch(e){if(e.status!==409||attempt===4)throw e;}}
    }
    const {state,revision}=await read();if(input.revision!==revision)return reply(409,{error:'FloRA is ondertussen gewijzigd. Herlaad eerst.'});
-   const now=new Date().toISOString(),user=await actor(),audit=(action,detail)=>state.audit.push({at:now,user,action,detail});
+   const now=new Date().toISOString(),user=await actor(req),audit=(action,detail)=>state.audit.push({at:now,user,action,detail});
    let evaluated=false;
    if(path==='/api/sync'||path==='/api/check'){state.bookings=await sync();state.lastSync=now;state.syncError=null;applyFollowup(state,{now,mode:'manual',user});evaluated=true;}
    else if(path==='/api/import-preview'||path==='/api/import'){

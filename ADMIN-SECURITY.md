@@ -1,5 +1,9 @@
 # Beheerbasis (fase 1)
 
+## Google-login en browsergoedkeuring
+
+Google-login naast de bestaande eigenaarlogin, vooraf toegestane accounts, eerste koppeling, blijvende browsergoedkeuring en sessiebeheer zijn beschreven in [docs/GOOGLE-ACCESS.md](docs/GOOGLE-ACCESS.md). Google-toegang gebruikt eigen account- en browsergoedkeuring én dezelfde landenlijst als de oude login. De bestaande herstelcodes en beperkte herstelroute blijven beschikbaar.
+
 Routes: /stationschef, /stationschef/borden, /seinhuis. Seinhuis bevat in deze fase accountbeveiliging; pagina- en inhoudsbeheer volgt apart.
 
 ## Activering
