@@ -53,8 +53,10 @@ such as Montpellier Saint-Roch and Montpellier Sud de France.
 Downloads are bounded to 30 MiB compressed, individual selected files to 100 MiB,
 worker heap to 256 MiB, with timeouts. Freshness requires a Last-Modified no older than
 8 days. Missing freshness evidence, oversized feeds or unverified service/category names
-fall back to manual. SNCF/NMBS endpoint and freshness compatibility still require a real
-source smoke test before enabling; fixture tests do not prove provider coverage.
+fall back to manual. The SNCF public ZIP and its Last-Modified metadata were smoke-tested in the bounded
+worker against a public rail service; this confirms the source format, not full coverage.
+NMBS endpoint and freshness compatibility still require a real source smoke test before
+enabling. Fixture tests do not prove provider coverage.
 
 Configuration, supplied through secret environment settings (never Git):
 

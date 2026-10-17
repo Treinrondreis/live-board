@@ -18,6 +18,8 @@ export function gtfsClock(day,value){
 }
 const iso=s=>s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8);
 const label=s=>String(s||'').replace(/\s/g,'').toUpperCase();
+const railKind=s=>label(s).replace(/\d+[a-z]?$/i,'').replace(/^TGVINOUI$/,'TGV').replace(/^INTERCITES$/,'IC');
+const frenchKind=id=>{const kind=String(id).match(/^StopPoint:OCE(.+)-\d+$/)?.[1]||'';return kind.startsWith('TGV')?'TGV':kind.startsWith('INTERCITES')?'IC':kind==='Train TER'?'TER':kind==='Lyria'?'TGVLYRIA':label(kind);};
 const fields=o=>({departure_date:o.departure.date,departure_time:o.departure.time,arrival_date:o.arrival.date,arrival_time:o.arrival.time,cancelled:false,connection_broken:false,backup_communicated:false});
 function matchStops(stops,leg,serviceDate){
  const starts=stops.filter(s=>norm(s.name)===norm(leg.from_station)&&s.pickup!=='1'),ends=stops.filter(s=>norm(s.name)===norm(leg.to_station)&&s.dropoff!=='1');
@@ -34,23 +36,23 @@ export function parseGtfs(bytes,legs,meta){
  const routes=new Map([...read('routes.txt')].map(s=>[s.route_id,s]));
  const calendar=new Map([...read('calendar.txt')].map(s=>[s.service_id,s]));
  const exceptions=new Map([...read('calendar_dates.txt')].map(s=>[s.service_id+'|'+s.date,s.exception_type]));
- const numbers=new Set(legs.map(l=>label(l.train_number))),dates=new Set();
+ const numbers=new Set(legs.map(l=>label(l.train_number))),numericNumbers=new Set(legs.map(l=>l.train_number.match(/\d+$/)?.[0])),dates=new Set();
  for(const leg of legs)for(let offset=-2;offset<=0;offset++)dates.add(new Date(Date.parse(leg.travel_date)+offset*86400000).toISOString().slice(0,10));
  const weekdays=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
  const trips=new Map();
  for(const trip of read('trips.txt')){
-  const route=routes.get(trip.route_id)||{},name=label(trip.trip_short_name),category=label(route.route_short_name).replace(/\d+$/,'');
+  const route=routes.get(trip.route_id)||{},sncf=meta.name==='SNCF GTFS',name=label(trip.trip_short_name||(sncf&&/^\d+$/.test(trip.trip_headsign)?trip.trip_headsign:'')),category=label(route.route_short_name).replace(/\d+$/,'');
   if(route.route_type&&Number(route.route_type)!==2&&!(Number(route.route_type)>=100&&Number(route.route_type)<200))continue;
-  if(!numbers.has(name)&&!numbers.has(category+name)&&!(name===''&&category==='RJ'))continue;
+  if(!numbers.has(name)&&!numbers.has(category+name)&&!(sncf&&numericNumbers.has(name))&&!(name===''&&category==='RJ'))continue;
   const days=[...dates].filter(day=>{const d=day.replaceAll('-',''),exception=exceptions.get(trip.service_id+'|'+d),c=calendar.get(trip.service_id);return exception?exception==='1':c&&d>=c.start_date&&d<=c.end_date&&c[weekdays[new Date(day).getUTCDay()]]==='1';});
   if(days.length)trips.set(trip.trip_id,{...trip,name,category,days,stops:[]});
  }
- for(const s of read('stop_times.txt')){const t=trips.get(s.trip_id),stop=stops.get(s.stop_id);if(t&&stop)t.stops.push({name:stop.stop_name,sequence:+s.stop_sequence,departure:s.departure_time,arrival:s.arrival_time,pickup:s.pickup_type,dropoff:s.drop_off_type});}
+ for(const s of read('stop_times.txt')){const t=trips.get(s.trip_id),stop=stops.get(s.stop_id);if(t&&stop)t.stops.push({name:stop.stop_name,sequence:+s.stop_sequence,departure:s.departure_time,arrival:s.arrival_time,pickup:s.pickup_type,dropoff:s.drop_off_type,category:meta.name==='SNCF GTFS'?frenchKind(s.stop_id):t.category});}
  for(const t of trips.values())t.stops.sort((a,b)=>a.sequence-b.sequence);
  return Object.fromEntries(legs.map(leg=>{
   const candidates=[];let overflow=false;
   for(const t of trips.values()){
-   const exact=numbers.has(t.name)&&t.name===label(leg.train_number)||t.category+t.name===label(leg.train_number);
+   const exact=numbers.has(t.name)&&t.name===label(leg.train_number)||t.category+t.name===label(leg.train_number)||meta.name==='SNCF GTFS'&&t.name===leg.train_number.match(/\d+$/)?.[0]&&t.stops.some(s=>norm(s.name)===norm(leg.from_station)&&s.category&&s.category===railKind(leg.train_number));
    const unnumbered=t.name===''&&t.category==='RJ'&&/^RJ\s*\d/i.test(leg.train_number);
    if(!exact&&!unnumbered)continue;
    for(const serviceDate of t.days){

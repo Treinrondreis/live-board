@@ -25,6 +25,12 @@ test('same-number parts can join at a shared station, with every source trip ret
  const bytes=gtfs({'stops.txt':'stop_id,stop_name\na,Example North\nb,Boundary\nc,Example South\n','trips.txt':'route_id,service_id,trip_id,trip_short_name,trip_headsign\nr,s,t,RJ 700,Example South\nr,s,u,RJ 700,Example South\n','stop_times.txt':'trip_id,stop_id,stop_sequence,arrival_time,departure_time\nt,a,1,25:10:00,25:12:00\nt,b,2,26:00:00,26:00:00\nu,b,1,26:05:00,26:05:00\nu,c,2,27:00:00,27:00:00\n'});
  const r=parseGtfs(bytes,[leg],meta).example;assert.equal(r.observation.arrival_time,'03:00');assert.deepEqual(r.evidence.trip_ids,['t','u']);
 });
+test('SNCF uses its numeric headsign and explicit train category from the stop identifier',()=>{
+ const bytes=gtfs({'routes.txt':'route_id,route_short_name,route_type\nr,C30,2\n','stops.txt':'stop_id,stop_name\nStopPoint:OCETrain TER-100,Example North\nStopPoint:OCETrain TER-200,Example South\n','trips.txt':'route_id,service_id,trip_id,trip_headsign\nr,s,t,700\n','stop_times.txt':'trip_id,stop_id,stop_sequence,arrival_time,departure_time\nt,StopPoint:OCETrain TER-100,1,25:10:00,25:12:00\nt,StopPoint:OCETrain TER-200,2,27:00:00,27:00:00\n'});
+ assert.equal(parseGtfs(bytes,[{...leg,train_number:'TER 700'}],{...meta,name:'SNCF GTFS'}).example.observation.departure_time,'01:12');
+ assert.equal(parseGtfs(bytes,[{...leg,train_number:'TGV 700'}],{...meta,name:'SNCF GTFS'}).example.observation,undefined);
+ assert.equal(parseGtfs(bytes,[{...leg,train_number:'TER 700'}],meta).example.observation,undefined);
+});
 test('IFF preserves origin service day and limits Nightjet checks to Dutch endpoints',()=>{
  const bytes=pack({'delivery.dat':'@100,10062031,12062031,1,Fictional','footnote.dat':'#00001\n111','stations.dat':'1,a,05,05,NL,0,,,Example North\n1,b,05,05,NL,0,,,Example South\n0,c,00,00,D,0,,,Example Abroad','timetbls.dat':'#1\n%202,00700,,001,003\n-00001,000,999\n&NJ,001,003\n>a,2512\n+b,2700,2702\n<c,2900'});
  const rows=[{...leg,train_number:'NJ 700'},{...leg,leg_id:'abroad',train_number:'NJ 700',to_station:'Example Abroad'}],r=parseIff(bytes,rows,meta);
