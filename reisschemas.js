@@ -22,8 +22,9 @@
  const legs=()=>state?.available&&Array.isArray(state.legs)?state.legs:[];
  const ready=()=>state?.configured&&state?.available;
  function table(rows,withBooking=false){
-  const heads=withBooking?['Boeking','Reisdatum','Trein / vervoer','Traject','Vertrek / aankomst','Rit','Reisschema']:['Trein / vervoer','Traject','Vertrek / aankomst','Rit'];
-  return '<table><thead><tr>'+heads.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+sortLegs(rows).map(r=>'<tr>'+(withBooking?'<td><button class="text-button" data-booking="'+escape(bookingId(r))+'">'+escape(r.dossier)+'</button>'+(r.booking_key?'<br><span class="muted">'+escape(r.booking_key)+'</span>':'')+'</td><td>'+escape(date(r.travel_date))+'</td>':'')+'<td>'+escape(r.train_number||r.transport_type||'Onbekend')+'</td><td>'+escape(r.from_station)+' → '+escape(r.to_station)+'</td><td>'+escape(r.departure_time||'Onbekend')+' / '+escape(r.arrival_time||'Onbekend')+(r.arrival_date&&r.arrival_date!==r.travel_date?'<br><span class="muted">Aankomst '+escape(date(r.arrival_date))+'</span>':'')+'</td><td>'+(r.role==='backup'?'<span class="badge">Back-up</span>':'Hoofdrit')+'</td>'+(withBooking?'<td>'+documentLink(r.document_url)+'</td>':'')+'</tr>').join('')+'</tbody></table>';
+  const heads=withBooking?['Boeking','Reisdatum','Trein / vervoer','Vertrek','Traject','Aankomst','Reisschema']:['Trein / vervoer','Vertrek','Traject','Aankomst'];
+  const timeCell=(value,arrivalDate)=>'<td class="time-cell"><strong>'+escape(value||'Onbekend')+'</strong>'+(arrivalDate?'<span class="arrival-date">'+escape(date(arrivalDate))+'</span>':'')+'</td>';
+  return '<table class="journey-table"><thead><tr>'+heads.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+sortLegs(rows).map(r=>'<tr>'+(withBooking?'<td><button class="text-button" data-booking="'+escape(bookingId(r))+'">'+escape(r.dossier)+'</button>'+(r.booking_key?'<br><span class="muted">'+escape(r.booking_key)+'</span>':'')+'</td><td>'+escape(date(r.travel_date))+'</td>':'')+'<td class="train-cell"><strong>'+escape(r.train_number||r.transport_type||'Onbekend')+'</strong>'+(r.role==='backup'?'<span class="badge">Back-up</span>':'')+'</td>'+timeCell(r.departure_time)+'<td class="route-cell"><span class="station">'+escape(r.from_station)+'</span><span class="route-arrow" aria-label="naar">→</span><span class="station">'+escape(r.to_station)+'</span></td>'+timeCell(r.arrival_time,r.arrival_date&&r.arrival_date!==r.travel_date?r.arrival_date:null)+(withBooking?'<td>'+documentLink(r.document_url)+'</td>':'')+'</tr>').join('')+'</tbody></table>';
  }
  function renderTrains(){
   el('register').innerHTML='';el('summary').textContent='';if(!ready())return;
@@ -82,4 +83,5 @@
  el('register').onclick=e=>{const button=e.target.closest('[data-booking]');if(!button)return;const row=legs().find(r=>bookingId(r)===button.dataset.booking);if(!row)return;el('booking-number').value=row.dossier;selected=bookingId(row);resetBookingFilters();setMode('bookings');renderBookings();};
  el('refresh').onclick=load;setMode(mode);void load();
 })();
+
 
