@@ -130,7 +130,7 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    if(input.action==='rinkel-link'&&input.confirm===true&&input.remember===false&&record.state.rinkelCalls?.[key(input.call)]?.booking===input.booking)return reply(200,{revision:record.revision});
    const state=input.action==='rinkel-link'?rinkel.linkCall(record.state,input,list,who):input.action==='rinkel-number-remove'?rinkel.removeNumber(record.state,input,who):applyChange(record.state,input,list,who);
    return reply(200,{revision:await write(state,record.revision)});
-  }catch(e){return reply([400,409].includes(e.status)?e.status:503,{error:e.status===400?'Controleer de invoer en de bevestiging.':e.status===409?'Naam of koppeling is ambigu, of gegevens zijn gewijzigd. Herlaad en controleer.':'Reishuis is tijdelijk niet beschikbaar. Controleer de leesverbinding en opslag.'});}
+  }catch(e){if(Number.isInteger(e.rinkelStatus))return reply(502,{error:'Rinkel weigert het leesverzoek (HTTP '+e.rinkelStatus+'). Controleer de API-toegang.'});if(e.rinkelShape)return reply(502,{error:'Rinkel geeft een onverwacht formaat voor de gesprekshistorie.'});return reply([400,409].includes(e.status)?e.status:503,{error:e.status===400?'Controleer de invoer en de bevestiging.':e.status===409?'Naam of koppeling is ambigu, of gegevens zijn gewijzigd. Herlaad en controleer.':'Reishuis is tijdelijk niet beschikbaar. Controleer de leesverbinding en opslag.'});}
  };
 }
 export const handleReishuis=createReishuisHandler();

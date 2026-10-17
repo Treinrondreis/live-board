@@ -20,3 +20,8 @@ test('historical lookup is exact-number scoped, paginated and excludes the third
  const service=createRinkelMedia({key:'fixture',allowedNumbers:number,fetcher:async(url,opts)=>{const u=new URL(url);assert.equal(opts.method,'GET');assert.equal(u.searchParams.get('externalNumber'),external);assert.equal(u.searchParams.get('perPage'),'25');assert.equal(u.searchParams.get('page'),'2');assert.equal(u.searchParams.get('contactLookup'),'false');return response(rows);}});
  const result=await service.history(external,2);assert.equal(result.rows.length,1);assert.equal(result.rows[0].id,'fixture-call');assert.equal(result.hasMore,false);await assert.rejects(service.history('0990000002',2));await assert.rejects(service.history(external,0));
 });
+
+test('provider failure reports only its HTTP status, never credentials or response contents',async()=>{
+ const service=createRinkelMedia({key:'fixture-key',allowedNumbers:number,fetcher:async()=>new Response('private provider body',{status:401})});
+ await assert.rejects(service.info(call),e=>e.rinkelStatus===401&&!e.message.includes('private provider body')&&!e.message.includes('fixture-key'));
+});

@@ -5,7 +5,7 @@ export function createRinkelMedia({key=process.env.RINKEL_READ_API_KEY||'',allow
  const valid=id=>typeof id==='string'&&/^[-a-zA-Z0-9_]{1,100}$/.test(id);
  async function json(path){
   const r=await fetcher('https://api.rinkel.com/v1'+path,{method:'GET',redirect:'error',headers:{Authorization:'Bearer '+key,Accept:'application/json'},signal:AbortSignal.timeout(15000)});
-  if(!r.ok)throw Error('Gespreksgegevens zijn nog niet beschikbaar.');
+  if(!r.ok){const e=Error('Rinkel API request failed');e.rinkelStatus=r.status;throw e;}
   const body=await r.text();if(body.length>1024*1024)throw Error('Ongeldig antwoord.');return JSON.parse(body).data;
  }
  async function details(call){
@@ -18,7 +18,7 @@ export function createRinkelMedia({key=process.env.RINKEL_READ_API_KEY||'',allow
   async history(number,page=1){
    if(!configured||!/^\+[1-9]\d{7,14}$/.test(number)||!Number.isInteger(page)||page<1||page>100)throw Error('Gebruik een internationaal telefoonnummer.');
    const params=new URLSearchParams({externalNumber:number,page:String(page),perPage:'25',contactLookup:'false',includeDetails:'false',sort:'date',sortOrder:'DESC'}),rows=await json('/call-detail-records?'+params);
-   if(!Array.isArray(rows)||rows.length>25)throw Error('Ongeldige gesprekshistorie.');
+   if(!Array.isArray(rows)||rows.length>25)throw Object.assign(Error('Ongeldige gesprekshistorie.'),{rinkelShape:true});
    return {rows:rows.filter(r=>valid(r.callId)&&allowed.has(r.internalNumber?.number)&&r.externalNumber?.e164===number).map(r=>({id:r.callId,at:Date.parse(r.date),phone:number})).filter(r=>Number.isFinite(r.at)),hasMore:rows.length===25&&page<100};
   },
   async info(call){
