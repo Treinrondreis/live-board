@@ -41,6 +41,7 @@ const views={overzicht:['Overzicht','Pagina’s, navigatie en bronnen van je app
 function closeCmsMenu(){document.body.classList.remove('tr-menu-open');document.querySelector('.tr-menu-button').setAttribute('aria-expanded','false');}
 function showView(view,updateHash=true){
  if(!Object.hasOwn(views,view))view='overzicht';
+ document.body.dataset.cmsView=view;
  if(record){if(view==='overzicht')renderOverview();if(view==='bronnen')renderSources();}
  document.querySelectorAll('[data-panel]').forEach(panel=>panel.hidden=panel.dataset.panel!==view);
  document.querySelectorAll('.tr-nav [data-view]').forEach(link=>{if(link.dataset.view===view)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
@@ -59,7 +60,10 @@ function renderSources(){
 document.addEventListener('click',event=>{const link=event.target.closest('[data-view]');if(!link)return;event.preventDefault();showView(link.dataset.view);});
 document.querySelector('.tr-menu-button').addEventListener('click',event=>{const open=document.body.classList.toggle('tr-menu-open');event.currentTarget.setAttribute('aria-expanded',String(open));});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('tr-menu-open')){closeCmsMenu();document.querySelector('.tr-menu-button').focus();}});
-matchMedia('(max-width: 850px)').addEventListener('change',()=>{const inside=$('cms-sidebar').contains(document.activeElement);closeCmsMenu();if(inside&&matchMedia('(max-width: 850px)').matches)document.querySelector('.tr-menu-button').focus();});
+function sizePageList(){document.querySelector('.cms-pages').open=!matchMedia('(max-width: 850px)').matches;}
+sizePageList();
+document.querySelector('#pages').addEventListener('click',event=>{if(event.target.closest('[data-page]')&&matchMedia('(max-width: 850px)').matches){document.querySelector('.cms-pages').open=false;document.querySelector('.cms-pages summary').focus({preventScroll:true});}});
+matchMedia('(max-width: 850px)').addEventListener('change',()=>{sizePageList();const inside=$('cms-sidebar').contains(document.activeElement);closeCmsMenu();if(inside&&matchMedia('(max-width: 850px)').matches)document.querySelector('.tr-menu-button').focus();});
 window.addEventListener('hashchange',()=>showView(location.hash.slice(1),false));
 document.querySelector('.cms-more').addEventListener('click',event=>{if(event.target.closest('button'))document.querySelector('.cms-more').open=false;});
 

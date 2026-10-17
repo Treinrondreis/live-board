@@ -15,6 +15,14 @@ try{
   if(process.env.CMS_ADMIN_SCREENSHOTS){await mkdir(process.env.CMS_ADMIN_SCREENSHOTS,{recursive:true});await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(process.env.CMS_ADMIN_SCREENSHOTS,'treinreiziger-overzicht.png')});}
   const menu=page.getByRole('navigation',{name:'Menu Treinreiziger',exact:true});
   await menu.getByRole('link',{name:'Pagina’s',exact:true}).click();
+  for(const width of [1440,1024]){
+    await page.setViewportSize({width,height:900});
+    const layout=await page.evaluate(()=>({editor:document.querySelector('#editor').getBoundingClientRect().toJSON(),list:document.querySelector('.cms-pages').getBoundingClientRect().toJSON(),overflow:document.documentElement.scrollWidth>innerWidth}));
+    assert.ok(layout.editor.top<300,'editor starts near the top at '+width);
+    assert.ok(Math.abs(layout.editor.top-layout.list.top)<2&&layout.editor.left>=layout.list.right,'page list stays beside the editor at '+width);
+    assert.equal(layout.overflow,false,'no laptop horizontal overflow');
+  }
+  await page.setViewportSize({width:1440,height:1050});
   const title=page.locator('[data-scope="page"] input[data-key="title"]');await title.fill('Gewijzigd voorbeeld');
   await menu.getByRole('link',{name:'Appnavigatie',exact:true}).click();await page.locator('#main-menu input[data-key="title"]').first().fill('Voorbeeldmenu');
   await menu.getByRole('link',{name:'Pagina’s',exact:true}).click();assert.equal(await title.inputValue(),'Gewijzigd voorbeeld','view changes preserve unsaved editor values');
@@ -40,6 +48,11 @@ try{
     await menu.getByRole('link',{name:'Appnavigatie',exact:true}).click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#cms-main').evaluate(e=>e===document.activeElement),true);
     await toggle.click();await page.keyboard.press('Escape');assert.equal(await toggle.getAttribute('aria-expanded'),'false');
     await toggle.click();await menu.getByRole('link',{name:'Pagina’s',exact:true}).click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    assert.equal(await page.locator('.cms-pages').evaluate(e=>e.open),false,'mobile page list starts collapsed');
+    const editorTop=await page.locator('#editor').evaluate(e=>e.getBoundingClientRect().top);
+    assert.ok(editorTop<470,'mobile editor is visible without scrolling past the page list at '+width+': '+editorTop);
+    await page.locator('.cms-pages summary').click();await page.locator('#pages button').first().click();
+    assert.equal(await page.locator('.cms-pages').evaluate(e=>e.open),false,'choosing a mobile page returns space to the editor');
   }
   if(process.env.CMS_ADMIN_SCREENSHOTS){await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Menu',exact:true}).click();await menu.getByRole('link',{name:'Overzicht',exact:true}).click();await page.screenshot({path:join(process.env.CMS_ADMIN_SCREENSHOTS,'treinreiziger-mobiel.png')});}
   const failed=await context.newPage();failed.on('pageerror',e=>errors.push(e.message));await failed.setViewportSize({width:390,height:844});
