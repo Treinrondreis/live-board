@@ -191,3 +191,9 @@ validation as other dossier edits; failed saves restore the visible saved status
 A concurrent in-flight operation rejects a second quick edit visibly, preventing an
 unsaved checkbox from appearing saved. All source annotations and other fields are
 preserved when only a status changes.
+
+## Rinkel inkomende oproep
+
+Zie `docs/REISHUIS-RINKEL.md` voor de voorbereide, standaard uitgeschakelde koppeling,
+gegevensstroom, authenticatie, activeringsgrens, tests en beperkingen. Geen Rinkel
+API-key, webhook, nieuwe rol of Sanity-wijziging wordt automatisch aangemaakt.

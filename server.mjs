@@ -1,3 +1,4 @@
+import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
 import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
@@ -1087,6 +1088,7 @@ const server=http.createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,`http://${req.headers.host}`);
     if(url.pathname.startsWith('/api/views/'))res.embedQuery=url.searchParams;
+    if(await rinkelIncoming.receive(req,res,url))return;
     if(await handleReishuis(req,res,url))return;
     if(await handleExpedia(req,res,url))return;
     if(await handleReisschemas(req,res,url))return;

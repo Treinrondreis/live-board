@@ -1,8 +1,7 @@
 # Rinkel: inkomende oproep bij het klantdossier
 
 Onderzocht op 17 oktober 2026. Gewenste eerste toepassing: bij een inkomende
-oproep het passende Reishuis-dossier tonen. Dit document is onderzoek en ontwerp;
-er is nog geen Rinkel-koppeling, webhook of nieuwe publieke route geactiveerd.
+oproep het passende Reishuis-dossier tonen. Het ontwerp is inmiddels voorbereid in code. De ontvangst blijft standaard uit totdat de concrete verbinding apart is goedgekeurd en geconfigureerd.
 
 ## Bevestigde mogelijkheden
 
@@ -70,3 +69,57 @@ er is nog geen Rinkel-koppeling, webhook of nieuwe publieke route geactiveerd.
 Een API-key of webhook activeren verruimt toegang tot telefoongegevens. Bereid de
 concrete instellingen voor en laat de gebruiker de exacte nieuwe verbinding
 goedkeuren voordat die wordt geactiveerd. Vraag nooit een sleutel in de chat te plakken.
+
+## Voorbereide implementatie
+
+Accountinspectie bevestigt de inkomende-oproepinstelling. Het accountformulier biedt
+alleen URL, content-type en omschrijving; geen aparte authenticatieheader. Voor deze
+screen-pop is geen Rinkel API-key nodig en wordt geen REST-leesrecht gevraagd.
+De zakelijke lijnen Treinrondreis.nl en Spoedlijn zijn als voorgestelde scope bekeken;
+het derde nummer wordt niet automatisch aangesloten. Er is nog niets opgeslagen in
+Rinkel en er zijn nog geen productievariabelen voor de koppeling gezet.
+
+`createRinkelIncoming` staat uit zonder alle drie de instellingen:
+`RINKEL_INCOMING_ENABLED=1`, een willekeurige 64-hex `RINKEL_WEBHOOK_SECRET` en een
+E.164-lijst `RINKEL_ALLOWED_NUMBERS`. Een apart machinepad
+`/integrations/rinkel/incoming/<secret>` accepteert uitsluitend kleine JSON POSTs.
+Dit onraadbare geheime pad is de webhook-authenticator omdat Rinkel in de getoonde
+UI geen headerinstelling aanbiedt. De URL is een credential: alleen in de beschermde
+Rinkel- en Railway-instellingen gebruiken, nooit delen in chat, Git, CI, browsercode
+of screenshots. De applicatie logt verzoekpaden/payloads niet. Hosting- en provider
+accesslogs kunnen de volledige URL bevatten en moeten als geheim materiaal worden
+behandeld. Er wordt geen claim gedaan dat Rinkel een payloadsignature levert.
+
+Uitgeschakeld/verkeerd geheim geeft 404 vóór gegevensverwerking. Browser-Origin en
+Fetch-Metadata worden geweigerd. Gekozen bestemmingsnummer, tijdvenster, formaat,
+4 KB requestlimiet, deduplicatie en geheugengrenzen worden gecontroleerd. Call notices
+bestaan alleen in process memory, maximaal 100 actief, zichtbaar voor 2 minuten.
+De tijdelijke deduplicatieset is maximaal 1000 IDs en wordt na 10 minuten bij een
+volgende verwerking opgeschoond. Geen call history, audio, samenvattingen of rauwe
+bellertelefoonnummers worden opgeslagen. Herstart wist meldingen. Huidige productie
+heeft één replica; meerdere replicas vereisen een gedeelde eventbus voordat dit
+betrouwbaar gebruikt kan worden.
+
+Een aparte minimale, gepagineerde Sanity GET leest uitsluitend `_id,phone,country`.
+Deze leesactie start pas bij een geautoriseerde Reishuis-poll wanneer de koppeling
+is ingeschakeld. De index blijft server-side in geheugen als HMAC-telefoondigests;
+geen export naar Rinkel en geen ruwe telefoonindex in browser/Postgres/Git.
+E.164 en bekende landcontexten worden ondersteund; onbekende locale formaten worden
+niet geraden. Geen suffix-match en geen match op noodcontacten. Lokale contactvelden
+met expliciete telefoonwijziging gaan voor de bron; leeg lokaal telefoonveld sluit
+het oude bronnummer uit. De index ververst na vijf minuten op aanvraag. Bij een
+mislukte verversing wordt herkenning geblokkeerd totdat lezen weer lukt.
+
+De geauthenticeerde `/seinhuis/reishuis/api/rinkel` poll en JS-module gebruiken de
+bestaande expliciete rol, same-origin-controle en privacyheaders. De browser ontvangt
+alleen minimale passende boekingsreferenties. Eén exacte match opent automatisch
+alleen als geen editor, dossier, voorkeuren of klantpaneel geopend is en de pagina
+zichtbaar is. Tijdens bewerken verschijnt een melding binnen het bestaande dialoog;
+de gebruiker kiest zelf om over te stappen. Meerdere gelijktijdige oproepen of
+meerdere matches worden nooit automatisch gekozen. Meldingen worden gewist zodra
+toegang verloopt of ingetrokken is. Er is geen browser-persistente opslag.
+
+Automatische tests gebruiken uitsluitend fictieve nummers, records en events. De
+live Rinkel URL-test gebruikt oud voorbeeldmateriaal; de ontvanger bevestigt de
+transporttest maar negeert zo'n verouderd event. Een echte nieuwe oproep moet daarom
+apart met de gebruiker worden gecontroleerd voor een volledige praktijkverificatie.
