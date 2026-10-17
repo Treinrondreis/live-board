@@ -1,3 +1,4 @@
+import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
 import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
 import {embedPayload} from './embed-payload.mjs';
@@ -1255,6 +1256,7 @@ await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfi
 await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreOebb(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
 for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>Date.now()-86400000)ndovRows.set(row.id,row);
 server.listen(PORT,async()=>{
+  startReishuisCatalogSync();
   startFlora();
   void checkNdovAccess();
   void startNdov();

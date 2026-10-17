@@ -39,7 +39,7 @@ export async function fetchReishuisDossier(id,{fetcher=fetch,config=sanityConfig
 export function mergeDossier(source,local={}){
  const merge=(rows,overrides={})=>[...rows.map(r=>({...r,...(overrides[r.id]?._edited?Object.fromEntries(overrides[r.id]._edited.map(k=>[k,overrides[r.id][k]])):overrides[r.id]),localChanged:!!overrides[r.id],localStatus:!!overrides[r.id]&&(!overrides[r.id]._edited||overrides[r.id]._edited.includes('status'))})),...Object.entries(overrides).filter(([id])=>!rows.some(r=>r.id===id)).map(([id,r])=>({...r,id,localChanged:true,sourceRemoved:!r.local}))];
  return {...source,contacts:local.contacts||{phones:[],emails:[]},personal:{...source.personal,...local.personal},comment:local.notes?.comment??source.comment,notes:local.notes?.notes??source.notes,
- todos:merge(source.todos,local.todos),lines:merge(source.lines,local.lines),localChanged:Object.keys(local).length>0};
+ todos:[...merge(source.todos,local.todos).map(t=>({...t,component:local.components?.[t.id]||null})),...(local.reviews||[]).filter(t=>!t.archived),...(local.reviews||[]).filter(t=>t.archived)],changeHistory:local.changes||[],lines:merge(source.lines,local.lines),localChanged:Object.keys(local).length>0};
 }
 function bad(){const e=Error('Invalid dossier input');e.status=400;throw e;}
 function clean(values,fields){
@@ -59,7 +59,8 @@ function clean(values,fields){
 export function changeDossier(state,input,source){
  const id=input.booking;if(typeof id!=='string'||!/^[-a-zA-Z0-9_.]{1,160}$/.test(id)||['__proto__','constructor','prototype'].includes(id))bad();
  const section=input.section,local=structuredClone(state.dossiers?.[id]||{});
- if(section==='contacts'){
+ if(section==='review'){const review=local.reviews?.find(t=>t.id===input.item);if(!review||review.archived||input.confirm!==true)bad();review.archived=true;review.status='done';review.reviewedAt=new Date().toISOString();
+ }else if(section==='contacts'){
   const v=input.values;if(!v||Object.keys(v).some(k=>!['phones','emails'].includes(k)))bad();
   const country=mergeDossier(source,local).personal.country;
   local.contacts=Object.fromEntries(['phones','emails'].map(kind=>{
@@ -73,6 +74,10 @@ export function changeDossier(state,input,source){
   const collection=section==='todo'?'todos':'lines',fields=section==='todo'?todoFields:lineFields;
   const values=clean(input.values,fields);let item=input.item;
   const current=mergeDossier(source,local)[collection].find(r=>r.id===item);
+  if(current?.review||current?.archived)bad();
+  if(section==='todo'&&(local.components?.[item]||current?.tag==='hotel'||/interrail/i.test(current?.title||''))&&Object.keys(values).some(k=>['title','startDate','endDate','quantity'].includes(k)&&values[k]!==current?.[k])){const e=Error('Gebruik Onderdeel wijzigen en herberekenen voor gekoppelde taken.');e.status=400;e.reishuisSafe=true;throw e;}
+  if(section==='line'&&Object.values(local.components||{}).some(c=>c.line===item)&&Object.keys(values).some(k=>['title','quantity','price'].includes(k)&&values[k]!==current?.[k])){const e=Error('Wijzig deze gekoppelde regel via de bijbehorende todo.');e.status=400;e.reishuisSafe=true;throw e;}
+  if(section==='todo'&&current?.status==='done'&&Object.keys(values).some(k=>['title','startDate','endDate','quantity'].includes(k)&&values[k]!==current[k])){local.reviews??=[];local.reviews.push({...current,id:'review-'+randomUUID(),idOfOriginal:current.id,status:'caution',review:true,archived:false,changedAt:new Date().toISOString()});values.status='pending';}
   if(input.add===true){if(item)bad();item='local-'+randomUUID();const defaults=section==='todo'?{status:'pending',quantity:1}:{quantity:1,price:0,costs:null,type:'product',visible:true};local[collection]={...local[collection],[item]:{...defaults,...values,local:true}};}
   else {if(!current)bad();local[collection]={...local[collection],[item]:{...current,...values,_edited:[...new Set([...(local[collection]?.[item]?._edited||Object.keys(local[collection]?.[item]||{}).filter(k=>fields.includes(k))),...Object.keys(values).filter(k=>values[k]!==current[k])])]}};delete local[collection][item].localChanged;delete local[collection][item].sourceRemoved;}
  }else bad();

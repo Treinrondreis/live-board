@@ -17,3 +17,5 @@ test('hotel APIs and module are role protected before source access; no public a
 });
 
 test('room links resolve only matching APO keys and report missing links',()=>{const h=normalizeHotel({...fixture,rooms:[{title:'Kamer A',apoRoom:{docId:'fixture-hotel',path:'apoRooms.fixture-room'}},{title:'Kamer B',apoRoom:{docId:'missing',path:'apoRooms.missing'}}]});const result=hotelWithLinkedRates(h,[h]);assert.deepEqual(result.apoRooms[0].roomTitles,['Kamer A']);assert.deepEqual(result.unresolved,['Kamer B']);});
+
+test('legacy room identities survive source reordering',()=>{const a={title:'Fictieve kamer A',guests:2},b={title:'Fictieve kamer B',guests:1};const first=normalizeHotel({...fixture,rooms:[a,b]}),next=normalizeHotel({...fixture,rooms:[b,a]});assert.equal(first.rooms[0].key,next.rooms[1].key);assert.notEqual(first.rooms[0].key,first.rooms[1].key);});
