@@ -21,8 +21,8 @@ test('section has no write route and does not capture sibling paths',async()=>{
  assert.equal((await call({path:'/seinhuis/reisschemas-other'})).handled,false);
  assert.equal((await call({path:'/seinhuis/reisschemas/unknown'})).status,404);
 });
-test('page serves standalone assets and an explicit read-only notice',async()=>{
- const page=await call({path:'/seinhuis/reisschemas/'});assert.equal(page.status,200);assert.match(page.body,/Reisschema’s/);assert.match(page.body,/alleen-lezen/);assert.doesNotMatch(page.body,/seinhuis\/flora/);
+test('page serves standalone assets and an explicit communication notice',async()=>{
+ const page=await call({path:'/seinhuis/reisschemas/'});assert.equal(page.status,200);assert.match(page.body,/Reisschema’s/);assert.match(page.body,/geen klantberichten automatisch/);assert.doesNotMatch(page.body,/seinhuis\/flora/);
  const source=await readFile(new URL('./reisschemas.mjs',import.meta.url),'utf8');assert.match(source,/adminAuthenticated\(req\)/);assert.doesNotMatch(source,/adminAuthenticated\(req,'flora'\)/);
 });
 test('Flora no longer imports, reads or writes the itinerary register',async()=>{
@@ -30,4 +30,3 @@ test('Flora no longer imports, reads or writes the itinerary register',async()=>
  assert.doesNotMatch(flora,/floraRegister|register\.summary|register\.recordCheck|api\/register/);assert.doesNotMatch(ui,/renderRegistry|reisschema-register/);
  const hub=await readFile(new URL('./admin-hub.mjs',import.meta.url),'utf8');assert.match(hub,/hubSections\.reisschemas=/);assert.match(hub,/reisschemas:'owner'/);
 });
-
