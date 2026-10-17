@@ -286,9 +286,9 @@ function countryForStation(name="") {
   if(["Wien Hbf","Innsbruck Hbf"].some(x=>n===x))return "AT";
   if(n==="Basel Bad Bf")return "CH";
   if([
-    "Mannheim Hbf","Köln Hbf","Berlin Hbf","Bad Bentheim","Düsseldorf Hbf",
+    "Mannheim Hbf","KÃ¶ln Hbf","Berlin Hbf","Bad Bentheim","DÃ¼sseldorf Hbf",
     "Hamburg Hbf","Hannover Hbf","Frankfurt(Main)Hbf","Frankfurt(M) Flughafen Fernbf",
-    "Stuttgart Hbf","München Hbf","Osnabrück Hbf","Offenburg","Nürnberg Hbf","Berlin Hbf (tief)"
+    "Stuttgart Hbf","MÃ¼nchen Hbf","OsnabrÃ¼ck Hbf","Offenburg","NÃ¼rnberg Hbf","Berlin Hbf (tief)"
   ].some(x=>n===x))return "DE";
   return "";
 }
@@ -310,7 +310,7 @@ function normalize(stop,station,cfg){
     actualTimestamp:null,from:route.from,to:route.to,route:route.route,pastRoute:route.pastRoute,futureRoute:route.futureRoute,
     train,category,number,operatorCode:String(tl.o||""),eventMode:resolvedMode,status,type,delay,cancelled,
     observedAt:station.name,stationCode:String(station.eva||""),countryCode:countryForStation(station.name),
-    hasRealtime:Boolean(stop.hasRealtime),plannedTrack,currentTrack,track:currentTrack||plannedTrack||"—",
+    hasRealtime:Boolean(stop.hasRealtime),plannedTrack,currentTrack,track:currentTrack||plannedTrack||"â€”",
     hasChangedTrack:Boolean(currentTrack&&plannedTrack&&currentTrack!==plannedTrack),trend30:null,rawStop:stop
   };
 }
@@ -365,7 +365,7 @@ function boardMergeKey(row){
   const destination=normalizeStationName(row.to||"");
   const track=String(row.track||"").trim().toUpperCase();
   // Missing times, destinations or tracks are not evidence of a shared departure.
-  if(!station||!Number.isFinite(planned)||planned<=0||!destination||["","—","-","?"].includes(track))return null;
+  if(!station||!Number.isFinite(planned)||planned<=0||!destination||["","â€”","-","?"].includes(track))return null;
   return [station,Math.floor(planned/60000),destination,track].join("|");
 }
 function isFernverkehrRow(row){
@@ -405,7 +405,7 @@ function mergeEquivalentBoardTrains(rows){
     const delay=Number(first.delay||0);
     const type=cancelled?"cancel":delay>30?"major-delay":partialCancellation?"delay":first.type;
     const status=cancelled?"Geannuleerd":partialCancellation
-      ?`Deels geannuleerd${delay>0?` · +${delay} min`:""}`:first.status;
+      ?`Deels geannuleerd${delay>0?` Â· +${delay} min`:""}`:first.status;
     result.push({
       ...first,cancelled,partialCancellation,type,status,
       merged:true,mergedCount:[...byCategory.values()].reduce((n,set)=>n+set.size,0),
@@ -547,7 +547,7 @@ async function performScan(){
     for(const items of groups.values())selected.push(chooseBest(items));
 
     // V4.1.3: dezelfde fysieke vertrekbeweging met meerdere treinnummers
-    // wordt één bordregel. Opslag blijft volledig: alle individuele nummers
+    // wordt Ã©Ã©n bordregel. Opslag blijft volledig: alle individuele nummers
     // zijn hierboven al afzonderlijk naar de Data Hub geschreven.
     const trains=mergeEquivalentBoardTrains(selected);
 
@@ -626,7 +626,7 @@ function stationDirectionMatches(row,direction){
   const categories=direction.categories||[];
   const stops=direction.futureStops||[];
   const category=normalizeCategory(row.category);
-  const internationalIC=direction.internationalIC&&category==="IC"&&routeContains(row,["Bad Bentheim","Berlin Hbf","Hannover Hbf","Osnabrück Hbf"]);
+  const internationalIC=direction.internationalIC&&category==="IC"&&routeContains(row,["Bad Bentheim","Berlin Hbf","Hannover Hbf","OsnabrÃ¼ck Hbf"]);
   if(direction.serviceBrand==="regiojet")return ["REGIOJET","RJI"].includes(category)||/REGIOJET/i.test(row.operatorName||row.operatorCode||"")||String(row.operatorCode)==="3247";
   if(["eurocity","eurocity-direct","eurostar"].includes(direction.serviceBrand)){
     const name=normalizeCategory(row.categoryName||""),brand=direction.serviceBrand;
@@ -731,7 +731,7 @@ function historyRowToTrain(r){
     trainKey:r.train_key,number:String(r.train_number||""),category:String(r.category||""),train:[r.category,r.train_number].filter(Boolean).join(" "),
     observedAt:r.station,eventMode:r.event_mode,station:r.station,plannedTimestamp:Number(r.planned_timestamp||0),expectedTimestamp:Number(r.expected_timestamp||0)||Number(r.planned_timestamp||0)+Number(r.delay_minutes||0)*60000,
     plannedTime:r.planned_time,currentTime:r.current_time||r.planned_time,delay:Number(r.delay_minutes||0),status:r.status||"",cancelled:Boolean(r.cancelled),
-    from:r.origin||"—",to:r.destination||"—",track:r.current_track||r.track||r.planned_track||"—",plannedTrack:r.planned_track||"",currentTrack:r.current_track||r.track||"",route:Array.isArray(route)?route:[],hasRealtime:true
+    from:r.origin||"â€”",to:r.destination||"â€”",track:r.current_track||r.track||r.planned_track||"â€”",plannedTrack:r.planned_track||"",currentTrack:r.current_track||r.track||"",route:Array.isArray(route)?route:[],hasRealtime:true
   };
 }
 async function getNightjetView(){
@@ -880,11 +880,11 @@ async function scanOneItaly(cfg){
     sourceEventId:String(stop?.id||stop?.idFermata||`${cfg.station}|${cfg.mode}`),
     serviceDate:italyCandidateServiceDate(resolved.candidate),
     number:String(cfg.number),train:italyTrainName(data,cfg.number),category:String(data?.categoriaDescrizione||data?.categoria||"").trim(),
-    from:origin||"—",to:destination||"—",station:cfg.station,mode:cfg.mode,eventMode:cfg.mode,
+    from:origin||"â€”",to:destination||"â€”",station:cfg.station,mode:cfg.mode,eventMode:cfg.mode,
     stationCode:String(stop?.id||stop?.idFermata||""),countryCode:"IT",
     time:hhmmMs(event.planned||event.actual),plannedTime:hhmmMs(event.planned||event.actual),currentTime:hhmmMs(event.actual||event.planned),
     plannedTimestamp:plannedTs,expectedTimestamp:expectedTs,actualTimestamp:Number(event.actual||0)||null,
-    plannedTrack:event.plannedTrack,currentTrack:event.currentTrack,track:event.track||"—",delay,status,type,cancelled,trend30:null,
+    plannedTrack:event.plannedTrack,currentTrack:event.currentTrack,track:event.track||"â€”",delay,status,type,cancelled,trend30:null,
     hasRealtime:Boolean(event.actual||data?.oraUltimoRilevamento),
     lastDetection:String(data?.stazioneUltimoRilevamento||"").trim(),lastDetectionAt:data?.oraUltimoRilevamento||null,
     rawStop:stop,rawData:data
@@ -904,7 +904,7 @@ function milanoViaggiaPayload(base,now=Date.now()){
  const rows=new Map((base.departures?.all||[]).map(r=>[String(r.number)+'|'+r.plannedTimestamp,r]));
  for(const t of italyState.trains||[]){if(t.station!=='Milano Centrale'||t.eventMode!=='departure'||t.expectedTimestamp<now-60000)continue;
  const key=String(t.number)+'|'+t.plannedTimestamp,old=rows.get(key);
- rows.set(key,{...old,...t,source:'ViaggiaTreno',id:old?.id||t.trainKey+'|'+t.serviceDate,observedAt:t.station,transportMode:'rail',route:old?.route||[t.to],futureRoute:old?.futureRoute||[t.to],currentTrack:old?.currentTrack||t.currentTrack,track:(old?.cancelled||t.cancelled)?'—':old?.currentTrack||t.track,currentTime:old?.hasRealtime?old.currentTime:t.currentTime,status:old?.hasRealtime?old.status:t.status,hasRealtime:old?.hasRealtime||t.hasRealtime,expectedTimestamp:old?.hasRealtime?old.expectedTimestamp:t.expectedTimestamp,delay:old?.hasRealtime?old.delay:t.delay,cancelled:old?.cancelled||t.cancelled});
+ rows.set(key,{...old,...t,source:'ViaggiaTreno',id:old?.id||t.trainKey+'|'+t.serviceDate,observedAt:t.station,transportMode:'rail',route:old?.route||[t.to],futureRoute:old?.futureRoute||[t.to],currentTrack:old?.currentTrack||t.currentTrack,track:(old?.cancelled||t.cancelled)?'â€”':old?.currentTrack||t.track,currentTime:old?.hasRealtime?old.currentTime:t.currentTime,status:old?.hasRealtime?old.status:t.status,hasRealtime:old?.hasRealtime||t.hasRealtime,expectedTimestamp:old?.hasRealtime?old.expectedTimestamp:t.expectedTimestamp,delay:old?.hasRealtime?old.delay:t.delay,cancelled:old?.cancelled||t.cancelled});
  }
  const all=[...rows.values()].sort((a,b)=>a.plannedTimestamp-b.plannedTimestamp),fern=r=>/^(FR|FA|FB|AV|IC|ICN|EC|ECE|EN|NJ|ITALO)$/i.test(r.category);
  return {...base,source:'RFI + ViaggiaTreno',notice:base.notice+' ViaggiaTreno vult geselecteerde ritten aan; sporen kunnen gepland zijn.',departures:{all,fernverkehr:all.filter(fern),regional:all.filter(r=>!fern(r))}};
@@ -922,7 +922,7 @@ function stationViewPayload(station,kind){
   }
   if(kind==="netherlands"){
     const targets=["Amsterdam Centraal","Arnhem Centraal","Venlo","Utrecht Centraal"];
-    // Alleen toekomstige haltes ná Düsseldorf tellen. Zo komt een trein
+    // Alleen toekomstige haltes nÃ¡ DÃ¼sseldorf tellen. Zo komt een trein
     // die vanuit Nederland naar Duitsland rijdt niet per ongeluk op dit bord.
     rows=rows.filter(r=>futureRouteContains(r,targets));
   }
@@ -994,7 +994,7 @@ function parseNdovRows(xml){
     const delay=Math.round((expectedTimestamp-plannedTimestamp)/60000);
     const status=cancelled?"Geannuleerd":notBoardable?"Niet instappen":delay>0?`+${delay} min`:"Op tijd";
     const id=`NDOV|${stationShortCode}|${date}|${ride}`;
-    rows.push({id,source:"NDOV",sourceTripId:`${date}|${ride}`,sourceEventId:id,serviceDate:date,trainKey:`${category}|${number}`,number,rideId:ride,train:[category,number].filter(Boolean).join(" "),category,categoryName:ndovText(train.TreinSoort),specialTicket:ndovText(train.SpeciaalKaartje)==="J",operatorCode:ndovText(train.Vervoerder),operatorName:ndovText(train.Vervoerder),observedAt:stationName,stationShortCode,stationCode:ndovText(station.UICCode)||stationShortCode,countryCode:"NL",eventMode:"departure",plannedTimestamp,expectedTimestamp,plannedTime:ndovClock(plannedTimestamp),time:ndovClock(plannedTimestamp),currentTime:ndovClock(expectedTimestamp),plannedTrack,currentTrack,track:cancelled?"—":currentTrack||plannedTrack||"—",delay,status,type:cancelled?"cancel":delay>30?"major-delay":delay>0?"delay":"ok",cancelled,departed,notBoardable,from:stationName,to:destination,route:[stationName,...futureRoute],futureRoute,pastRoute:[],hasRealtime:Number.isFinite(actualTime),hasChangedTrack:Boolean(currentTrack&&plannedTrack&&currentTrack!==plannedTrack),messageTimestamp,rawStop:dvs});
+    rows.push({id,source:"NDOV",sourceTripId:`${date}|${ride}`,sourceEventId:id,serviceDate:date,trainKey:`${category}|${number}`,number,rideId:ride,train:[category,number].filter(Boolean).join(" "),category,categoryName:ndovText(train.TreinSoort),specialTicket:ndovText(train.SpeciaalKaartje)==="J",operatorCode:ndovText(train.Vervoerder),operatorName:ndovText(train.Vervoerder),observedAt:stationName,stationShortCode,stationCode:ndovText(station.UICCode)||stationShortCode,countryCode:"NL",eventMode:"departure",plannedTimestamp,expectedTimestamp,plannedTime:ndovClock(plannedTimestamp),time:ndovClock(plannedTimestamp),currentTime:ndovClock(expectedTimestamp),plannedTrack,currentTrack,track:cancelled?"â€”":currentTrack||plannedTrack||"â€”",delay,status,type:cancelled?"cancel":delay>30?"major-delay":delay>0?"delay":"ok",cancelled,departed,notBoardable,from:stationName,to:destination,route:[stationName,...futureRoute],futureRoute,pastRoute:[],hasRealtime:Number.isFinite(actualTime),hasChangedTrack:Boolean(currentTrack&&plannedTrack&&currentTrack!==plannedTrack),messageTimestamp,rawStop:dvs});
   }
   return rows;
 }
@@ -1220,7 +1220,7 @@ const server=http.createServer(async(req,res)=>{
     if(stationPageId&&Object.hasOwn(config.stationPages||{},stationPageId)){
       const payload=stationPagePayload(stationPageId);
       // Preserve the existing mobile API fields alongside the complete embed board.
-      const legacy=stationPageId==="duesseldorf"?stationViewPayload("Düsseldorf Hbf","netherlands")
+      const legacy=stationPageId==="duesseldorf"?stationViewPayload("DÃ¼sseldorf Hbf","netherlands")
         :stationPageId==="wien"?stationViewPayload("Wien Hbf","fern")
         :stationPageId==="mannheim"?stationViewPayload("Mannheim Hbf","fern"):{};
       return sendJson(res,200,applyBoardSettings(stationPageId,{...legacy,...payload}));
