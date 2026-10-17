@@ -1,6 +1,6 @@
 import {paymentSummary,paymentLabels} from './reishuis-payments.mjs';
 const personal=[['firstName','Voornaam'],['lastName','Achternaam'],['address','Adres'],['postalCode','Postcode'],['city','Plaats'],['country','Land'],['email','E-mail'],['phone','Telefoon'],['emergencyName','Naam noodcontact'],['emergencyPhone','Telefoon noodcontact']];
-const todoStatuses=[['pending','Te doen'],['doing','Mee bezig'],['caution','Opletten'],['done','Gedaan']];
+const todoStatuses=[['pending','Te doen'],['planned','Gepland'],['doing','Mee bezig'],['caution','Opletten'],['done','Gedaan']];
 const lineTypes=[['product','Product'],['option','Optie'],['discount','Korting'],['margin','Marge']];
 const money=v=>typeof v==='number'&&Number.isFinite(v)?new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(v):'Onbekend';
 const numeric=v=>typeof v==='number'&&Number.isFinite(v);
@@ -9,7 +9,7 @@ export function invoiceTotals(lines){
  for(const l of lines){if(l.sourceRemoved){archived++;continue;}if(numeric(l.quantity)&&numeric(l.price))total+=Math.round(l.quantity*l.price*100);else invalid++;if(numeric(l.quantity)&&numeric(l.costs))cost+=Math.round(l.quantity*l.costs*100);else missing++;}
  return {total:total/100,cost:cost/100,missing,invalid,archived};
 }
-export function createDossierUI({node,change,request,run}){
+export function createDossierUI({node,change,request,run,isBusy=()=>false}){
  let generation=0;
  return {clear(){generation++;},async open(id,root){
   const seq=++generation,loading=node('p','Dossier laden…');root.replaceChildren(loading);let record,conflicted=false;
@@ -26,12 +26,19 @@ export function createDossierUI({node,change,request,run}){
    l.append(input);form.append(l);return input;
   };
   const values=form=>Object.fromEntries([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.type==='number'?(e.value===''?null:Number(e.value)):e.value]));
+  const persist=async data=>{
+   if(conflicted)throw Error('Heropen het dossier om nieuwe gegevens te controleren.');
+   const saved=await change({action:'dossier',booking:id,...data,sourceVersion:record.sourceVersion},record.revision);let next;try{next=await request(id);}catch(error){conflicted=true;error.committed=true;throw error;}
+   if(!current())return null;
+   if(next.revision!==saved.revision||next.sourceVersion!==record.sourceVersion){conflicted=true;const error=Error('Gegevens zijn tussentijds bijgewerkt. Heropen het dossier.');error.committed=true;throw error;}
+   record=next;updateNotice();feedback.textContent='Opgeslagen in Reishuis. Sanity is ongewijzigd.';return next.dossier;
+  };
   const save=(form,section,item,add=false,after)=>{
    const submit=node('button','Opslaan in Reishuis');submit.type='submit';form.append(submit);
    form.onsubmit=e=>{e.preventDefault();run(async()=>{
     submit.disabled=true;feedback.textContent='Opslaan…';
-    try{if(conflicted)throw Error('Heropen het dossier om nieuwe gegevens te controleren.');const saved=await change({action:'dossier',booking:id,section,item,add,values:values(form),sourceVersion:record.sourceVersion},record.revision);const next=await request(id);if(!current())return;if(next.revision!==saved.revision||next.sourceVersion!==record.sourceVersion){conflicted=true;throw Error('Gegevens zijn tussentijds bijgewerkt. Heropen het dossier.');}record=next;updateNotice();feedback.textContent='Opgeslagen in Reishuis. Sanity is ongewijzigd.';after?.(next.dossier);}
-    catch(error){if(current())feedback.textContent=error.message+' Je invoer blijft staan.';}
+    try{const next=await persist({section,item,add,values:values(form)});if(next)after?.(next);}
+    catch(error){if(current())feedback.textContent=error.committed?'Opgeslagen in Reishuis. '+error.message:error.message+' Je invoer blijft staan.';}
     finally{if(current())submit.disabled=false;}
    });};
   };
@@ -41,19 +48,30 @@ export function createDossierUI({node,change,request,run}){
   personPanel.append(node('h4','Reizigers'));
   if(!d.passengers.length)personPanel.append(node('p','Geen reizigersgegevens in de bron.'));
   for(const p of d.passengers){const row=node('div',undefined,'dossier-passenger');row.append(node('strong',[p.firstName,p.lastName].filter(Boolean).join(' ')||p.name||'Naam ontbreekt'));for(const [k,label] of [['dateOfBirth','Geboortedatum'],['type','Reizigerstype'],['gender','Geslacht'],['nationality','Nationaliteit'],['countryOfResidence','Woonland'],['station','Vertrekstation']])if(p[k])row.append(node('p',label+': '+p[k]));personPanel.append(row);}
-  const todoPanel=panel('Todo’s en aantekeningen','todos'),notesForm=node('form');
-  field(notesForm,'notes','Interne aantekeningen',d.notes,{type:'textarea',max:10000});field(notesForm,'comment','Opmerkingen van klant',d.comment,{type:'textarea',max:10000});save(notesForm,'notes');todoPanel.append(notesForm);
-  const todoList=node('div');todoPanel.append(todoList);
+  const todoPanel=panel('Todo’s en aantekeningen','todos'),progress=node('p',undefined,'todo-progress'),todoList=node('ul',undefined,'todo-list');todoPanel.append(progress,todoList);
+  const updateProgress=()=>{const rows=record.dossier.todos;progress.textContent=rows.filter(r=>r.status==='done').length+' van '+rows.length+' gedaan';};updateProgress();
   const todoForm=(row={},add=false)=>{
-   const wrapper=node('details',undefined,'dossier-item');wrapper.open=add;const summary=node('summary',row.title||'Nieuwe todo');wrapper.append(summary);const form=node('form',undefined,'dossier-grid');
+   const item=node('li',undefined,'todo-item'),head=node('div',undefined,'todo-head'),check=node('input'),content=node('div',undefined,'todo-content'),title=node('button',row.title||'Nieuwe todo','todo-title'),meta=node('p',undefined,'todo-meta'),status=node('select'),wrapper=node('details',undefined,'todo-editor'),summary=node('summary','Bewerken');
+   check.type='checkbox';check.setAttribute('aria-label','Afgerond: '+(row.title||'Nieuwe todo'));check.className='todo-check';title.type='button';title.onclick=()=>{wrapper.open=!wrapper.open;};status.setAttribute('aria-label','Status: '+(row.title||'Nieuwe todo'));for(const [v,t] of todoStatuses)status.append(new Option(t,v));content.append(title,meta);head.append(check,content,status);wrapper.open=add;wrapper.append(summary);const form=node('form',undefined,'dossier-grid');
+   const refreshRow=next=>{row=next;title.textContent=row.title||'Todo';check.checked=row.status==='done';status.value=row.status||'pending';item.dataset.status=row.status||'pending';check.setAttribute('aria-label','Afgerond: '+(row.title||'Todo'));status.setAttribute('aria-label','Status: '+(row.title||'Todo'));meta.textContent=[row.startDate?.slice(0,10),row.endDate?'t/m '+row.endDate.slice(0,10):'',row.supplierBookingNumber,row.description,row.sourceRemoved?'Bron vervallen; eigen versie bewaard':''].filter(Boolean).join(' · ');};refreshRow(row);
    if(row.sourceRemoved)form.append(node('p','Niet meer aanwezig in de bron. Je eigen versie is bewaard.','muted'));
-   field(form,'title','Titel todo',row.title);field(form,'status','Todo-status',row.status||'pending',{options:todoStatuses});field(form,'description','Todo-aantekening',row.description,{type:'textarea',max:10000});field(form,'quantity','Aantal todo',row.quantity??1,{type:'number'});
+   field(form,'title','Titel todo',row.title);const detailStatus=field(form,'status','Todo-status',row.status||'pending',{options:todoStatuses});field(form,'description','Todo-aantekening',row.description,{type:'textarea',max:10000});field(form,'quantity','Aantal todo',row.quantity??1,{type:'number'});
    for(const [k,l] of [['startDate','Datum / check-in'],['endDate','Check-out'],['bookableFrom','Boekbaar vanaf'],['deadline','Deadline']])field(form,k,l,(row[k]||'').slice(0,10),{type:'date'});
    field(form,'tag','Type todo',row.tag);field(form,'supplierBookingNumber','Bevestigingsnummer',row.supplierBookingNumber);
-   save(form,'todo',row.id,add,next=>{if(add){wrapper.remove();todoForm(next.todos.at(-1));}else summary.textContent=form.elements.title.value||'Todo';});wrapper.append(form);todoList.append(wrapper);return wrapper;
+   const quickStatus=next=>{if(isBusy()){refreshRow(row);feedback.textContent='Wacht tot de vorige wijziging is opgeslagen en probeer opnieuw.';return;}return run(async()=>{
+    check.disabled=status.disabled=true;feedback.textContent='Opslaan…';
+    try{const data=await persist({section:'todo',item:row.id,values:{status:next}});if(data){refreshRow(data.todos.find(r=>r.id===row.id));detailStatus.value=next;updateProgress();}}
+    catch(error){if(current()){if(error.committed){refreshRow({...row,status:next});detailStatus.value=next;feedback.textContent='Status opgeslagen in Reishuis. '+error.message;}else{refreshRow(row);feedback.textContent=error.message+' De status is niet gewijzigd.';}}}
+    finally{if(current())check.disabled=status.disabled=false;}
+   });};
+   check.onchange=()=>quickStatus(check.checked?'done':'pending');status.onchange=()=>quickStatus(status.value);
+   save(form,'todo',row.id,add,next=>{if(add){item.remove();todoForm(next.todos.at(-1));}else{refreshRow(next.todos.find(r=>r.id===row.id));wrapper.open=false;}updateProgress();});
+   if(add)check.disabled=status.disabled=true;wrapper.append(form);item.append(head,wrapper);todoList.append(item);return item;
   };
-  for(const row of d.todos)todoForm(row);if(!d.todos.length)todoList.append(node('p','Nog geen todo’s.'));
+  for(const row of d.todos)todoForm(row);if(!d.todos.length)todoList.append(node('li','Nog geen todo’s.'));
   const addTodo=node('button','Todo toevoegen');addTodo.type='button';addTodo.onclick=()=>todoForm({},true).scrollIntoView({block:'nearest'});todoPanel.append(addTodo);
+  const notes=node('details',undefined,'dossier-item dossier-notes'),notesForm=node('form');notes.append(node('summary','Interne aantekeningen en klantopmerkingen'));
+  field(notesForm,'notes','Interne aantekeningen',d.notes,{type:'textarea',max:10000});field(notesForm,'comment','Opmerkingen van klant',d.comment,{type:'textarea',max:10000});save(notesForm,'notes');notes.append(notesForm);todoPanel.append(notes);
   const finance=panel('Factuur en financiën','finance'),totals=node('div',undefined,'finance-totals');
   const updateTotals=data=>{const {total,cost,missing,invalid,archived}=invoiceTotals(data.lines);totals.replaceChildren(node('p','Berekende reissom: '+money(total)+(invalid?' · '+invalid+' onvolledige regel(s)':'')),node('p','Bekende werkelijke kosten: '+money(cost)+(missing?' · werkelijke prijs ontbreekt op '+missing+' regel(s)':' · compleet')),node('p','Oorspronkelijke reissom bij boeken: '+money(data.initialPrice)));if(archived)totals.append(node('p',archived+' bewaarde vervallen regel(s) niet meegeteld.'));};updateTotals(d);
   finance.append(node('p',[d.invoiceTitle||'Factuur',d.invoiceSubtitle,d.vendorName].filter(Boolean).join(' · ')),totals,node('p','Bedragen per stuk, in euro. Regeltotalen zijn aantal × prijs. Betaalverzoeken blijven alleen-lezen.','muted'));

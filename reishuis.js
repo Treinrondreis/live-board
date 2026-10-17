@@ -45,7 +45,7 @@ function renderSelection(){
 }
 function noteForm(kind,id){const form=node('form'),label=node('label','Eigen notitie'),area=node('textarea');area.maxLength=10000;area.value=state.notes[kind+':'+id]||'';label.append(area);const save=node('button','Notitie opslaan');form.append(label,save);form.onsubmit=e=>{e.preventDefault();run(async()=>{await change({action:'note',kind,id,note:area.value});message('Notitie opgeslagen.');});};return form;}
 function selectCustomers(exclude){const s=node('select');s.setAttribute('aria-label','Klant kiezen');s.append(new Option('Kies bewust een klant…',''));for(const c of state.customers.filter(c=>c.id!==exclude))s.append(new Option(c.name+' · '+c.id.slice(0,8),c.id));return s;}
-const dossierUI=createDossierUI({node,change,run,request:async id=>{
+const dossierUI=createDossierUI({node,change,run,isBusy:()=>busy,request:async id=>{
  const r=await fetch(base+'/api/dossier?'+new URLSearchParams({id}),{cache:'no-store'}),j=await r.json();if(r.status===401||r.status===403)clearState();if(!r.ok)throw Error(j.error||'Dossier laden mislukt.');return j;
 }});
 async function showBooking(id){const b=state.bookings.find(b=>b.id===id);if(!b)return;dossierUI.clear();$('detail').classList.add('booking-dossier');$('detail-title').textContent=b.index+' · '+b.name;const body=$('detail-body');body.replaceChildren(node('p',statusLabel(b.status)+' · '+date(b.departure)+' tot '+date(b.return),'detail-meta'),node('p',paymentText(b.payment)),node('p',bookingDay(b.created)?'Geboekt op '+date(bookingDay(b.created)):'Boekingsdatum onbekend','muted'));

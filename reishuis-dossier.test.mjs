@@ -24,7 +24,7 @@ test('local notes, personal, todo and financial edits survive source refresh and
  const s=emptyReishuis(),d=source(),old=structuredClone(d);
  changeDossier(s,{booking:'private.fixture',section:'notes',values:{notes:'Eigen notitie'}},d);
  changeDossier(s,{booking:'private.fixture',section:'personal',values:{address:'Testlaan 2'}},d);
- changeDossier(s,{booking:'private.fixture',section:'todo',item:d.todos[0].id,values:{status:'doing',description:'Eigen taaknotitie'}},d);
+ changeDossier(s,{booking:'private.fixture',section:'todo',item:d.todos[0].id,values:{status:'planned',description:'Eigen taaknotitie'}},d);
  changeDossier(s,{booking:'private.fixture',section:'line',item:d.lines[0].id,values:{price:123.45,costs:80,quantity:3}},d);
  const fresh=normalizeDossier({...raw(),notes:'Nieuwe bron',todos:[{_key:'new',title:'Nieuwe brontaak'},...raw().todos],lines:[{_key:'new-line',price:1},...raw().lines]});
  const merged=mergeDossier(fresh,s.dossiers['private.fixture']);assert.equal(merged.notes,'Eigen notitie');assert.equal(merged.comment,'Fictieve opmerking');assert.equal(merged.personal.address,'Testlaan 2');assert.equal(merged.todos.find(r=>r.id===d.todos[0].id).description,'Eigen taaknotitie');assert.equal(merged.lines.find(r=>r.id===d.lines[0].id).costs,80);assert.deepEqual(d,old,'source never mutated');

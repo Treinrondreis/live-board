@@ -13,7 +13,7 @@ const rows=(list,fields,type)=>(Array.isArray(list)?list:[]).map((v,i,all)=>{
  const identity=uniqueKey?v._key:JSON.stringify(v),occurrence=uniqueKey?0:all.slice(0,i).filter(r=>JSON.stringify(r)===identity).length;
  const row={id:'source-'+digest([type,identity,occurrence]).slice(0,32),...pick(v,fields)};
  for(const k of ['quantity','price','costs','vatRate'])if(fields.includes(k))row[k]=number(k==='quantity'?v.quantity??v.amount??1:v[k]);
- if(type==='todo')row.status=['pending','doing','done','caution'].includes(v.status)?v.status:v.done===true?'done':'pending';
+ if(type==='todo')row.status=['pending','planned','doing','done','caution'].includes(v.status)?v.status:v.done===true?'done':'pending';
  if(type==='line'){row.visible=v.visible!==false;row.type=['product','discount','margin','option'].includes(v.type)?v.type:'product';}
  return row;
 });
@@ -51,7 +51,7 @@ function clean(values,fields){
   if(k==='visible'){if(typeof v!=='boolean')bad();return [k,v];}
   if(typeof v!=='string'||v.includes('\u0000')||v.length>(['notes','comment','description'].includes(k)?10000:500))bad();
   if(['startDate','endDate','bookableFrom','deadline','date'].includes(k)&&v&&(!/^\d{4}-\d{2}-\d{2}$/.test(v)||Number.isNaN(Date.parse(v))||new Date(v).toISOString().slice(0,10)!==v))bad();
-  if(k==='status'&&!['pending','doing','done','caution'].includes(v)||k==='type'&&!['product','discount','margin','option'].includes(v))bad();
+  if(k==='status'&&!['pending','planned','doing','done','caution'].includes(v)||k==='type'&&!['product','discount','margin','option'].includes(v))bad();
   return [k,v.trim()];
  }));
 }
