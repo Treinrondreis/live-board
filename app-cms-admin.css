@@ -1,0 +1,26 @@
+/* Editor adapter only; the public app retains /app/cms.css. */
+.cms-admin .cms-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.cms-admin .cms-command-area{position:sticky;top:var(--tr-header-height);z-index:10;margin-bottom:24px;padding-bottom:1px;background:var(--tr-background)}
+.cms-admin .cms-savebar{padding:14px 0;background:var(--tr-background)}
+.cms-admin #message{margin-bottom:16px;white-space:pre-line;overflow-wrap:anywhere}.cms-admin #message:empty{display:none}
+.cms-admin .cms-view{min-width:0}.cms-admin .cms-view p{line-height:1.65}
+.cms-admin .cms-more{position:relative;margin-left:auto}.cms-admin .cms-more summary{cursor:pointer;padding:12px;font-size:14px;font-weight:600;color:var(--tr-blue)}
+.cms-admin .cms-more>div{position:absolute;right:0;top:100%;padding:14px;min-width:270px;display:grid;gap:10px;background:white;border:1px solid var(--tr-line);border-radius:12px;box-shadow:var(--tr-shadow)}
+.cms-admin .cms-workspace{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start}.cms-admin .cms-pages{padding:18px}
+.cms-admin #pages{display:grid;gap:5px;margin:16px 0}.cms-admin #pages button{width:100%;min-height:46px;padding:10px 12px;text-align:left;border:1px solid transparent;border-radius:10px;color:var(--tr-text);background:transparent;font:600 15px/1.5 var(--tr-font-body);cursor:pointer;overflow-wrap:anywhere}
+.cms-admin #pages button:hover{background:var(--tr-surface-soft)}.cms-admin #pages button[aria-current]{background:#e8f2f8;color:var(--tr-blue);box-shadow:inset 3px 0 var(--tr-blue)}
+.cms-admin #pages small{display:block;color:var(--tr-muted);font-size:14px;font-weight:400}.cms-admin .cms-pages>p{font-size:14px;margin-top:18px}.cms-admin .cms-editor{min-width:0}
+.cms-admin .cms-editor h2{font-family:var(--tr-font-heading);font-size:22px;line-height:1.4;margin:24px 0 16px}.cms-admin .cms-editor>.cms-actions h2{margin:0 auto 0 0;overflow-wrap:anywhere}
+.cms-admin .cms-editor .hint{color:var(--tr-muted);font-size:14px;overflow-wrap:anywhere;margin:12px 0 20px}
+.cms-admin :where(#editor,#main-menu) button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:9px 12px;margin:3px 4px 3px 0;border:1px solid var(--tr-control-line);border-radius:10px;background:white;color:var(--tr-blue);font:600 14px/1.5 var(--tr-font-heading);cursor:pointer}
+.cms-admin :where(#editor,#main-menu) button:hover{background:var(--tr-surface-soft)}.cms-admin :where(#editor,#main-menu) button:disabled{opacity:.55;cursor:not-allowed}
+.cms-admin :where([data-action='remove-page'],[data-action$='-delete']){color:var(--tr-alarm)!important}
+.cms-admin fieldset{min-width:0;margin:22px 0;padding:20px;border:1px solid var(--tr-line);border-radius:14px;background:#f8fbfd}.cms-admin legend{padding:0 7px;font-weight:600}
+.cms-admin .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;margin-bottom:18px}.cms-admin .fields label{min-width:0;display:grid;align-content:start;gap:7px;color:var(--tr-text);font-size:14px;font-weight:600}
+.cms-admin .fields :where(input,select,textarea){display:block;width:100%;min-width:0;min-height:46px;padding:10px 12px;border:1px solid var(--tr-control-line);border-radius:11px;color:var(--tr-text);background:white;font:400 16px/1.5 var(--tr-font-body)}
+.cms-admin .fields textarea{resize:vertical}.cms-admin .fields .checkbox{display:flex;align-items:center;gap:10px;min-height:46px}.cms-admin .fields .checkbox input{width:20px;min-height:20px;height:20px;accent-color:var(--tr-blue)}
+.cms-admin .cms-account{display:block;margin:22px 14px;font-size:14px}.cms-admin .cms-source-url{color:var(--tr-muted);font-size:14px;overflow-wrap:anywhere}
+.cms-admin dialog{width:min(1100px,95vw);height:90dvh;padding:24px;border:1px solid var(--tr-line);border-radius:18px;color:var(--tr-text);background:white;box-shadow:0 20px 80px #143c4933}.cms-admin dialog::backdrop{background:#12384799}
+.cms-admin dialog .cms-actions{justify-content:space-between;margin-bottom:18px}.cms-admin dialog iframe{display:block;width:100%;height:calc(100% - 70px);border:1px solid var(--tr-line);border-radius:12px;background:white}
+@media(max-width:1150px){.cms-admin .cms-workspace{grid-template-columns:1fr}.cms-admin #pages{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.cms-admin .fields{grid-template-columns:1fr}.cms-admin .cms-command-area{position:static}.cms-admin .cms-savebar>button{flex:1 1 auto;font-size:14px;padding:10px 12px}.cms-admin .cms-more{margin-left:0}.cms-admin .cms-more>div{position:static;min-width:0}.cms-admin fieldset{padding:14px}.cms-admin .cms-editor{padding:18px}}

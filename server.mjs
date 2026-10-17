@@ -93,7 +93,7 @@ function loadDotEnv(filename){
 }
 function sendJson(res,status,obj){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(res.embedQuery?embedPayload(obj,res.embedQuery):obj));}
 function sendFile(res,filename){
-  const types={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".svg":"image/svg+xml",".png":"image/png",".ico":"image/x-icon"};
+  const types={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".svg":"image/svg+xml",".png":"image/png",".ico":"image/x-icon",".woff2":"font/woff2"};
   fs.readFile(filename,(err,data)=>{
     if(err){res.writeHead(404);return res.end("Not found");}
 
