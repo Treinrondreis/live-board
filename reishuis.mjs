@@ -1,3 +1,4 @@
+import {hotelMatches,hotelStays} from './reishuis-hotel-links.mjs';
 import {reishuisCatalogs} from './reishuis-catalogs.mjs';
 import {quoteChange,applyQuote,pricingFingerprint} from './reishuis-repricing.mjs';
 import {createRinkelMedia} from './reishuis-rinkel-media.mjs';
@@ -84,7 +85,8 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    if(req.method==='GET'){
     if(path==='/api/interrail'){const c=await catalogs.get('interrail');return reply(200,{passes:c.data,syncedAt:c.checkedAt,version:c.version});}
     if(path==='/api/access')return reply(200,{ok:true});
-    if(path==='/api/hotels'){const data=await hotels();return reply(200,{...data,hotels:data.hotels.map(({apoRooms,photos,description,rooms,...h})=>({...h,photoCount:photos.length,rooms:rooms.map(({key,title,guests})=>({key,title,guests})),apoRooms:apoRooms.map(({prices,...r})=>({...r,priceCount:prices.length}))}))});}
+    if(path==='/api/hotels'){const data=await hotels();return reply(200,{...data,hotels:data.hotels.map(({apoRooms,photos,description,rooms,...h})=>({...h,photoCount:photos.length,rooms:rooms.map(({key,title,titleShort,guests})=>({key,title,titleShort,guests})),apoRooms:apoRooms.map(({prices,...r})=>({...r,priceCount:prices.length}))}))});}
+    if(path==='/api/hotel-stays'){const data=await hotels(),id=key(url.searchParams.get('id'));if(!data.hotels.some(h=>h.id===id))return reply(404,{error:'Hotel niet gevonden.'});const snapshot=await bookingCache.get(),record=await read(),period=url.searchParams.get('period')||'upcoming',page=Number(url.searchParams.get('page')||0);if(!['upcoming','past','cancelled'].includes(period)||!Number.isSafeInteger(page)||page<0||page>100000)invalid();const result=hotelStays(snapshot.bookings,record.state,data.hotels,id,dayInAmsterdam(new Date(clock())),period,page);return reply(200,{...result,unindexed:snapshot.bookings.reduce((n,b)=>n+(b.hotelTodosUnindexed||0),0),syncedAt:new Date(snapshot.syncedAt).toISOString(),refreshing:snapshot.refreshing,incomplete:snapshot.bookings.some(b=>!Array.isArray(b.hotelTodos))});}
     if(path==='/api/hotel-photo'){const data=await hotels(),hotel=data.hotels.find(h=>h.id===url.searchParams.get('id')),index=Number(url.searchParams.get('index'));if(!hotel||!Number.isInteger(index)||index<0||!hotel.photos[index])return reply(404,{error:'Geen foto.'});const result=await photo(hotel.photos[index]);res.writeHead(200,{'Content-Type':result.type});res.end(result.bytes);return true;}
     if(path==='/api/hotel'){const data=await hotels(),hotel=data.hotels.find(h=>h.id===url.searchParams.get('id'));return hotel?reply(200,{hotel:{...hotelWithLinkedRates(hotel,data.hotels),photos:undefined,photoCount:hotel.photos.length},syncedAt:data.syncedAt,refreshing:data.refreshing}):reply(404,{error:'Hotel niet gevonden.'});}
     if(path==='/api/rinkel'){if(!rinkel.configured)return reply(200,{enabled:false});const [list,record]=await Promise.all([bookings(),read()]);return reply(200,await rinkel.poll({cursor:url.searchParams.get('cursor'),bookings:list,state:record.state}));}
@@ -100,14 +102,14 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
     if(path==='/api/rinkel/dossier'){const id=key(url.searchParams.get('id'));if(!(await bookings()).some(b=>b.id===id))return reply(404,{error:'Boeking niet gevonden.'});return reply(200,rinkel.dossier((await read()).state,id));}
     if(path==='/api/dossier'){
      const id=key(url.searchParams.get('id'));if(!(await bookings()).some(b=>b.id===id))return reply(404,{error:'Boeking niet gevonden.'});
-     const snapshot=await dossiers.get(id),record=await read();
-     return reply(200,{id,revision:record.revision,sourceVersion:snapshot.version,syncedAt:new Date(snapshot.syncedAt).toISOString(),stale:snapshot.stale,refreshing:snapshot.refreshing,syncFailed:snapshot.syncFailed,dossier:mergeDossier(snapshot.data,record.state.dossiers?.[id])});
+     const snapshot=await dossiers.get(id),record=await read(),dossier=mergeDossier(snapshot.data,record.state.dossiers?.[id]);if(dossier.todos.some(t=>t.tag==='hotel'&&!t.component&&!t.review&&!t.archived)){try{const catalog=await hotels(),matches=hotelMatches(dossier,catalog.hotels,record.state.dossiers?.[id]?.components);for(const t of dossier.todos)if(matches[t.id])t.hotelMatch=matches[t.id];}catch{dossier.hotelMatchUnavailable=true;}}
+     return reply(200,{id,revision:record.revision,sourceVersion:snapshot.version,syncedAt:new Date(snapshot.syncedAt).toISOString(),stale:snapshot.stale,refreshing:snapshot.refreshing,syncFailed:snapshot.syncFailed,dossier});
     }
     if(path==='/api/state'){
      const who=await actor(req),record=await read(),snapshot=await bookingCache.get(),today=dayInAmsterdam(new Date(clock())),bookingVersion=snapshot.version+':'+today;
      const meta={version:'0.3',revision:record.revision,csrf:csrf(req),bookingVersion,syncedAt:new Date(snapshot.syncedAt).toISOString(),refreshing:snapshot.refreshing,stale:snapshot.stale,syncFailed:snapshot.failed};
      if(url.searchParams.get('bookingVersion')===bookingVersion&&url.searchParams.get('revision')===String(record.revision))return reply(200,{...meta,unchanged:true});
-     const list=snapshot.bookings.map(({photo,payments,updated,...b})=>({...b,hasPhoto:!!photo,photoVersion:photo?new URL(photo).pathname.split('/').pop():null,payment:paymentSummary(payments,today)}));
+     const list=snapshot.bookings.map(({photo,payments,updated,hotelTodos,hotelTodosUnindexed,...b})=>({...b,hasPhoto:!!photo,photoVersion:photo?new URL(photo).pathname.split('/').pop():null,payment:paymentSummary(payments,today)}));
      const search=(url.searchParams.get('q')||'').slice(0,160),pages=(url.searchParams.get('pages')||'').split(',').map(Number);
      return reply(200,{...meta,rows:selectRows(list,record.state.preferences[who]||defaultRows,pages,search),statuses:[...new Set([...statuses,...list.map(b=>b.status)])],customers:record.state.customers,links:record.state.links,notes:record.state.notes,bookings:list});
     }
@@ -129,6 +131,11 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
     const history=await media.history(input.number,input.page);return reply(200,{enabled:true,calls:rinkel.history(history.rows),hasMore:history.hasMore});
    }
    const list=await bookings();
+   if(input.action==='match-hotels'){
+    const id=key(input.booking);if(!list.some(b=>b.id===id))invalid();const snapshot=await dossiers.get(id);if(snapshot.version!==input.sourceVersion)return reply(409,{error:'De bron is bijgewerkt. Heropen het dossier.'});
+    const catalog=await hotels(),local=record.state.dossiers?.[id]||{},matches=hotelMatches(mergeDossier(snapshot.data,local),catalog.hotels,local.components),links=Object.entries(matches).filter(([id,m])=>m.component&&!local.components?.[id]);
+    if(!links.length)return reply(200,{revision:record.revision});record.state.dossiers??={};record.state.dossiers[id]??={};record.state.dossiers[id].components={...local.components,...Object.fromEntries(links.map(([id,m])=>[id,{...m.component,automatic:true}]))};record.state.history.push({at:new Date(clock()).toISOString(),actor:who,action:'hotel-match',booking:id,count:links.length});record.state.history=record.state.history.slice(-500);return reply(200,{revision:await write(record.state,record.revision)});
+   }
    if(['reprice-preview','reprice-commit'].includes(input.action)){
     const id=key(input.booking);if(!list.some(b=>b.id===id))invalid();const snapshot=await dossiers.get(id);if(snapshot.version!==input.sourceVersion)return reply(409,{error:'De bron is bijgewerkt. Heropen het dossier.'});
     const [h,p]=await Promise.all([catalogs.get('hotels'),catalogs.get('interrail')]),plan=quoteChange(snapshot.data,record.state.dossiers?.[id]||{},input.edit,{hotels:h.data,interrail:p.data});
