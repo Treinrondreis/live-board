@@ -115,6 +115,11 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    let input;try{input=JSON.parse(Buffer.concat(parts).toString());}catch{return reply(400,{error:'Ongeldig verzoek.'});}
    if(!input||!Number.isSafeInteger(input.revision)||input.revision<0)invalid();
    const who=await actor(req),record=await read();if(input.revision!==record.revision)return reply(409,{error:'Gegevens zijn gewijzigd. Herlaad en controleer je keuze.'});
+   if(input.action==='rinkel-history'){
+    if(!media.configured)return reply(200,{enabled:false,calls:[]});
+    if(typeof input.number!=='string'||!/^\+[1-9]\d{7,14}$/.test(input.number)||!Number.isInteger(input.page)||input.page<1||input.page>100)invalid();
+    const history=await media.history(input.number,input.page);return reply(200,{enabled:true,calls:rinkel.history(history.rows),hasMore:history.hasMore});
+   }
    const list=await bookings();
    // Never trust a client-supplied source; only the authorized server snapshot can seed edits.
    if(input.action==='dossier'){

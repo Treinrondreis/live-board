@@ -68,3 +68,10 @@ test('extra number matches linked customer bookings without replacing the existi
  state.links={'fixture-one':'customer-one','fixture-two':'customer-one'};r=await service.poll({bookings:list,state});assert.equal(r.events[0].matches.length,2);
  await event(service,{data:payload('primary')});r=await service.poll({bookings:list,state});assert.equal(r.events.find(e=>e.id==='primary').matches[0].id,'fixture-one');
 });
+
+test('historical conversation can be linked without a current call and survives reload, but unverified ids cannot',()=>{
+ let time=now;const service=createRinkelIncoming({...options,clock:()=>time}),state=emptyReishuis();
+ const rows=service.history([{id:'history-fixture',at:now-86400000,phone:caller}]);assert.equal(rows.length,1);assert.ok(!JSON.stringify(rows).includes(caller));
+ service.linkCall(state,{call:'history-fixture',booking:'fixture-one',confirm:true,remember:true},bookings,'fixture');assert.equal(service.dossier(JSON.parse(JSON.stringify(state)),'fixture-one').calls[0].at,now-86400000);
+ time+=1800001;assert.throws(()=>service.linkCall(state,{call:'history-fixture',booking:'fixture-one',confirm:true,remember:false},bookings,'fixture'));
+});

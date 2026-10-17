@@ -14,3 +14,9 @@ test('audio proxy keeps temporary URL and credential server-side and rejects red
  const audio=await service.audio(call);assert.equal(audio.type,'audio/mpeg');assert.equal(audio.bytes.toString(),'fixture audio');assert.equal(requests[2].opts.headers,undefined);assert.equal(requests[2].opts.redirect,'error');
  let step=0;const hostile=createRinkelMedia({key:'fixture',allowedNumbers:number,fetcher:async()=>response(++step===1?record:{url:'https://evil.test/recording'})});await assert.rejects(hostile.audio(call));assert.equal(step,2);
 });
+
+test('historical lookup is exact-number scoped, paginated and excludes the third line',async()=>{
+ const external='+31990000002',rows=[{...record,date:'2026-10-01T12:00:00Z',externalNumber:{e164:external}},{...record,callId:'excluded',internalNumber:{number:'+31990000009'},externalNumber:{e164:external}},{...record,callId:'wrong-caller',externalNumber:{e164:'+31990000003'}}];
+ const service=createRinkelMedia({key:'fixture',allowedNumbers:number,fetcher:async(url,opts)=>{const u=new URL(url);assert.equal(opts.method,'GET');assert.equal(u.searchParams.get('externalNumber'),external);assert.equal(u.searchParams.get('perPage'),'25');assert.equal(u.searchParams.get('page'),'2');assert.equal(u.searchParams.get('contactLookup'),'false');return response(rows);}});
+ const result=await service.history(external,2);assert.equal(result.rows.length,1);assert.equal(result.rows[0].id,'fixture-call');assert.equal(result.hasMore,false);await assert.rejects(service.history('0990000002',2));await assert.rejects(service.history(external,0));
+});

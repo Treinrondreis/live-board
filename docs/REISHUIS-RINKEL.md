@@ -161,8 +161,10 @@ API-key of tijdelijke provider-URL in de browser. Afspelen vraagt de opname op
 bij api.rinkel.com/audio/call-recording/, weigert redirects/andere hosts en heeft
 een limiet van 40 MB. Samenvattingen en audio worden niet opgeslagen of naar een
 andere AI-dienst gestuurd. Dit is getest met fictieve providerantwoorden; echte
-providerverificatie wacht op goedgekeurde API-toegang. Historische gesprekken van
-vóór de aansluiting worden nog niet geïmporteerd.
+providerverificatie wacht op goedgekeurde API-toegang. Historische gesprekken kunnen per exact internationaal nummer worden opgezocht,
+met 25 per pagina. Alleen de twee toegestane lijnen worden doorgelaten. De
+medewerker bevestigt elke dossierkoppeling; er is geen bulkimport op basis van naam.
+Tijdelijke historische herkenningshashes blijven maximaal dertig minuten in geheugen.
 
 Exact één herkend dossier wordt via een geautoriseerde CSRF-beveiligde POST automatisch gekoppeld,
 zonder een extra herkenningsnummer op te slaan. Bij ambiguïteit wordt niets gekozen.

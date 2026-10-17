@@ -15,6 +15,12 @@ export function createRinkelMedia({key=process.env.RINKEL_READ_API_KEY||'',allow
   return data;
  }
  return {configured,
+  async history(number,page=1){
+   if(!configured||!/^\+[1-9]\d{7,14}$/.test(number)||!Number.isInteger(page)||page<1||page>100)throw Error('Gebruik een internationaal telefoonnummer.');
+   const params=new URLSearchParams({externalNumber:number,page:String(page),perPage:'25',contactLookup:'false',includeDetails:'false',sort:'date',sortOrder:'DESC'}),rows=await json('/call-detail-records?'+params);
+   if(!Array.isArray(rows)||rows.length>25)throw Error('Ongeldige gesprekshistorie.');
+   return {rows:rows.filter(r=>valid(r.callId)&&allowed.has(r.internalNumber?.number)&&r.externalNumber?.e164===number).map(r=>({id:r.callId,at:Date.parse(r.date),phone:number})).filter(r=>Number.isFinite(r.at)),hasMore:rows.length===25&&page<100};
+  },
   async info(call){
    const data=await details(call),summary=data.insights?.customSummary||data.insights?.summary;
    return {recording:valid(data.callRecording?.id),summary:typeof summary==='string'?summary.slice(0,12000):null};

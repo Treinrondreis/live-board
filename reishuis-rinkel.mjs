@@ -25,9 +25,9 @@ export async function fetchPhoneIndex({fetcher=fetch,config=sanityConfig()}={}){
 // bounded process memory. No audio, call history, raw caller numbers or API key.
 export function createRinkelIncoming({secret=process.env.RINKEL_WEBHOOK_SECRET||'',allowedNumbers=process.env.RINKEL_ALLOWED_NUMBERS||'',enabled=process.env.RINKEL_INCOMING_ENABLED==='1',fetchPhones=fetchPhoneIndex,clock=Date.now}={}){
  const allowed=new Set(String(allowedNumbers).split(',').map(n=>normalizePhone(n)).filter(Boolean));
- const configured=enabled&&/^[a-f0-9]{64}$/.test(secret)&&allowed.size>0,instance=randomUUID();let counter=0,events=[],seen=new Map(),index=null,pending,retry=0,loadedAt=0,failed=false;
+ const configured=enabled&&/^[a-f0-9]{64}$/.test(secret)&&allowed.size>0,instance=randomUUID();let counter=0,events=[],historical=new Map(),seen=new Map(),index=null,pending,retry=0,loadedAt=0,failed=false;
  const hash=number=>createHmac('sha256',secret).update('rinkel-phone-v1\0'+number).digest('hex');
- const prune=()=>{const now=clock();events=events.filter(e=>now-e.at<1800000);for(const [id,at] of seen)if(now-at>600000)seen.delete(id);};
+ const prune=()=>{const now=clock();events=events.filter(e=>now-e.at<1800000);for(const [id,e] of historical)if(now-e.loadedAt>=1800000)historical.delete(id);for(const [id,at] of seen)if(now-at>600000)seen.delete(id);};
  function refresh(){if(pending||clock()<retry)return;retry=clock()+30000;pending=(async()=>{const rows=await fetchPhones(),next=new Map();for(const r of rows){const phone=normalizePhone(r.phone,r.country);if(phone)next.set(r.id,hash(phone));}index=next;loadedAt=clock();failed=false;retry=clock()+300000;})().catch(()=>{failed=true;retry=clock()+30000;}).finally(()=>{pending=null;});}
  return {
   configured,
@@ -48,13 +48,17 @@ export function createRinkelIncoming({secret=process.env.RINKEL_WEBHOOK_SECRET||
     seen.set(data.id,clock());events.push({id:data.id,seq:++counter,at,fromHash:from?hash(from):null,lastFour:from?from.slice(-4):null});return reply(200);
    }catch{return reply(400);}
   },
+  history(rows){
+   prune();for(const r of rows){if(!/^[-a-zA-Z0-9_]{1,100}$/.test(r.id)||['__proto__','constructor','prototype'].includes(r.id))continue;const phone=normalizePhone(r.phone);if(!phone)continue;while(historical.size>=250)historical.delete(historical.keys().next().value);historical.set(r.id,{id:r.id,at:r.at,fromHash:hash(phone),lastFour:phone.slice(-4),loadedAt:clock()});}
+   return rows.filter(r=>historical.has(r.id)).map(({id,at})=>({id,at}));
+  },
   dossier(state,booking){
    return {calls:Object.values(state.rinkelCalls||{}).filter(c=>c.booking===booking).map(({id,at,linkedAt})=>({id,at,linkedAt})),numbers:(state.rinkelNumbers?.[booking]||[]).map(({id,lastFour})=>({id,lastFour}))};
   },
   linkCall(state,input,bookings,actor){
    const fail=(status=400)=>{const e=Error('Controleer de oproep en dossierkeuze.');e.status=status;throw e;};
    if(!configured||input.confirm!==true||!bookings.some(b=>b.id===input.booking)||typeof input.call!=='string'||typeof input.remember!=='boolean')fail();
-   prune();const call=events.find(e=>e.id===input.call);if(!call)fail(409);
+   prune();const call=events.find(e=>e.id===input.call)||historical.get(input.call);if(!call)fail(409);
    state.rinkelCalls||={};state.rinkelNumbers||={};
    const existing=state.rinkelCalls[call.id];if(existing&&existing.booking!==input.booking)fail(409);
    if(input.remember){
