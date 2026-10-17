@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Readable} from 'node:stream';
 import {DatabaseSync} from 'node:sqlite';
-import {fetchReishuisBookings,selectRows,dayInAmsterdam,imageURL,defaultRows} from './reishuis-data.mjs';
+import {fetchReishuisBookings,selectRows,dayInAmsterdam,imageURL,defaultRows,normalizeStatus} from './reishuis-data.mjs';
 import {createReishuisHandler,applyChange} from './reishuis.mjs';
 import {emptyReishuis,initReishuis,readReishuis,writeReishuis} from './reishuis-store.mjs';
 import {googleHasScope} from './google-access-state.mjs';
@@ -18,10 +18,12 @@ test('five-card paging, search, ordering and inclusive Amsterdam dates',()=>{
  rows=selectRows(list,defaultRows,[1]);assert.equal(rows[0].bookings[0].index,'7');assert.equal(selectRows(list,defaultRows,[],'12')[0].total,1);
  const travelling={...booking(),status:'afgehandeld'};assert.equal(selectRows([travelling],defaultRows,[],'','2026-10-17')[4].total,1);assert.equal(selectRows([travelling],defaultRows,[],'','2026-10-18')[4].total,1);assert.equal(selectRows([travelling],defaultRows,[],'','2026-10-19')[4].total,0);
  assert.equal(dayInAmsterdam(new Date('2026-10-16T22:30:00Z')),'2026-10-17');
+ assert.equal(normalizeStatus('wacht klant'),'wacht op reactie klant');
+ assert.equal(normalizeStatus('Wacht op reactie van klant'),'wacht op reactie klant');
 });
 test('Sanity reads page by page using GET only; draft override and narrow photo projection',async()=>{
  let n=0;const all=await fetchReishuisBookings({config:{project:'il9cyh3m',dataset:'production',token:'fixture'},fetcher:async(u,o)=>{
-  assert.equal(o.method,'GET');assert.equal(o.redirect,'error');assert.equal(u.searchParams.get('perspective'),'raw');assert.match(u.searchParams.get('query'),/trip->imagesWithData\[0\]\.image.asset->url/);assert.doesNotMatch(u.searchParams.get('query'),/documents|passengers|notes/);
+  assert.equal(o.method,'GET');assert.equal(o.redirect,'error');assert.equal(u.searchParams.get('perspective'),'raw');assert.match(u.searchParams.get('query'),/coalesce\(trip->imagesWithData\[0\]->image.asset->url,trip->imagesWithData\[0\]\.image.asset->url\)/);assert.doesNotMatch(u.searchParams.get('query'),/documents|passengers|notes/);
   n++;return {ok:true,json:async()=>({result:n===1?Array.from({length:100},(_,i)=>({_id:'a'+String(i).padStart(3,'0'),index:i,firstName:'Fictief'})):[{_id:'drafts.a000',index:0,firstName:'Concept'}]})};
  }});assert.equal(n,2);assert.equal(all.length,100);assert.equal(all.find(b=>b.id==='a000').name,'Concept');assert.equal(imageURL('https://evil.test/image.jpg'),null);assert.equal(imageURL('https://cdn.sanity.io/files/il9cyh3m/production/anything.pdf'),null);
 });
