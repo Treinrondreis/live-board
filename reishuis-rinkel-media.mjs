@@ -4,7 +4,11 @@ export function createRinkelMedia({key=process.env.RINKEL_READ_API_KEY||'',allow
  const configured=!!key&&allowed.size>0;
  const valid=id=>typeof id==='string'&&/^[-a-zA-Z0-9_]{1,100}$/.test(id);
  async function json(path){
-  const r=await fetcher('https://api.rinkel.com/v1'+path,{method:'GET',redirect:'error',headers:{Authorization:'Bearer '+key,Accept:'application/json'},signal:AbortSignal.timeout(15000)});
+  const options=headers=>({method:'GET',redirect:'error',headers,signal:AbortSignal.timeout(15000)});
+  let r=await fetcher('https://api.rinkel.com/v1'+path,options({Authorization:'Bearer '+key,Accept:'application/json'}));
+  // Rinkel documents the legacy header as supported. One read-only fallback
+  // handles accounts whose endpoint has not adopted Bearer API-key auth yet.
+  if([401,403,500].includes(r.status)){await r.body?.cancel();r=await fetcher('https://api.rinkel.com/v1'+path,options({'x-rinkel-api-key':key,Accept:'application/json'}));}
   if(!r.ok){const e=Error('Rinkel API request failed');e.rinkelStatus=r.status;throw e;}
   const body=await r.text();if(body.length>1024*1024)throw Error('Ongeldig antwoord.');return JSON.parse(body).data;
  }
