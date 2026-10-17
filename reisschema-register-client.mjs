@@ -49,6 +49,9 @@ export function createRegisterClient({baseUrl, token, fetcher=fetch}={}) {
     if(legIds!==undefined)body.leg_ids=legIds;
     return request('/v1/versions/'+versionId+'/checks',{body});
   }
-  return Object.freeze({findLegs,recordCheck});
+  async function recordLegEvent(versionId,kind,event){
+    if(!/^[a-f0-9-]{36}$/.test(versionId)||!['observation','communication'].includes(kind)||!event||typeof event!=='object')throw Error('Ongeldige ritmelding.');
+    return request('/v1/versions/'+versionId+'/leg-events',{body:{kind,event}});
+  }
+  return Object.freeze({findLegs,recordCheck,recordLegEvent});
 }
-

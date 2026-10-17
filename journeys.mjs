@@ -144,6 +144,14 @@ export async function getJourney(train,date,journeyId){
  if(history.length){const fresh=backend==='postgresql'?(await pool.query(sql,[id])).rows[0]:sqlite.prepare(sql.replace('$1','?')).get(id);state=JSON.parse(fresh.state_json);}
  return state;
 }
+// Pure read for itinerary comparisons; never recovers or writes measurements.
+export async function journeyPlansForDate(train,date){
+ if(!backend)return [];
+ const previous=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10);
+ const sql='SELECT state_json FROM journey_archive WHERE train_number=$1 AND service_date >= $2 AND service_date <= $3';
+ const rows=backend==='postgresql'?(await pool.query(sql,[train,previous,date])).rows:sqlite.prepare(sql.replace(/\$\d+/g,'?')).all(train,previous,date);
+ return rows.map(r=>JSON.parse(r.state_json)).filter(Boolean);
+}
 export async function listJourneys(train){
  const sql='SELECT journey_id,train_number,service_date,first_seen_at,last_seen_at FROM journey_archive WHERE train_number=$1 ORDER BY service_date';
  return backend==='postgresql'?(await pool.query(sql,[train])).rows:sqlite.prepare(sql.replace('$1','?')).all(train);
