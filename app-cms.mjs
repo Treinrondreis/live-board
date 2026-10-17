@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {XMLParser} from 'fast-xml-parser';
 import {adminAuthenticated} from './admin-security.mjs';
+import {adminUiNavigation} from './admin-ui-navigation.mjs';
 import {readAppContent,writeAppContent} from './board-cache.mjs';
 import {parseTrips,plain} from './tr-app-content.mjs';
 
@@ -92,7 +93,7 @@ const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application
 async function input(req){let size=0,parts=[];for await(const b of req){size+=b.length;if(size>500000)bad('Inhoud te groot.');parts.push(b);}return JSON.parse(Buffer.concat(parts).toString());}
 export async function handleAppCms(req,res,url){
  const p=url.pathname;
- if(!p.startsWith('/api/app-content/')&&!p.startsWith('/seinhuis/paginas')&&!['/app/cms-render.js','/app/cms.css'].includes(p))return false;
+ if(!p.startsWith('/api/app-content/')&&!p.startsWith('/seinhuis/paginas')&&!['/seinhuis/treinreiziger','/seinhuis/treinreiziger/','/app/cms-render.js','/app/cms.css'].includes(p))return false;
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
  try{
   const publicAssets={'/app/cms-render.js':'app-cms-render.js','/app/cms.css':'app-cms.css'};
@@ -105,10 +106,15 @@ export async function handleAppCms(req,res,url){
    if(!config?.pages.some(p=>p.sections.some(s=>s.kind==='feed'&&s.feed===feed))){json(res,403,{error:'Feed is niet gepubliceerd.'});return true;}
    json(res,200,await getCmsFeed(feed));return true;
   }
-  if(!authenticated){if(p==='/seinhuis/paginas'){res.writeHead(302,{Location:'/seinhuis'});res.end();}else json(res,401,{error:'Log opnieuw in via /seinhuis.'});return true;}
-  if(p==='/seinhuis/paginas'||p==='/seinhuis/paginas.js'){
+  if(!authenticated){if(['/seinhuis/paginas','/seinhuis/treinreiziger','/seinhuis/treinreiziger/'].includes(p)){res.writeHead(302,{Location:'/seinhuis'});res.end();}else json(res,401,{error:'Log opnieuw in via /seinhuis.'});return true;}
+  const adminAssets={'/seinhuis/paginas.js':['app-cms-admin.js','text/javascript; charset=utf-8'],'/seinhuis/paginas.css':['app-cms-admin.css','text/css; charset=utf-8']};
+  if(['/seinhuis/paginas','/seinhuis/treinreiziger','/seinhuis/treinreiziger/'].includes(p)||adminAssets[p]){
+   if(req.method!=='GET'){json(res,405,{error:'Deze methode is niet toegestaan.'});return true;}
    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-   res.writeHead(200,{'Content-Type':p.endsWith('.js')?'text/javascript':'text/html; charset=utf-8'});res.end(await readFile(new URL(p.endsWith('.js')?'app-cms-admin.js':'app-cms-admin.html',import.meta.url)));return true;
+   res.setHeader('X-Frame-Options','DENY');
+   if(adminAssets[p]){const [file,type]=adminAssets[p];res.writeHead(200,{'Content-Type':type});res.end(await readFile(new URL(file,import.meta.url)));return true;}
+   const html=(await readFile(new URL('app-cms-admin.html',import.meta.url),'utf8')).replace('<!--TR_GLOBAL_NAV-->',await adminUiNavigation(req,'treinreiziger'));
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html);return true;
   }
   if(req.method==='GET'&&p==='/api/app-content/draft'){json(res,200,{revision:record.revision,...value});return true;}
   if(req.method==='POST'&&['/api/app-content/save','/api/app-content/publish'].includes(p)){

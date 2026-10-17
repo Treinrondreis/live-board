@@ -1,6 +1,6 @@
 # Seinhuis content management
 
-Open `/seinhuis`, sign in with the existing protected owner account, then choose **Pagina’s en inhoud beheren**.
+Open `/seinhuis`, sign in with an account permitted to manage Treinreiziger, then choose **Treinreiziger**. Its shared-style workspace offers an overview, Pages, App navigation, and Feeds and sources. `/seinhuis/paginas` remains a direct entry to the page editor. Module links in the top bar follow the existing server permissions; the left navigation belongs to Treinreiziger.
 
 The existing app content is prefilled as a draft. Saving does not change the public app. **Voorbeeld bekijken** saves the current draft and opens an authenticated preview. **Publiceren** atomically replaces the public configuration. The previous publication can be restored into a draft and reviewed before publishing again. Concurrent saves fail with a conflict instead of overwriting another session.
 

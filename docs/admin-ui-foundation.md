@@ -4,7 +4,7 @@ Versie 1.0.0. Voor Seinhuis, Stationschef, KM-trein, Treinreiziger, Boekjesmaker
 
 ## Opgeleverd
 
-De gedeelde basis staat in `public/admin-ui/`. De voorbeeldpagina is een componentencatalogus met fictieve gegevens, geen vervanging van een bestaand beheerscherm. Productiepagina's en hun routes zijn in deze stap niet aangepast. Ook rollen, rechten, opslag, leverancierscontroles en Sanity blijven buiten deze wijziging.
+De gedeelde basis staat in `public/admin-ui/`. De voorbeeldpagina is een componentencatalogus met fictieve gegevens, geen vervanging van een bestaand beheerscherm. Op verzoek is Treinreiziger de eerste concrete integratie: het bestaande pagina- en inhoudsbeheer gebruikt deze basis. De overige toepassingen zijn nog niet omgezet. Rollen, rechten, opslag, leverancierscontroles en Sanity worden niet gewijzigd.
 
 | Onderdeel | Afspraak |
 | --- | --- |
@@ -46,4 +46,4 @@ Technisch actief in de voorbeeldpagina: uitsluitend lokale assets, een CSP die n
 
 ## Volgende stappen
 
-Stap 2 maakt twee concrete proefpagina's met deze basis: Seinhuis en één FloRA-werkpagina. Pas na beoordeling daarvan volgt productie-integratie. In deze PR zijn daarom geen bestaande schermen omgezet en geen productie-uitrol of configuratiewijzigingen opgenomen.
+De gebruiker heeft Treinreiziger als eerste toepassing gekozen. Het omgezette beheer is lokaal te bekijken met `npm run preview:treinreiziger-admin`; dit gebruikt uitsluitend fictieve inhoud en een tijdelijke database. De concrete integratie en controles staan in `treinreiziger-admin-redesign.md`. Andere toepassingen volgen afzonderlijk. Er is geen automatische productie-uitrol of configuratiewijziging opgenomen.
