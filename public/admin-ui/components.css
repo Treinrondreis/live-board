@@ -92,6 +92,15 @@ body.tr-ui { margin: 0; }
 .tr-ui .tr-logo { width: 220px; max-width: 100%; height: auto; filter: brightness(0) invert(1); display: block; }
 .tr-ui .tr-header-title { font: 600 16px/1.4 var(--tr-font-heading); padding-left: 24px; border-left: 1px solid #ffffff80; }
 .tr-ui .tr-header-note { margin-left: auto; font-size: 14px; }
+.tr-ui .tr-global-nav { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: auto; overflow-x: auto; }
+.tr-ui .tr-global-nav a {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 46px;
+  padding: 10px 13px; border-radius: 10px; white-space: nowrap; color: white;
+  font: 600 14px/1.5 var(--tr-font-heading); text-decoration: none; border-bottom: 3px solid transparent;
+}
+.tr-ui .tr-global-nav a:hover { background: #ffffff12; }
+.tr-ui .tr-global-nav [aria-current='page'] { border-bottom-color: white; background: #ffffff12; }
+.tr-ui .tr-sidebar-title { font: 700 18px/1.4 var(--tr-font-heading); margin: 0 14px 20px; }
 .tr-ui .tr-header .tr-button { color: white; border-color: #ffffffb3; background: transparent; }
 .tr-ui .tr-header :where(a, button):focus-visible { outline-color: white; }
 .tr-ui .tr-layout { display: grid; grid-template-columns: var(--tr-sidebar-width) minmax(0, 1fr); max-width: 1720px; margin: auto; }
@@ -118,14 +127,16 @@ body.tr-ui { margin: 0; }
   .tr-ui .tr-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 850px) {
-  .tr-ui { --tr-header-height: 72px; }
-  .tr-ui .tr-header { flex-wrap: wrap; gap: 12px; padding: 14px 18px; }
+  .tr-ui { --tr-header-height: 120px; }
+  .tr-ui .tr-header { flex-wrap: wrap; gap: 8px 12px; padding: 12px 18px; }
   .tr-ui .tr-logo { width: 195px; }
   .tr-ui .tr-header-title { display: none; }
   .tr-ui .tr-layout { grid-template-columns: minmax(0, 1fr); }
   .tr-ui .tr-sidebar { display: none; position: static; height: auto; padding: 16px; border-bottom: 1px solid var(--tr-line); }
   .tr-ui.tr-menu-open .tr-sidebar { display: block; }
   .tr-ui .tr-menu-button { display: inline-flex; margin-left: auto; min-height: 44px; padding: 9px 12px; font-size: 14px; }
+  .tr-ui .tr-global-nav { order: 3; flex: 1 1 100%; width: 100%; margin: 0; }
+  .tr-ui .tr-global-nav a { min-height: 44px; padding: 9px 12px; }
   .tr-ui .tr-main { padding: 24px 18px 48px; }
   .tr-ui .tr-card { padding: 20px; }
 }
@@ -144,4 +155,6 @@ body.tr-ui { margin: 0; }
   .tr-ui .tr-logo { filter: none; }
   .tr-ui .tr-header .tr-button { color: ButtonText; border-color: ButtonText; }
   .tr-ui .tr-nav [aria-current='page'] { outline: 2px solid Highlight; }
+  .tr-ui .tr-global-nav a { color: LinkText; }
+  .tr-ui .tr-global-nav [aria-current='page'] { outline: 2px solid Highlight; }
 }

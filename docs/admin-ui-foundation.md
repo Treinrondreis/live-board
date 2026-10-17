@@ -11,7 +11,7 @@ De gedeelde basis staat in `public/admin-ui/`. De voorbeeldpagina is een compone
 | Merk | Blauw-groene bovenbalk; bestaande productnamen en logo's behouden |
 | Typografie | Montserrat voor koppen en knoppen, Open Sans voor tekst en invoer; lokaal geladen |
 | Leesbaarheid | Basis 16px; secundaire labels minimaal 14px; bediening minstens 44px hoog |
-| Opbouw | Vaste bovenbalk, zijmenu op desktop, uitklapbare navigatie op mobiel, witte werkvlakken |
+| Opbouw | Vaste bovenbalk met de zes onderdelen; links uitsluitend het menu van het gekozen onderdeel; op mobiel een schuifbare onderdeelkeuze boven en een afzonderlijke menuknop; witte werkvlakken |
 | Hoofdactie | Eén opvallende blauwe knop per werkvlak; rustige nevenacties |
 | Status | Rood: concrete afwijking. Oranje: beoordeling nodig. Groen: controle geslaagd. Altijd een tekstlabel |
 | Formulieren | Zichtbare labels, hulptekst, fouttekst verbonden via `aria-describedby`, `aria-invalid` bij fouten |
@@ -33,7 +33,7 @@ De bibliotheek bevat geen verplicht framework, geen externe diensten en geen alg
 
 Met Node 24: `node scripts/preview-admin-ui.mjs`. Open de getoonde lokale URL. De server luistert alleen op de lokale computer en bedient uitsluitend bestanden uit de voorbeeldmap. Met `PORT` kan een andere poort worden gekozen.
 
-De navigatielinks in de catalogus springen naar componentvoorbeelden. In productie moet de navigatie aansluiten op de bestaande servercontrole van rollen en toegestane onderdelen; een verborgen menu-item is geen toegangsbeveiliging.
+De bovenbalk wisselt in de catalogus tussen voorbeeldmenu's voor de zes onderdelen. Het linkermenu toont uitsluitend opties van het gekozen onderdeel en springt naar componentvoorbeelden. Deze keuze haalt geen productieschermen of gegevens op. In productie moet de navigatie aansluiten op de bestaande servercontrole van rollen en toegestane onderdelen; een verborgen menu-item is geen toegangsbeveiliging.
 
 ## Controle en gegevensbescherming
 

@@ -16,27 +16,32 @@
   <a class="tr-skip" href="#inhoud">Naar de inhoud</a>
   <header class="tr-header">
     <img class="tr-logo" src="./logo.svg" width="220" height="31" alt="Treinrondreis.nl">
-    <span class="tr-header-title">Seinhuis <span aria-hidden="true">/</span> Stijlbasis</span>
-    <span class="tr-header-note">Eén herkenbare omgeving</span>
-    <button class="tr-button tr-menu-button" type="button" aria-controls="onderdelen" aria-expanded="false">Onderdelen</button>
+    <nav class="tr-global-nav" aria-label="Onderdelen">
+      <a href="#overzicht" data-module="seinhuis" aria-current="page">Seinhuis</a>
+      <a href="#overzicht" data-module="stationschef">Stationschef</a>
+      <a href="#overzicht" data-module="km">KM-trein</a>
+      <a href="#overzicht" data-module="treinreiziger">Treinreiziger</a>
+      <a href="#overzicht" data-module="boekjesmaker">Boekjesmaker</a>
+      <a href="#overzicht" data-module="flora">FloRA</a>
+    </nav>
+    <button class="tr-button tr-menu-button" type="button" aria-controls="onderdelen" aria-expanded="false">Menu</button>
   </header>
   <div class="tr-layout">
     <aside class="tr-sidebar" id="onderdelen">
-      <nav class="tr-nav" aria-label="Onderdelen · voorbeeld">
-        <a href="#overzicht" aria-current="page"><span class="spec-nav-symbol" aria-hidden="true">⌂</span>Seinhuis</a>
-        <a href="#werkoverzicht"><span class="spec-nav-symbol" aria-hidden="true">⇄</span>Stationschef</a>
-        <a href="#werkoverzicht"><span class="spec-nav-symbol" aria-hidden="true">⚑</span>KM-trein</a>
-        <a href="#bediening"><span class="spec-nav-symbol" aria-hidden="true">▤</span>Treinreiziger</a>
-        <a href="#formulieren"><span class="spec-nav-symbol" aria-hidden="true">▥</span>Boekjesmaker</a>
-        <a href="#statussen"><span class="spec-nav-symbol" aria-hidden="true">✓</span>FloRA</a>
+      <h2 class="tr-sidebar-title" id="module-title">Seinhuis</h2>
+      <nav class="tr-nav" aria-label="Menu Seinhuis">
+        <a href="#overzicht" aria-current="page">Overzicht</a>
+        <a href="#bediening">Onderdelen</a>
+        <a href="#werkoverzicht">Recente activiteit</a>
+        <a href="#formulieren">Toegang en beveiliging</a>
       </nav>
-      <p class="tr-sidebar-note">Dit is de gezamenlijke stijlbasis. De links tonen voorbeelden van de bediening.</p>
+      <p class="tr-sidebar-note">Het menu hoort bij het gekozen onderdeel. De links tonen voorbeelden uit deze stijlbasis.</p>
     </aside>
     <main class="tr-main tr-stack" id="inhoud" tabindex="-1">
       <section id="overzicht">
         <div class="tr-breadcrumb">Ontwerpvoorstel / Gezamenlijke basis</div>
         <div class="tr-page-heading">
-          <div class="tr-split"><p class="tr-eyebrow">SEINHUIS · STIJLBASIS 1.0</p><span class="tr-badge">Voorbeeld met fictieve gegevens</span></div>
+          <div class="tr-split"><p class="tr-eyebrow" id="module-label">Seinhuis · Stijlbasis 1.0</p><span class="tr-badge">Voorbeeld met fictieve gegevens</span></div>
           <h1 class="tr-title tr-gradient-title">Alles op één vertrouwde plek.</h1>
           <p class="tr-muted">Dezelfde kleuren, duidelijke knoppen en goed leesbare schermen voor alle zes onderdelen.</p>
         </div>

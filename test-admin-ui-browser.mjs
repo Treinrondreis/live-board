@@ -15,25 +15,33 @@ try{
   assert.equal(await page.evaluate(()=>document.fonts.check('600 16px "TR Montserrat"')),true);
   await page.keyboard.press('Tab');assert.equal(await page.locator('.tr-skip').evaluate(e=>e===document.activeElement),true);
   await page.keyboard.press('Enter');assert.equal(await page.locator('#inhoud').evaluate(e=>e===document.activeElement),true);
+  const globalNavigation=page.getByRole('navigation',{name:'Onderdelen',exact:true});
+  await globalNavigation.getByRole('link',{name:'Stationschef',exact:true}).focus();await page.keyboard.press('Enter');
+  await page.getByRole('navigation',{name:'Menu Stationschef',exact:true}).getByRole('link',{name:'Vertrekborden',exact:true}).waitFor();
+  await globalNavigation.getByRole('link',{name:'FloRA',exact:true}).click();
+  assert.equal(await globalNavigation.getByRole('link',{name:'FloRA',exact:true}).getAttribute('aria-current'),'page');
+  await page.getByRole('navigation',{name:'Menu FloRA',exact:true}).getByRole('link',{name:'Meldingen',exact:true}).waitFor();
+  assert.equal(await page.locator('.tr-nav [data-module]').count(),0);
   await page.getByRole('searchbox').fill('boekje');await page.locator('#result-count').getByText('1 voorbeeld',{exact:true}).waitFor();
   await page.getByRole('combobox',{name:'Status',exact:true}).selectOption('alarm');await page.locator('#empty').waitFor({state:'visible'});
   await page.getByRole('button',{name:'Filters wissen'}).click();assert.equal(await page.locator('#result-count').innerText(),'3 voorbeelden');
   await page.getByRole('button',{name:'Bekijken',exact:true}).first().click();await page.locator('#example-detail').waitFor({state:'visible'});
   await page.getByRole('button',{name:'Compacte weergave'}).click();assert.equal(await page.locator('#density').getAttribute('aria-pressed'),'true');
   await page.getByRole('button',{name:'Voorbeeld opslaan'}).click();assert.match(await page.locator('#save-feedback').innerText(),/geen gegevens opgeslagen/);
-  if(process.env.ADMIN_UI_SCREENSHOTS){await mkdir(process.env.ADMIN_UI_SCREENSHOTS,{recursive:true});await page.goto(origin);await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(process.env.ADMIN_UI_SCREENSHOTS,'stijlbasis-desktop.png'),fullPage:true});await page.screenshot({path:join(process.env.ADMIN_UI_SCREENSHOTS,'stijlbasis-overzicht.png')});}
+  if(process.env.ADMIN_UI_SCREENSHOTS){await mkdir(process.env.ADMIN_UI_SCREENSHOTS,{recursive:true});await page.goto(origin);await page.evaluate(()=>document.fonts.ready);await globalNavigation.getByRole('link',{name:'FloRA',exact:true}).click();await page.screenshot({path:join(process.env.ADMIN_UI_SCREENSHOTS,'stijlbasis-desktop.png'),fullPage:true});await page.screenshot({path:join(process.env.ADMIN_UI_SCREENSHOTS,'stijlbasis-overzicht.png')});}
   for(const width of [850,390,320]){
     await page.setViewportSize({width,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no page overflow at '+width);
-    const toggle=page.getByRole('button',{name:'Onderdelen',exact:true});await toggle.click();
+    await globalNavigation.getByRole('link',{name:'FloRA',exact:true}).click();
+    const toggle=page.getByRole('button',{name:'Menu',exact:true});await toggle.click();
     assert.equal(await toggle.getAttribute('aria-expanded'),'true');
-    await page.getByRole('navigation').getByRole('link',{name:'FloRA',exact:true}).focus();await page.keyboard.press('Escape');
+    await page.getByRole('navigation',{name:'Menu FloRA',exact:true}).getByRole('link',{name:'Geschiedenis',exact:true}).focus();await page.keyboard.press('Escape');
     assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await toggle.evaluate(e=>e===document.activeElement),true);
-    await toggle.click();await page.getByRole('navigation').getByRole('link',{name:'FloRA',exact:true}).click();
+    await toggle.click();await page.getByRole('navigation',{name:'Menu FloRA',exact:true}).getByRole('link',{name:'Geschiedenis',exact:true}).click();
     assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#statussen').evaluate(e=>e===document.activeElement),true);
     assert.equal(await toggle.evaluate(e=>e.getBoundingClientRect().height>=44),true);
   }
-  if(process.env.ADMIN_UI_SCREENSHOTS){await page.setViewportSize({width:390,height:844});await page.goto(origin);await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(process.env.ADMIN_UI_SCREENSHOTS,'stijlbasis-mobiel.png'),fullPage:true});}
+  if(process.env.ADMIN_UI_SCREENSHOTS){await page.setViewportSize({width:390,height:844});await page.goto(origin);await page.evaluate(()=>document.fonts.ready);await globalNavigation.getByRole('link',{name:'FloRA',exact:true}).click();await page.getByRole('button',{name:'Menu',exact:true}).click();await page.screenshot({path:join(process.env.ADMIN_UI_SCREENSHOTS,'stijlbasis-mobiel.png'),fullPage:true});}
   assert.deepEqual(errors,[]);assert.equal(requests.every(r=>r.origin===origin&&r.method==='GET'),true,'local assets only, no writes');
   // Loading the library must not change an existing screen outside its opt-in root.
   const isolated=await browser.newPage();await isolated.goto(origin);
