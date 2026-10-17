@@ -9,10 +9,56 @@ departure, Interrail delivery, waiting for customer and travelling now. Travelli
 means status `afgehandeld` and departure <= today <= return in Europe/Amsterdam.
 The server reads Sanity with GET and raw cursor pagination, preferring draft
 records over their published counterpart. Projection contains booking identity,
-name, status, dates and `trip->imagesWithData[0]->image.asset->url` only (with an
-embedded-image fallback). The legacy status `wacht klant` maps to the waiting row.
-Reads refresh at most once per minute per running instance; the UI refreshes every
-minute when visible and outside editing dialogs. There is no Sanity write path.
+name, status, dates, minimal payment amounts/statuses/deadlines and
+`trip->imagesWithData[0]->image.asset->url` (with an embedded-image fallback).
+Payment URLs are projected to a boolean; provider IDs, dashboard URLs, fulfillment
+notes and other customer details are not fetched. The legacy status `wacht klant`
+maps to the waiting row. There is no Sanity write path.
+
+## Fast loading and status/payment filters
+
+The last complete booking projection is stored in `reishuis_booking_snapshot` in
+the existing Postgres database. Opening, F5, another approved browser and a server
+restart reuse that central snapshot immediately. Only an empty initial snapshot
+waits for the first Sanity import. A stale snapshot is returned while a single
+background read refreshes it; failed or incomplete reads do not replace the last
+successful snapshot. Errors use a 30-second retry delay. Refreshes are coalesced
+per running server; the existing production service has one replica. This is not
+a background automation: authorized requests trigger refreshes when needed.
+
+Searching, filtering and paging run on the already-authorized in-memory browser
+dataset, using the same presentation logic as the server. All current and future
+source statuses can be selected or assigned to dashboard rows. Searching and
+payment filtering switch to a unified result list across all statuses unless a
+particular status is selected. No browser localStorage, IndexedDB or service
+worker stores customer data. Each new page still authenticates and reads the
+shared snapshot through the protected API.
+
+Minute polls compare the booking version and edit revision; unchanged replies
+contain only small metadata and preserve existing card/photo elements. During a
+background update the UI polls every three seconds for completion. Open editors
+and hidden pages only perform the lightweight role/session check every minute;
+revoked/expired access clears already-rendered data without changing form revisions.
+Photo downloads are coalesced and cached only behind authorization in bounded
+server memory (64 images / 24 MB / one day). Responses remain private/no-store;
+browser/public caching does not bypass role checks.
+
+Payment lights summarize **registered payment requests**, not the invoice total
+or proof of an email being delivered: grey = no active registered request, green
+= all request amounts paid, yellow = some paid with amounts outstanding, red =
+nothing paid. Fulfillment amounts take priority; a legacy `paid` status without
+fulfillments settles that request. Refund amounts reduce paid amounts, and an
+overpayment on one request does not silently settle another. Invalid amounts
+produce a separate grey "Betaling controleren" state and filter.
+Manual requests count even without a checkout link. "Zonder betaallink" includes
+manual and absent requests. "Te laat" means an outstanding request whose valid
+due calendar day in Europe/Amsterdam has passed, including partially paid requests.
+Missing deadlines are reported and never invented. Cancelled/void requests are
+excluded. Booking dates use `dateCreated`, falling back to `_createdAt`.
+
+Cards have a 90px photo (74px on narrow screens), a prominent number without `#`,
+name and departure in two lines to its right, a subtle booking date and a labelled
+payment light. Color is accompanied by text; overdue gets a separate badge.
 
 ## Access and data boundaries
 
@@ -37,7 +83,10 @@ minute when visible and outside editing dialogs. There is no Sanity write path.
 The `reishuis_state` table is created lazily on first authorized use, using the
 existing storage adapter (Postgres in production, SQLite for tests). It stores
 customers, booking-to-customer links, notes, personal row settings, a revision and
-the last 500 edit actions. Sanity booking snapshots remain only in server memory.
+the last 500 edit actions. The separate booking snapshot stores only the narrow
+read projection, including payment amounts/deadlines needed for the requested
+filters, within the same protected database. This changes storage scope from
+process memory to persistent central storage; it does not create public access.
 The single-row CAS prevents lost updates across sessions and replicas. Initial
 rollout is intended for the existing small internal dataset; this is not a bulk CRM.
 
