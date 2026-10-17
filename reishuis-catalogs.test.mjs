@@ -23,3 +23,11 @@ test('timer ticks bootstrap once, skip already checked slots, and keep Interrail
  let now=Date.parse('2026-10-17T05:00:00Z');const saved=new Map(),calls=[];const service=createCatalogService({clock:()=>now,read:async k=>saved.get(k),write:async(k,v)=>saved.set(k,v),manifest:async kind=>{calls.push(kind);return [];},documents:async()=>[]});await service.tick();await service.tick();assert.deepEqual(calls,['hotels','interrail']);now=Date.parse('2026-10-17T06:15:00Z');await service.tick();await service.tick();assert.deepEqual(calls,['hotels','interrail','hotels']);now=Date.parse('2026-10-17T10:15:00Z');await service.tick();assert.equal(calls.at(-1),'hotels');assert.equal(calls.filter(k=>k==='interrail').length,1);
 });
 test('catalog snapshots persist independently from dossiers in SQLite/Postgres-compatible store',async()=>{const sqlite=new DatabaseSync(':memory:');initReishuis({sqlite});await writeCatalog('hotels',{data:[{id:'fixture'}],checkedAt:100,version:'fixture'});initReishuis({sqlite});assert.equal((await readCatalog('hotels')).data[0].id,'fixture');assert.equal(await readCatalog('interrail'),null);sqlite.close();});
+
+
+test('hotel catalog upgrades short-name projection once even when source dates are unchanged; failed upgrades retain the old catalog',async()=>{
+ const legacy={entries:[{sourceId:'fixture',id:'fixture',updatedAt:'one',title:'Voorbeeld'}],data:[{id:'fixture',title:'Voorbeeld'}],version:'old',checkedAt:1};let saved=structuredClone(legacy),calls=0;
+ const service=createCatalogService({read:async()=>saved,write:async(k,v)=>{saved=v;},manifest:async()=>[{_id:'fixture',_updatedAt:'one'}],documents:async()=>{calls++;return [{...legacy.entries[0],titleShort:'Kort voorbeeld'}];}});
+ assert.equal((await service.get('hotels')).data[0].titleShort,'Kort voorbeeld');assert.equal(saved.formatVersion,2);await service.get('hotels');assert.equal(calls,1);
+ const failed=createCatalogService({read:async()=>legacy,write:async()=>assert.fail('no incomplete snapshot'),manifest:async()=>{throw Error('fixture outage');}});assert.equal((await failed.get('hotels')).version,'old');
+});

@@ -1,7 +1,7 @@
 # Lokale onderdelen, tarieven en herberekenen
 
 ## Bediening
-Open een todo, vervolgens Onderdeel wijzigen en herberekenen. Kies bij de eerste wijziging expliciet de financiële regel: bronregels hebben geen betrouwbare onderlinge referentie. Reishuis onthoudt de koppeling. Een financiële regel mag niet bij twee taken horen. Een bestaande koppeling wordt niet stilzwijgend naar een andere regel verplaatst.
+Open een todo, vervolgens Onderdeel wijzigen en herberekenen. Bij het openen van een dossier koppelt Reishuis hotel-todo’s automatisch wanneer korte/lange hotelnaam, datum en financiële regel eenduidig overeenkomen. De koppeling wordt via een beveiligde POST lokaal opgeslagen, zonder bedrag of todo-status te wijzigen. Bij ontbrekende of dubbele matches kiest de gebruiker de financiële regel zelf. Reishuis onthoudt de koppeling. Een financiële regel mag niet bij twee taken horen. Een bestaande koppeling wordt niet stilzwijgend naar een andere regel verplaatst.
 
 Naam aanpassen behoudt het bestaande totaal, of gebruikt een expliciet handmatig totaal. Hotelwijzigingen kiezen hotel, kamer, check-in/check-out of aantal nachten, aantal kamers en een leverancier/maaltijdtype. Alleen een exact APO-tarief per verblijfsnacht wordt gebruikt, check-out exclusief. Bij ontbrekende of dubbele tarieven is een handmatig totaal nodig; er is geen gok op een andere kamer/leverancier. Er worden geen marges, kortingen of ontbijtbedragen bij verzonnen. Een handmatig totaal kan eventuele toeslagen bevatten.
 
@@ -15,7 +15,7 @@ Een nieuwe berekende prijs wordt als totaal voor dit onderdeel opgeslagen (finan
 
 Een inhoudelijk gewijzigde afgeronde taak krijgt een nieuwe actieve versie en een bewaarde oude versie met uitroepteken. Na aanvinken van de controle gaat de oude versie onderaan als Gearchiveerd. De historie is lokaal en alleen-lezen; oude financiële snapshots tellen niet mee in de reissom. De status van lokaal herberekende taken wordt lokaal vastgehouden zodat een latere statuswijziging van de oude Sanity-taak niet de nieuwe versie afvinkt.
 
-Hotelpagina openen gaat bij een gekoppeld hotel direct naar de lokale hotelpagina. Bij oudere ongekoppelde hotel-todo’s opent het hoteloverzicht met een zoekvoorstel; er wordt niet op een mogelijk ambigue naam automatisch gekoppeld.
+Hotelpagina openen gaat bij een gekoppeld hotel direct naar de lokale hotelpagina. Bij een uniek herkende korte of lange hotelnaam opent ook een oudere hotel-todo direct het hotel. Bij een ambigue naam opent het hoteloverzicht met een zoekvoorstel.
 
 ## Tariefopslag en planning
 Een aparte reishuis_catalog-tabel in de bestaande Postgres-opslag bewaart volledige laatste succesvolle catalogi en de bijgewerkte bronrecords. Geen productiegegevens of exports in Git. De eerste ingebruikname leest beide catalogi; een serverherstart hergebruikt de opslag.
@@ -31,3 +31,11 @@ Tests gebruiken uitsluitend fictieve gegevens. Aanvullende unit- en browsertests
 
 ## Niet-beschikbare hotelnachten
 Een APO-hoteltarief van nul (of afgerond minder dan één cent) betekent niet beschikbaar. Eén onbeschikbare nacht blokkeert de volledige automatische verblijfsprijs en de bevestiging; de nieuwe reissom blijft onbekend in plaats van naar nul te dalen. De kalender markeert dit met × Niet beschikbaar. De gebruiker kan bewust kiezen voor Toch wijzigen? Handmatig tarief invullen, moet een positief totaal in eurocenten invullen en de beschikbaarheidswaarschuwing bevestigen. Dit geldt ook voor meegeschoven vervolghotels. Gratis Interrail-varianten blijven toegestaan. Er worden geen bestaande klantboekingen of Sanity-records automatisch gecorrigeerd.
+
+
+## Boekingen op de hotelpagina
+De beschermde hotelpagina toont verblijven met check-in, check-out, aantal kamers, boekingsnummer en klantnaam. Het boekingsnummer opent het dossier in een nieuw tabblad. Komende/huidige verblijven, eerdere verblijven en geannuleerde boekingen hebben aparte selecties; sortering is op check-in, 25 verblijven per pagina. Lokale hotel-, datum- en kamerwijzigingen gaan voor de Sanity-bron; oude controletaken en gearchiveerde taken tellen niet nogmaals mee. Onbekende datums of aantallen worden als onbekend/te controleren getoond. Ambigue namen worden niet automatisch gekoppeld.
+
+De bestaande gedeelde boekingssnapshot bevat hiervoor alleen minimale hotel-todo-velden (sleutel, titel, datums, aantal), geen aantekeningen, reserveringsnummers of contactgegevens. Deze velden worden niet met het gewone dashboard meegestuurd. Alleen de beschermde hotelverblijven-API geeft de gevraagde paginaselectie terug. Oude taken zonder unieke sleutel worden overgeslagen en als aantal gemeld; lokale wijzigingen kunnen daar niet betrouwbaar aan worden gekoppeld. Er worden geen duizenden volledige persoonsdossiers opgehaald voor een hoteloverzicht. Hotelcatalogus formaat 2 importeert eenmalig de korte namen opnieuw, ook als de bronwijzigingsdatum gelijk bleef. Daarna blijft de bestaande tariefplanning gelden.
+
+Automatisch koppelen gebruikt exacte genormaliseerde korte/lange namen, een volledige datum of de Nederlandse datum vooraan de factuurtitel, en waar herkenbaar de kamernaam. Een datum zonder jaar wordt tegen de todo-datum gecontroleerd; meerdere passende verblijven/regels worden niet willekeurig verdeeld. Een bestaande financiële koppeling wordt nooit door deze automatische actie vervangen. De server berekent de koppeling opnieuw; een client kan geen eigen componenten invoegen. Lezen schrijft niets in de lokale dossierstaat. De browser gebruikt de bestaande sessie-CSRF, same-origin- en revisiecontrole om de unieke koppelingen op te slaan. Sanity blijft uitsluitend GET.
