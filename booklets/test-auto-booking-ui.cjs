@@ -67,11 +67,11 @@ test('NS cancellation, missing reference and unavailable PDF never leave partial
 test('missing Google permission becomes a chapter issue, not a failure of the other imports',async()=>{
  const f=fixture({api:async path=>{if(path.includes('drive-search'))throw Error('Koppel Google Drive met leestoegang');}});await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[1].issue,/leestoegang/);assert(f.slots()[0].selected);assert(f.slots()[2].selected);assert(f.slots()[3].selected);
 });
-test('a unique Drive voucher is loaded automatically but must be reviewed before use',async()=>{
+test('a unique Drive voucher can be used without blanket confirmation',async()=>{
  const f=fixture({items:[{id:'letter',kind:'letter'}]});await f.exec('autoFillBookingDocuments()');
- assert.equal(f.slots()[3].selected.documentOrigin,'drive');assert.equal(f.slots()[3].selected.reviewRequired,true);assert.match(f.slots()[3].issue,/Controleer klant/);
- await f.exec('documentSlotPages(3)');f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
- assert(!f.slots()[3].selected.reviewRequired);assert(f.slots()[3].selected.reviewedAt);assert.equal(f.slots()[3].selected.driveDocument.id,'drive');
+ assert.equal(f.slots()[3].selected.documentOrigin,'drive');assert(!f.slots()[3].selected.reviewRequired);assert(!f.slots()[3].issue);
+ await f.exec('documentSlotPages(3)');assert(!f.node('#modal').innerHTML.includes('id="voucherReviewed"'));f.node('#voucherReviewed').checked=false;f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ assert(!f.slots()[3].selected.reviewRequired);assert(!f.slots()[3].selected.reviewedAt);assert.equal(f.slots()[3].selected.driveDocument.id,'drive');
 });
 
 test('distinct hotel-folder vouchers combine chronologically and preserve every source after review',async()=>{
@@ -81,7 +81,7 @@ test('distinct hotel-folder vouchers combine chronologically and preserve every 
   if(path==='/api/tickets/inspect'&&b.asset.startsWith('stay-'))return {pages:[{asset:b.asset,page:0,travelDate:b.asset==='stay-first'?'2027-03-08':'2027-03-10',dateSource:'pdf',dateNeedsReview:false}]};
  }});
  await f.exec('autoFillBookingDocuments()');let selected=f.slots()[3].selected;
- assert.equal(selected.pages,2);assert.equal(selected.pageSources[0].asset,'stay-first');assert.equal(selected.driveDocuments.length,2);assert(selected.reviewRequired);
+ assert.equal(selected.pages,2);assert.equal(selected.pageSources[0].asset,'stay-first');assert.equal(selected.driveDocuments.length,2);assert(!selected.reviewRequired);
  await f.exec('documentSlotPages(3)');f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
  selected=f.slots()[3].selected;assert.equal(selected.driveDocuments.length,2);assert(!selected.reviewRequired);assert.equal(selected.originalPages.length,2);
 });
@@ -92,6 +92,37 @@ test('a failed second Drive voucher never inserts a partial voucher set',async()
   if(path==='/api/booking-documents/drive-load'&&b.id==='two')throw Error('Voucher changed during import');
  }});
  await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[3].selected,null);assert.match(f.slots()[3].issue,/changed during import/);
+});
+
+test('Drive vouchers still request a date check for an unknown check-in date',async()=>{
+ const f=fixture({items:[],api:async(path,b)=>path==='/api/tickets/inspect'&&b.asset==='drive'?{pages:[{asset:'drive',page:0,travelDate:'',dateNeedsReview:true}]}:undefined});
+ await f.exec('autoFillBookingDocuments()');assert(f.slots()[3].selected.reviewRequired);assert.match(f.slots()[3].issue,/incheckdatums/);
+});
+
+test('a manually chosen Drive voucher does not require the standard confirmation',async()=>{
+ const f=fixture();f.exec(`documentPagesStart({book:draft,slot:draft.body.sections[3],bookingId:draft.body.sanityBooking.id},{asset:'drive',pages:1,format:'A4',driveDocument:{id:'drive'},pageSources:[{asset:'drive',page:0,travelDate:'2027-03-08',dateSource:'pdf',dateNeedsReview:false}]},{source:'drive'});`);
+ assert(!f.node('#modal').innerHTML.includes('id="voucherReviewed"'));f.node('#voucherReviewed').checked=false;
+ f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ assert.equal(f.slots()[3].selected.documentOrigin,'drive');assert(!f.slots()[3].selected.reviewRequired);assert(!f.slots()[3].selected.reviewedAt);
+});
+
+test('Drive voucher stay selection errors remain actionable',async()=>{
+ const f=fixture({items:[]});f.exec('draft.body.sections[3].voucherMoment=2');await f.exec('autoFillBookingDocuments()');
+ assert(f.slots()[3].selected.reviewRequired);assert.match(f.slots()[3].issue,/bestaat niet/);
+});
+
+test('legacy Drive confirmation is removed without clearing other review reasons',async()=>{
+ const f=fixture();
+ f.exec(`draft.body.sections=[
+  {documentKind:'voucher',issue:'Voucher uit Google Drive opgehaald. Controleer klant, hotel, datums en reserveringsnummer via Voucher controleren voordat u de PDF maakt.',selected:{documentOrigin:'drive',reviewRequired:true,pageSources:[{travelDate:'2027-03-08'}]}},
+  {documentKind:'voucher',issue:'Voucher uit Google Drive opgehaald. Controleer klant, hotel, datums en reserveringsnummer via Voucher controleren voordat u de PDF maakt.',selected:{documentOrigin:'drive',reviewRequired:true,pageSources:[{travelDate:'',dateNeedsReview:true}]}},
+  {documentKind:'voucher',issue:'Kies de pagina’s opnieuw',selected:{documentOrigin:'drive',reviewRequired:true}},
+  {documentKind:'voucher',issue:'Controleer voucher',selected:{documentOrigin:'sanity-attachment',reviewRequired:true}}
+ ];clearLegacyDriveVoucherReviews(draft.body)`);
+ assert(!f.slots()[0].selected.reviewRequired);assert(!f.slots()[0].issue);
+ assert(f.slots()[1].selected.reviewRequired);assert.match(f.slots()[1].issue,/incheckdatums/);
+ assert(f.slots()[2].selected.reviewRequired);assert(f.slots()[3].selected.reviewRequired);
+ assert.equal(f.exec('clearLegacyDriveVoucherReviews(draft.body)'),false);
 });
 
 test('duplicate filenames in the hotel folder require a choice instead of importing both versions',async()=>{
