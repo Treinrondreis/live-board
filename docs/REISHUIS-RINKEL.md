@@ -148,8 +148,7 @@ Rotatie van het webhookgeheim maakt bestaande herkenningshashes ongeldig.
 Alle nieuwe routes gebruiken de bestaande rol, same-origin, CSRF en revisiecontrole.
 Geen ruwe nummers, digests of webhookgeheim in de dashboardrespons of logs.
 
-Opnames/samenvattingen blijven nog uit: Rinkel vereist daarvoor een API-key, die
-apart met expliciete toestemming wordt aangemaakt. De API biedt gespreksdetails, bestaande insights
+Opnames/samenvattingen vereisen een apart goedgekeurde API-key. De API biedt gespreksdetails, bestaande insights
 en een tijdelijke opname-URL. Nieuwe opname- of betaalde AI-instellingen worden
 niet ingeschakeld. De huidige koppeling bewaart geen audio of transcripties.
 
