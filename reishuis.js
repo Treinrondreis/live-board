@@ -1,16 +1,20 @@
+import {createHotelsUI} from './reishuis-hotels-ui.js';
 import {createIncomingCalls} from './reishuis-rinkel-ui.js';
 import {createDossierUI} from './reishuis-dossier-ui.js';
 import {selectRows,statusLabel,bookingDay} from './reishuis-view.mjs';
 import {paymentLabels,matchesPayment} from './reishuis-payments.mjs';
 const $=id=>document.getElementById(id),base='/seinhuis/reishuis';
 let state,pages=[0,0,0,0,0],sequence=0,busy=false,refreshTimer;
+let layout='dashboard';try{layout=localStorage.getItem('reishuis-layout')==='workspace'?'workspace':'dashboard';}catch{}
+document.body.dataset.layout=layout;$('layout').value=layout;
+$('layout').onchange=()=>{if($('detail').open){if(!confirm('Het geopende dossier sluiten? Sla je wijzigingen eerst op.')){$('layout').value=layout;return;}$('detail').close();}layout=$('layout').value;document.body.dataset.layout=layout;try{localStorage.setItem('reishuis-layout',layout);}catch{}};
 const cardPool=new Map();
 const node=(tag,content,cls)=>{const n=document.createElement(tag);if(content!==undefined)n.textContent=content;if(cls)n.className=cls;return n;};
 const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?new Date(v+'T12:00:00Z').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric',timeZone:'Europe/Amsterdam'}):'Datum onbekend';
 const button=(caption,fn)=>{const b=node('button',caption);b.type='button';b.onclick=()=>run(fn);return b;};
 function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';}
 async function run(fn){if(busy)return;busy=true;try{await fn();}catch(e){message(e.message,true);}finally{busy=false;}}
-function clearState(){incomingCalls.clear();dossierUI.clear();state=null;cardPool.clear();$('rows').replaceChildren();$('customer-list').replaceChildren();$('detail-body').replaceChildren();$('detail-title').textContent='';$('detail').close();$('preferences').close();$('customer-panel').hidden=true;$('new-customer').reset();}
+function clearState(){hotelsUI.clear();incomingCalls.clear();dossierUI.clear();state=null;cardPool.clear();$('rows').replaceChildren();$('customer-list').replaceChildren();$('detail-body').replaceChildren();$('detail-title').textContent='';$('detail').close();$('preferences').close();$('customer-panel').hidden=true;$('new-customer').reset();}
 async function checkAccess(){const r=await fetch(base+'/api/access',{cache:'no-store'});if(r.status===401||r.status===403){clearState();throw Error('Je toegang is verlopen of ingetrokken. Meld je opnieuw aan via Seinhuis.');}if(!r.ok)throw Error('Toegang controleren lukt tijdelijk niet.');}
 async function load(){
  const seq=++sequence,params=new URLSearchParams(state?{bookingVersion:state.bookingVersion,revision:String(state.revision)}:{});
@@ -49,10 +53,10 @@ function selectCustomers(exclude){const s=node('select');s.setAttribute('aria-la
 const dossierUI=createDossierUI({node,change,run,isBusy:()=>busy,request:async id=>{
  const r=await fetch(base+'/api/dossier?'+new URLSearchParams({id}),{cache:'no-store'}),j=await r.json();if(r.status===401||r.status===403)clearState();if(!r.ok)throw Error(j.error||'Dossier laden mislukt.');return j;
 }});
-async function showBooking(id){const b=state.bookings.find(b=>b.id===id);if(!b)return;dossierUI.clear();$('detail').classList.add('booking-dossier');$('detail-title').textContent=b.index+' · '+b.name;const body=$('detail-body');body.replaceChildren(node('p',statusLabel(b.status)+' · '+date(b.departure)+' tot '+date(b.return),'detail-meta'),node('p',paymentText(b.payment)),node('p',bookingDay(b.created)?'Geboekt op '+date(bookingDay(b.created)):'Boekingsdatum onbekend','muted'));
+async function showBooking(id){if(layout==='workspace'&&$('detail').open&&$('detail').dataset.booking!==id&&!confirm('Een ander dossier openen? Sla je wijzigingen eerst op.'))return;const b=state.bookings.find(b=>b.id===id);if(!b)return;$('detail').dataset.booking=id;dossierUI.clear();$('detail').classList.add('booking-dossier');$('detail-title').textContent=b.index+' · '+b.name;const body=$('detail-body');body.replaceChildren(node('p',statusLabel(b.status)+' · '+date(b.departure)+' tot '+date(b.return),'detail-meta'),node('p',paymentText(b.payment)),node('p',bookingDay(b.created)?'Geboekt op '+date(bookingDay(b.created)):'Boekingsdatum onbekend','muted'));
  const dossier=node('div');body.append(dossier);const connections=node('details',undefined,'dossier-item');connections.append(node('summary','Klantkoppeling en eigen notitie'));
  const linked=state.customers.find(c=>c.id===state.links[id]);if(linked){connections.append(node('p','Gekoppeld aan '+linked.name),button('Klantprofiel openen',()=>showCustomer(linked.id)),button('Koppeling losmaken',async()=>{if(!confirm('Deze eigen klantkoppeling losmaken?'))return;await change({action:'unlink',booking:id,confirm:true});showBooking(id);}));}else{const select=selectCustomers();connections.append(node('p','Geen eigen klantkoppeling. Gelijke namen worden nooit automatisch gekoppeld.'),select,button('Boeking koppelen',async()=>{if(!select.value)throw Error('Kies eerst een klant.');await change({action:'link',booking:id,customer:select.value});showBooking(id);}));}
- connections.append(noteForm('booking',id));body.append(connections);if(!$('detail').open)$('detail').showModal();await dossierUI.open(id,dossier);await showCalls(id,body);
+ connections.append(noteForm('booking',id));body.append(connections);if(!$('detail').open){if(layout==='workspace')$('detail').show();else $('detail').showModal();}await dossierUI.open(id,dossier);await showCalls(id,body);
 }
 async function showCalls(id,body){
  const r=await fetch(base+'/api/rinkel/dossier?'+new URLSearchParams({id}),{cache:'no-store'});if(r.status===401||r.status===403){clearState();return;}if(!r.ok)return;const data=await r.json();if(!body.isConnected||!$('detail-title').textContent.startsWith(state.bookings.find(b=>b.id===id)?.index+' ·'))return;
@@ -74,4 +78,5 @@ $('row-form').onsubmit=e=>{e.preventDefault();run(async()=>{const rows=[...$('ro
 $('refresh').onclick=()=>run(load);function resetSelection(){pages=[0,0,0,0,0];renderSelection();}$('search').oninput=resetSelection;$('status-filter').onchange=resetSelection;$('payment-filter').onchange=resetSelection;$('customer-search').oninput=renderCustomers;
 $('customers').onclick=()=>{$('customer-panel').hidden=false;$('customer-panel').scrollIntoView({behavior:'smooth'});};$('close-customers').onclick=()=>{$('customer-panel').hidden=true;};$('detail').addEventListener('close',()=>dossierUI.clear());$('close-detail').onclick=()=>{dossierUI.clear();$('detail').close();};$('cancel-settings').onclick=()=>$('preferences').close();
 const incomingCalls=createIncomingCalls({node,open:id=>run(()=>showBooking(id)),isEditing:()=>busy||$('detail').open||$('preferences').open||!$('customer-panel').hidden,onDenied:clearState,bookings:()=>state?.bookings||[],link:async data=>{if(busy)throw Error('Er wordt al opgeslagen.');busy=true;try{await load();await change(data);}finally{busy=false;}}});
+const hotelsUI=createHotelsUI({node,base,onDenied:clearState});$('hotels').onclick=()=>run(()=>hotelsUI.open());
 run(async()=>{await load();incomingCalls.start();});
