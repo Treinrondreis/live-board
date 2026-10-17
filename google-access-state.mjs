@@ -2,7 +2,7 @@ import {createHash,randomBytes} from 'node:crypto';
 export const hash=value=>createHash('sha256').update(String(value)).digest('hex');
 export const token=()=>randomBytes(32).toString('base64url');
 export const GOOGLE_SESSION='tr_google_session',GOOGLE_DEVICE='tr_google_device';
-export const APP_SCOPES={stations:'Stationschef',treinhuis:'Treinhuis (KM-trein)',treinreiziger:'Treinreiziger',booklets:'Boekjesmaker',flora:'FloRA'};
+export const APP_SCOPES={stations:'Stationschef',treinhuis:'Treinhuis (KM-trein)',treinreiziger:'Treinreiziger',booklets:'Boekjesmaker',flora:'FloRA',reishuis:'Reishuis'};
 export const INITIAL_ACCOUNTS=[
  {email:'hildebrand@treinreiziger.nl',role:'admin',apps:[]},
  {email:'reservations@treinrondreis.nl',role:'admin',apps:[]},
@@ -21,6 +21,6 @@ export function googleSessionFor(req,s,country,now=Date.now()){
  if(!a?.active||a.sub!==v.sub||!d||d.status!=='approved'||d.sub!==v.sub||d.email!==v.email||v.device!==hash(cookieValue(req,GOOGLE_DEVICE)))return null;
  return {...v,role:a.role,apps:a.apps};
 }
-export function googleHasScope(session,scope){return !!session&&(session.role==='admin'||scope==='seinhuis'||session.apps.includes(scope));}
+export function googleHasScope(session,scope){return !!session&&(scope==='reishuis'?session.apps?.includes('reishuis')===true:session.role==='admin'||scope==='seinhuis'||session.apps.includes(scope));}
 export function revokeDevice(g,id,actor,now){const d=g.devices[id];if(!d)return false;d.status='revoked';d.revokedAt=now;for(const [key,v] of Object.entries(g.sessions))if(v.device===id)delete g.sessions[key];audit(g,'device-revoked',actor,d.email,now);return true;}
 export function blockAccount(g,email,actor,now){const a=g.accounts[email];if(!a)return false;a.active=false;for(const [key,v] of Object.entries(g.sessions))if(v.email===email)delete g.sessions[key];for(const [id,d] of Object.entries(g.devices))if(d.email===email)revokeDevice(g,id,actor,now);audit(g,'account-blocked',actor,email,now);return true;}

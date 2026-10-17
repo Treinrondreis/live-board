@@ -3,9 +3,11 @@ import {initConnections} from './connections-store.mjs';
 import {initDayReports} from './day-reports.mjs';
 import {initFlora} from './flora-store.mjs';
 import {initExpedia} from './expedia-store.mjs';
+import {initReishuis} from './reishuis-store.mjs';
 let db;
 export async function initBoardCache({backend,pool,sqlite}){
  db={backend,pool,sqlite};
+ initReishuis(db);
  await initFlora(db);
  await initExpedia(db);
  await initKKStore(db);

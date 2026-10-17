@@ -6,6 +6,7 @@ import {handleAdminHub} from './admin-hub.mjs';
 import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
 import {handleReisschemas} from './reisschemas.mjs';
+import {handleReishuis} from './reishuis.mjs';
 import {handleExpedia} from './expedia.mjs';
 import {startFlora} from './flora-schedule.mjs';
 import {handleBooklets} from './booklets-gateway.mjs';
@@ -1086,6 +1087,7 @@ const server=http.createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,`http://${req.headers.host}`);
     if(url.pathname.startsWith('/api/views/'))res.embedQuery=url.searchParams;
+    if(await handleReishuis(req,res,url))return;
     if(await handleExpedia(req,res,url))return;
     if(await handleReisschemas(req,res,url))return;
     if(await handleFlora(req,res,url))return;
