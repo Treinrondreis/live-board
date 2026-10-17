@@ -9,6 +9,7 @@ import {handleExpedia} from './expedia.mjs';
 import {startFlora} from './flora-schedule.mjs';
 import {handleBooklets} from './booklets-gateway.mjs';
 import {handlePlatformAdmin} from './platform-admin.mjs';
+import {stationschefPage} from './stationschef-layout.mjs';
 import {handleTreinhuisAccess} from './treinhuis-access.mjs';
 import {nightRule,runDay,observedDay} from './night-routes.mjs';
 import {attachBoardBookings} from './board-bookings.mjs';
@@ -1109,7 +1110,7 @@ const server=http.createServer(async(req,res)=>{
     if(['/stationschef/borden','/stationschef/borden/'].includes(url.pathname)){
       res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');
       if(!await adminAuthenticated(req,'stations')){res.writeHead(303,{Location:'/stationschef'});return res.end();}
-      return sendFile(res,path.join(publicDir,'board-admin.html'));
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(await stationschefPage(req,await fs.promises.readFile(path.join(publicDir,'board-admin.html'),'utf8'),'borden'));
     }
     if(await handleTreinreiziger(req,res,url))return;
     if(await handleBoardAdmin(req,res,url))return;

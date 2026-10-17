@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';
+import {stationschefPage} from './stationschef-layout.mjs';
 import {adminAuthenticated} from './admin-security.mjs';
 import {stationAliases,normalized} from './connections-rules.mjs';
 import {readConnectionSettings,writeConnectionSettings} from './connections-store.mjs';
@@ -40,6 +41,6 @@ export async function handleConnectionAdmin(req,res,url){
  json(200,await writeConnectionSettings(validateConnectionRules(data.rules),data.revision));return true;
  }
  if(req.method!=='GET'){json(405,{error:'Niet toegestaan.'});return true;}
- const js=url.pathname.endsWith('.js');res.writeHead(200,{'Content-Type':js?'text/javascript':'text/html; charset=utf-8'});res.end(await readFile(new URL(js?'./connections-admin.js':'./connections-admin.html',import.meta.url)));return true;
+ const js=url.pathname.endsWith('.js');res.writeHead(200,{'Content-Type':js?'text/javascript':'text/html; charset=utf-8'});const source=await readFile(new URL(js?'./connections-admin.js':'./connections-admin.html',import.meta.url),'utf8');res.end(js?source:await stationschefPage(req,source,'aansluitingen'));return true;
  }catch(e){json(e.status||500,{error:e.status?e.message:'Opslaan is mislukt. Probeer opnieuw.'});return true;}
 }

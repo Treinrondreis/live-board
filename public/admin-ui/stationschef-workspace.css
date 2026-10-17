@@ -1,0 +1,97 @@
+/* Scope every rule to the Stationschef administration; public boards are unchanged. */
+.sc-ui,.sc-ui *,.sc-ui *::before,.sc-ui *::after{box-sizing:border-box}
+body.sc-ui{margin:0;background:#f5f4ee;color:#2c3033;font:16px/1.5 'Segoe UI',sans-serif}
+.sc-ui [hidden]{display:none!important}
+.sc-ui a{color:var(--module-color);text-underline-offset:3px}
+.sc-ui :where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{outline:3px solid #164753;outline-offset:3px}
+.sc-ui :where(button,input,select,textarea){font:inherit}
+.sc-ui button{min-height:40px;padding:8px 13px;border:1px solid #c5cdc8;border-radius:8px;background:white;color:#2c3033;cursor:pointer}
+.sc-ui button:hover{background:var(--module-soft)}
+.sc-ui button:disabled{opacity:.5;cursor:not-allowed}
+.sc-ui button.primary,.sc-ui button#save,.sc-ui button#add{background:var(--module-color);border-color:var(--module-color);color:white}
+.sc-ui button.primary:hover,.sc-ui button#save:hover,.sc-ui button#add:hover{background:var(--module-hover)}
+.sc-ui :where(input,select,textarea){max-width:100%;min-width:0;padding:9px 11px;border:1px solid #929f98;border-radius:7px;background:white;color:#2c3033}
+.sc-ui input[type=checkbox]{accent-color:var(--module-color);width:auto}
+.sc-ui label{font-size:14px}
+.sc-ui :where(h1,h2,h3){font-family:'Segoe UI',sans-serif;color:#2c3033}
+.sc-ui h1{font-size:30px;line-height:1.3;letter-spacing:-.7px;margin:0 0 10px}
+.sc-ui h2{font-size:21px;line-height:1.4}
+.sc-ui :where(p,small){line-height:1.6}
+.sc-ui .sc-layout{display:grid;grid-template-columns:225px minmax(0,1fr);min-height:100dvh}
+.sc-ui .sc-sidebar{position:sticky;top:0;align-self:start;height:100dvh;overflow-y:auto;padding:28px 18px;background:var(--module-color);color:white}
+.sc-ui .sc-sidebar h2{color:white;font-size:21px;margin:0 12px 30px}
+.sc-ui .sc-sidebar h2 small{display:block;color:white;font-size:13px;font-weight:400;margin-top:4px}
+.sc-ui .sc-sidebar nav{display:grid;gap:5px;background:transparent;padding:0;border:0;margin:0}
+.sc-ui .sc-sidebar a{display:block;color:white;text-decoration:none;padding:11px 12px;min-height:44px;border:0;border-radius:8px;font-size:15px;font-weight:400;white-space:normal}
+.sc-ui .sc-sidebar a:hover,.sc-ui .sc-sidebar [aria-current='page']{background:#ffffff24;color:white}
+.sc-ui .sc-sidebar [aria-current='page']{font-weight:600}
+.sc-ui .sc-sidebar :where(a,summary):focus-visible{outline-color:white}
+.sc-ui .sc-external{border-top:1px solid #ffffff66;margin:22px 12px 0;padding-top:12px}
+.sc-ui .sc-external a{padding:8px 0;font-size:14px}
+.sc-ui .sc-modules{margin:20px 12px 0;border:0;border-top:1px solid #ffffff66;padding:14px 0 0;border-radius:0}
+.sc-ui .sc-modules summary{cursor:pointer;font-size:14px;min-height:36px}
+.sc-ui .sc-modules a{padding:8px;font-size:14px;min-height:40px}
+.sc-ui .sc-sidebar .sc-back{font-size:14px;text-decoration:underline;margin-top:20px}
+.sc-ui .sc-main{margin:0;min-width:0;width:100%;max-width:none;padding:26px 32px 48px}
+.sc-ui .sc-main>[data-sc-content]{padding:0;margin:0;max-width:none;width:100%;min-width:0}
+.sc-ui .sc-breadcrumb{color:#62686b;font-size:13px;margin:0 0 16px}
+.sc-ui .sc-breadcrumb a{color:inherit;text-decoration:none}
+.sc-ui .sc-main>header{padding:0 0 14px;background:transparent;border:0}
+.sc-ui .sc-main>header :where(strong,span,em){display:none}
+.sc-ui .sc-main>nav{display:none}
+.sc-ui [data-sc-content]>a:first-child[href='/stationschef']{display:none}
+.sc-ui [data-sc-content]>nav{background:transparent;padding:10px 0;border:0;font-size:14px;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+.sc-ui :where(.card,.panel,[data-sc-content]>section,#form>section){background:white;border:1px solid #dedfda;border-radius:13px;box-shadow:none;padding:20px;min-width:0}
+.sc-ui :where(.muted,small){color:#62686b;font-size:14px}
+.sc-ui .sc-intro{color:#62686b;margin:0 0 24px}
+.sc-ui .sc-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;max-width:1150px}
+.sc-ui .sc-tile{display:block;padding:24px;border:1px solid #dedfda;border-radius:13px;background:white;text-decoration:none;color:#2c3033}
+.sc-ui .sc-tile:hover{border-color:var(--module-color)}
+.sc-ui .sc-tile h2{margin:0 0 10px}
+.sc-ui .sc-tile p{margin:0 0 22px;color:#62686b}
+.sc-ui .sc-tile span{font-size:15px;color:var(--module-color)}
+.sc-ui .sc-mobile{display:none}
+.sc-ui .sc-skip{position:fixed;top:-100px;left:16px;z-index:50;background:white;border:2px solid var(--module-color);padding:10px 16px;border-radius:8px}
+.sc-ui .sc-skip:focus{top:10px}
+.sc-ui .sc-main :where(.selected,.tabs button.active,#stations button.active){color:var(--module-hover);background:var(--module-soft);border-color:var(--module-color)}
+.sc-ui #stations button.active,.sc-ui .tabs button.active{color:var(--module-hover);background:var(--module-soft);border-color:var(--module-color)}
+.sc-ui .sc-main .savebar{position:sticky;bottom:0;left:auto;width:auto;border:1px solid #dedfda;border-radius:10px;margin-top:20px;padding:14px 18px;z-index:5;background:white;flex-wrap:wrap}
+.sc-ui .sc-main :where(.savebar,#status,#message){overflow-wrap:anywhere}
+.sc-ui.sc-page-borden .layout{grid-template-columns:170px minmax(0,1fr) minmax(300px,.85fr);gap:18px}
+.sc-ui.sc-page-borden [data-sc-content] :where(aside,.preview){top:20px}
+.sc-ui.sc-page-perrons .layout{grid-template-columns:180px minmax(0,1fr) 270px;gap:18px}
+.sc-ui.sc-page-perrons :where(.layout>*,.row>*,.tabs){min-width:0}
+.sc-ui .tabs{flex-wrap:wrap}
+.sc-ui #rules>details{padding:16px;background:white;border:1px solid #dedfda;border-radius:10px;margin:16px 0}
+.sc-ui #rules summary{cursor:pointer}
+.sc-ui #rules label{margin:12px 0 6px}
+.sc-ui #rules :where(input:not([type=checkbox]),select){display:block;width:100%;max-width:520px}
+.sc-ui.sc-page-treinbord td{min-width:0;overflow-wrap:anywhere}
+.sc-ui.sc-page-treinbord td :where(input,select){max-width:100%}
+@media(max-width:1450px){
+ .sc-ui.sc-page-borden .layout,.sc-ui.sc-page-perrons .layout{grid-template-columns:170px minmax(0,1fr)}
+ .sc-ui.sc-page-borden .preview,.sc-ui.sc-page-perrons .test{grid-column:2;position:static}
+}
+@media(min-width:851px) and (max-width:1100px){.sc-ui .sc-layout{grid-template-columns:190px minmax(0,1fr)}.sc-ui .sc-main{padding:22px 18px}.sc-ui .sc-sidebar{padding:24px 10px}}
+@media(max-width:850px){
+ .sc-ui .sc-layout{grid-template-columns:minmax(0,1fr);min-height:calc(100dvh - 64px)}
+ .sc-ui .sc-mobile{display:flex;position:sticky;top:0;z-index:20;min-height:64px;align-items:center;justify-content:space-between;padding:10px 18px;background:var(--module-color);color:white;border:0;gap:12px}
+ .sc-ui .sc-mobile a{color:white;font-size:19px;font-weight:700;text-decoration:none}
+ .sc-ui .sc-toggle{color:white;background:transparent;border-color:#ffffff99;min-height:44px}
+ .sc-ui .sc-sidebar{display:none;position:fixed;top:64px;left:0;right:0;z-index:15;height:auto;max-height:calc(100dvh - 64px);padding:18px}
+ .sc-ui.sc-menu-open .sc-sidebar{display:block}
+ .sc-ui .sc-sidebar h2{margin-bottom:16px}
+ .sc-ui .sc-main{padding:18px 16px 40px}
+ .sc-ui .sc-breadcrumb{display:none}
+ .sc-ui .sc-tiles{grid-template-columns:1fr;gap:14px}
+ .sc-ui.sc-page-borden .layout,.sc-ui.sc-page-perrons .layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+ .sc-ui.sc-page-borden .preview,.sc-ui.sc-page-perrons .test{grid-column:auto}
+ .sc-ui .layout>aside{position:static;max-height:270px;overflow:auto}
+ .sc-ui .fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .sc-ui.sc-page-treinbord .fields{display:flex}
+ .sc-ui .sc-main header{flex-wrap:wrap}
+ .sc-ui.sc-page-treinbord :where(table,tbody,tr,td){display:block;width:100%}
+ .sc-ui.sc-page-treinbord thead{display:none}
+}
+@media(max-width:500px){.sc-ui .fields,.sc-ui .row{grid-template-columns:minmax(0,1fr)}.sc-ui .row{display:flex;flex-wrap:wrap}.sc-ui .row>*{flex-basis:100%}.sc-ui :where(.card,#form>section){padding:16px}.sc-ui .sc-main .savebar{padding:12px}.sc-ui .sc-main .savebar span{flex-basis:100%}}
+@media(forced-colors:active){.sc-ui .sc-sidebar,.sc-ui .sc-mobile{background:Canvas;color:CanvasText;border:1px solid CanvasText}.sc-ui .sc-sidebar :where(h2,small,a,summary),.sc-ui .sc-mobile a{color:CanvasText}.sc-ui .sc-sidebar [aria-current='page']{outline:2px solid Highlight}}
