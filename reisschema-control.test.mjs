@@ -7,6 +7,7 @@ test('per-leg date window includes D-15, D0; fallback D-8; never inactive',()=>{
  assert.equal(dueLeg(leg,'2031-05-26',true),true);assert.equal(dueLeg(leg,'2031-05-25',true),false);
  assert.equal(dueLeg(leg,'2031-06-10',true),true);assert.equal(dueLeg(leg,'2031-06-11',true),false);
  assert.equal(dueLeg(leg,'2031-06-02',false),true);assert.equal(dueLeg({...leg,status:'replaced'},'2031-06-02',true),false);
+ assert.equal(dueLeg({...leg,transport_type:'ferry'},'2031-06-02',true),false);
 });
 test('earlier and later departures use four-minute threshold; arrival needs consequence assessment',()=>{
  assert.equal(assess(leg,observation).urgent,true);assert.equal(assess(leg,observation).draftRequired,true);

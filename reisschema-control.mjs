@@ -15,7 +15,7 @@ export function assess(leg,o){
   tightConnectionReview:false};
 }
 export function dueLeg(leg,today,usable){
- if(leg.status!=='active')return false;
+ if(leg.status!=='active'||(leg.transport_type||'train')!=='train')return false;
  const days=(Date.parse(leg.travel_date)-Date.parse(today))/86400000;
  return usable?days>=0&&days<=15:days===8;
 }
