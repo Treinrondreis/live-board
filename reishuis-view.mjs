@@ -7,6 +7,7 @@ export const defaultRows=[
 export const statuses=['te verwerken','interrail leveren','wacht op reactie klant','nu op reis','afgehandeld','verwerkt','tickets versturen','nieuwe dienstregeling','geannuleerd','reistegoed','terugbetaald','zonder status','all'];
 export const statusLabel=value=>value==='all'?'Alle boekingen':value?value[0].toUpperCase()+value.slice(1):'Zonder status';
 export const dayInAmsterdam=(now=new Date())=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam'}).format(now);
+export const bookingDay=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?(value.length===10?value:dayInAmsterdam(new Date(value))):'';
 export function selectRows(bookings,rows=defaultRows,pages=[],search='',today=dayInAmsterdam()){
  const term=search.toLocaleLowerCase('nl-NL').trim();
  return rows.map((row,i)=>{

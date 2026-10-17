@@ -1,4 +1,4 @@
-import {selectRows,statusLabel} from './reishuis-view.mjs';
+import {selectRows,statusLabel,bookingDay} from './reishuis-view.mjs';
 import {paymentLabels,matchesPayment} from './reishuis-payments.mjs';
 const $=id=>document.getElementById(id),base='/seinhuis/reishuis';
 let state,pages=[0,0,0,0,0],sequence=0,busy=false,refreshTimer;
@@ -16,7 +16,7 @@ async function load(){
   const r=await fetch(base+'/api/state?'+params,{cache:'no-store'}),j=await r.json();if(seq!==sequence)return;
   if(!r.ok){if(r.status===401||r.status===403)clearState();throw Error(j.error||'Laden mislukt.');}
   if(j.unchanged&&state)Object.assign(state,j);else{state=j;render();}
-  message('');$('synced').textContent='Bijgewerkt: '+new Date(j.syncedAt).toLocaleString('nl-NL')+(j.refreshing?' · nieuwe gegevens ophalen op de achtergrond…':j.syncFailed?' · bijwerken mislukt; je ziet de laatst bekende gegevens':j.stale?' · laatst bekende gegevens':' · automatisch bijwerken');
+  message('');$('synced').textContent='Bijgewerkt: '+new Date(j.syncedAt).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'})+(j.refreshing?' · nieuwe gegevens ophalen op de achtergrond…':j.syncFailed?' · bijwerken mislukt; je ziet de laatst bekende gegevens':j.stale?' · laatst bekende gegevens':' · automatisch bijwerken');
  }finally{scheduleRefresh();}
 }
 function scheduleRefresh(delay=state?.refreshing?3000:60000){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{if(busy){scheduleRefresh(5000);return;}if(document.hidden||$('detail').open||$('preferences').open||!$('customer-panel').hidden){run(async()=>{try{await checkAccess();}finally{scheduleRefresh(60000);}});return;}run(load);},delay);}
@@ -28,7 +28,7 @@ function card(b,slot){
  const c=button('',()=>showBooking(b.id));c.className='card';const photo=node('div',undefined,'photo');if(b.hasPhoto){const img=node('img');img.src=base+'/api/photo?'+new URLSearchParams({id:b.id,v:b.photoVersion||''});img.alt='';img.loading='lazy';photo.append(img);}else photo.textContent='⌂';
  const p=b.payment,badge=node('span',undefined,'payment-badge');badge.title=paymentText(p);badge.setAttribute('aria-label',paymentText(p));const light=node('i',undefined,'light '+p.status);light.setAttribute('aria-hidden','true');badge.append(light,node('span',paymentLabels[p.status]));photo.append(badge);if(p.overdue)photo.append(node('span','Te laat','overdue-badge'));
  const body=node('div',undefined,'card-body'),info=node('div',undefined,'booking-info'),name=node('span',b.name||'Naam onbekend','customer-name');name.title=b.name;info.append(name,node('span','Vertrek '+date(b.departure),'date'));body.append(node('span',b.index,'booking-number'),info);
- const footer=node('div',undefined,'card-footer');footer.append(node('span',b.created?'Geboekt '+date(b.created.slice(0,10)):'Boekingsdatum onbekend'));c.append(photo,body,footer);if(cardPool.size>=160)cardPool.delete(cardPool.keys().next().value);cardPool.set(poolKey,{id:b.id,signature,element:c});return c;
+ const footer=node('div',undefined,'card-footer'),booked=bookingDay(b.created);footer.append(node('span',booked?'Geboekt '+date(booked):'Boekingsdatum onbekend'));c.append(photo,body,footer);if(cardPool.size>=160)cardPool.delete(cardPool.keys().next().value);cardPool.set(poolKey,{id:b.id,signature,element:c});return c;
 }
 function render(){
  const selected=$('status-filter').value;$('status-filter').replaceChildren(new Option('Mijn vijf rijen','dashboard'));for(const s of state.statuses)$('status-filter').append(new Option(statusLabel(s),s));$('status-filter').value=[...$('status-filter').options].some(o=>o.value===selected)?selected:'dashboard';
@@ -44,7 +44,7 @@ function renderSelection(){
 }
 function noteForm(kind,id){const form=node('form'),label=node('label','Eigen notitie'),area=node('textarea');area.maxLength=10000;area.value=state.notes[kind+':'+id]||'';label.append(area);const save=node('button','Notitie opslaan');form.append(label,save);form.onsubmit=e=>{e.preventDefault();run(async()=>{await change({action:'note',kind,id,note:area.value});message('Notitie opgeslagen.');});};return form;}
 function selectCustomers(exclude){const s=node('select');s.setAttribute('aria-label','Klant kiezen');s.append(new Option('Kies bewust een klant…',''));for(const c of state.customers.filter(c=>c.id!==exclude))s.append(new Option(c.name+' · '+c.id.slice(0,8),c.id));return s;}
-function showBooking(id){const b=state.bookings.find(b=>b.id===id);if(!b)return;$('detail-title').textContent=b.index+' · '+b.name;const body=$('detail-body');body.replaceChildren(node('p',statusLabel(b.status)+' · '+date(b.departure)+' tot '+date(b.return),'detail-meta'),node('p',paymentText(b.payment)),node('p',b.created?'Geboekt op '+date(b.created.slice(0,10)):'Boekingsdatum onbekend','muted'));
+function showBooking(id){const b=state.bookings.find(b=>b.id===id);if(!b)return;$('detail-title').textContent=b.index+' · '+b.name;const body=$('detail-body');body.replaceChildren(node('p',statusLabel(b.status)+' · '+date(b.departure)+' tot '+date(b.return),'detail-meta'),node('p',paymentText(b.payment)),node('p',bookingDay(b.created)?'Geboekt op '+date(bookingDay(b.created)):'Boekingsdatum onbekend','muted'));
  const linked=state.customers.find(c=>c.id===state.links[id]);if(linked){body.append(node('p','Gekoppeld aan '+linked.name),button('Klantprofiel openen',()=>showCustomer(linked.id)),button('Koppeling losmaken',async()=>{if(!confirm('Deze eigen klantkoppeling losmaken?'))return;await change({action:'unlink',booking:id,confirm:true});showBooking(id);}));}else{const select=selectCustomers();body.append(node('p','Geen eigen klantkoppeling. Gelijke namen worden nooit automatisch gekoppeld.'),select,button('Boeking koppelen',async()=>{if(!select.value)throw Error('Kies eerst een klant.');await change({action:'link',booking:id,customer:select.value});showBooking(id);}));}
  body.append(noteForm('booking',id));if(!$('detail').open)$('detail').showModal();
 }

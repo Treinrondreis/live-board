@@ -8,6 +8,7 @@ import {emptyReishuis,initReishuis,readReishuis,writeReishuis,readBookingSnapsho
 import {createBookingsCache} from './reishuis-cache.mjs';
 import {paymentSummary,matchesPayment} from './reishuis-payments.mjs';
 import {googleHasScope} from './google-access-state.mjs';
+import {bookingDay} from './reishuis-view.mjs';
 
 const booking=(i=1)=>({id:'private.fixture-'+i,index:String(i),name:'Fictieve Reiziger '+i,status:'te verwerken',departure:'2026-10-17',return:'2026-10-18',created:'2026-10-'+String(i).padStart(2,'0'),photo:null});
 const memorySnapshots=()=>{let value=null;return {readSnapshot:async()=>value,writeSnapshot:async v=>{value=structuredClone(v);}};};
@@ -23,6 +24,7 @@ test('five-card paging, search, ordering and inclusive Amsterdam dates',()=>{
  assert.equal(dayInAmsterdam(new Date('2026-10-16T22:30:00Z')),'2026-10-17');
  assert.equal(normalizeStatus('wacht klant'),'wacht op reactie klant');
  assert.equal(normalizeStatus('Wacht op reactie van klant'),'wacht op reactie klant');
+ assert.equal(bookingDay('2026-10-16T22:30:00Z'),'2026-10-17');assert.equal(bookingDay('invalid'),'');
 });
 test('Sanity reads page by page using GET only; draft override and narrow photo projection',async()=>{
  let n=0;const all=await fetchReishuisBookings({config:{project:'il9cyh3m',dataset:'production',token:'fixture'},fetcher:async(u,o)=>{
