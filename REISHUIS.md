@@ -9,7 +9,8 @@ departure, Interrail delivery, waiting for customer and travelling now. Travelli
 means status `afgehandeld` and departure <= today <= return in Europe/Amsterdam.
 The server reads Sanity with GET and raw cursor pagination, preferring draft
 records over their published counterpart. Projection contains booking identity,
-name, status, dates and `trip->imagesWithData[0].image.asset->url` only.
+name, status, dates and `trip->imagesWithData[0]->image.asset->url` only (with an
+embedded-image fallback). The legacy status `wacht klant` maps to the waiting row.
 Reads refresh at most once per minute per running instance; the UI refreshes every
 minute when visible and outside editing dialogs. There is no Sanity write path.
 
