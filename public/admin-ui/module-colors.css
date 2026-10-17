@@ -1,0 +1,11 @@
+/* Explicit opt-in: existing applications keep their current palette. */
+.tr-module-treinreiziger,.tr-module-kilometerkampioen{
+  --module-color:#bd2131; /* Existing Seinhuis sign-in button. */
+  --module-hover:#9e1727;
+  --module-soft:#faeaec;
+}
+.tr-module-stationschef{
+  --module-color:#267789;
+  --module-hover:#1b5e6c;
+  --module-soft:#e8f2f3;
+}

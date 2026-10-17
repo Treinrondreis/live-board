@@ -10,7 +10,9 @@ try{
   await page.route('**/*',async route=>{if(new URL(route.request().url()).origin!==preview.origin){external.push(route.request().url());await route.abort();}else await route.continue();});
   await page.goto(preview.origin+'/seinhuis/treinreiziger');await page.locator('#pages button').first().waitFor({state:'attached'});
   await page.getByRole('button',{name:'Concept opslaan',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('#save').disabled);
+  await page.getByText('Andere onderdelen',{exact:true}).click();
   assert.equal(await page.getByRole('navigation',{name:'Onderdelen',exact:true}).getByRole('link',{name:'Treinreiziger',exact:true}).getAttribute('aria-current'),'page');
+  await page.getByText('Andere onderdelen',{exact:true}).click();
   await page.getByRole('heading',{name:'Overzicht',exact:true}).waitFor();
   if(process.env.CMS_ADMIN_SCREENSHOTS){await mkdir(process.env.CMS_ADMIN_SCREENSHOTS,{recursive:true});await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(process.env.CMS_ADMIN_SCREENSHOTS,'treinreiziger-overzicht.png')});}
   const menu=page.getByRole('navigation',{name:'Menu Treinreiziger',exact:true});

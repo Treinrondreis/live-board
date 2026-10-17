@@ -7,11 +7,13 @@ Eerste concrete toepassing van de gedeelde stijlbasis, op verzoek van de gebruik
 - `/seinhuis/treinreiziger` opent het nieuwe overzicht.
 - `/seinhuis/paginas` blijft de bestaande editoringang en opent Pagina’s.
 - Het linkermenu bevat Overzicht, Pagina’s, Appnavigatie, Feeds en bronnen en een link naar de openbare app.
-- Bovenin staan alleen toepassingen waarvoor de ingelogde gebruiker bestaande rechten heeft. Treinreiziger is als huidig onderdeel gemarkeerd.
+- Onder ‘Andere onderdelen’ in de zijbalk staan alleen toepassingen waarvoor de ingelogde gebruiker bestaande rechten heeft. Treinreiziger is als huidig onderdeel gemarkeerd.
 - Pagina’s, onderste appnavigatie, feeds en bronnen worden in hetzelfde bestaande concept bewaard. Wisselen tussen de schermen slaat niets op en verwijdert geen bewerkingen.
 - Feeds en bronnen is een overzicht van feedonderdelen in het concept. Bewerken gebeurt op de bijbehorende app-pagina; er is geen nieuw gegevensmodel voor feeds toegevoegd.
 
 ## Behouden gedrag
+
+De werkruimte volgt de goedgekeurde Boekjesmaker-stijl: een effen zijbalk, warme achtergrond, systeemlettertype en rustige knoppen. Treinreiziger krijgt rood `#bd2131`, gelijk aan de bestaande Seinhuis-inlogknop. De kleurdefinities voor Kilometer Kampioen (hetzelfde rood) en Stationschef (turquoise `#267789`) staan klaar in `public/admin-ui/module-colors.css`; die onderdelen worden pas bij hun eigen omzetting aangesloten. Boekjesmaker en FloRA laden deze bestanden niet en behouden hun bestaande stijl.
 
 Concept opslaan, conceptvoorbeeld, publiceren, herstellen van de vorige publicatie, paginabeheer, menulinks, feedonderdelen, eigen inhoud en weergavekeuzes blijven beschikbaar. Het conceptvoorbeeld slaat, zoals voorheen, eerst het concept op. Publicatie vereist dezelfde bestaande API-actie. De openbare app, haar opmaak, persoonlijke stations, filters en dienstregelingsfuncties zijn niet herontworpen.
 

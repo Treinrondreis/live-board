@@ -1,0 +1,76 @@
+/* Booklets-inspired workspace; active only on the migrated CMS. */
+.cms-admin{
+  --tr-background:#f5f4ee;--tr-text:#2c3033;--tr-muted:#62686b;
+  --tr-blue:var(--module-color);--tr-blue-hover:var(--module-hover);
+  --tr-line:#dedfda;--tr-control-line:#a3aaa5;--tr-surface-soft:var(--module-soft);
+  --tr-header-height:0px;--tr-sidebar-width:225px;
+  --tr-font-body:'Segoe UI',sans-serif;--tr-font-heading:'Segoe UI',sans-serif;
+  font:16px/1.5 var(--tr-font-body);background:var(--tr-background);color:var(--tr-text);
+}
+.cms-admin .tr-header{display:none}
+.cms-admin .tr-layout{max-width:none;min-height:100dvh}
+.cms-admin .tr-sidebar{background:var(--module-color);color:white;top:0;height:100dvh;padding:28px 18px}
+.cms-admin .tr-sidebar-title{font:700 21px/1.4 var(--tr-font-heading);margin:0 12px 30px}
+.cms-admin .tr-sidebar-title small{display:block;font-size:13px;font-weight:400;color:white;margin-top:4px}
+.cms-admin .tr-nav{gap:5px}
+.cms-admin .tr-nav a{color:white;padding:11px 12px;border-radius:8px;font-weight:400;min-height:46px}
+.cms-admin .tr-nav [aria-current='page'],.cms-admin .tr-nav a:hover{background:#ffffff24;color:white;box-shadow:none;font-weight:600}
+.cms-admin .tr-sidebar-note{color:white;line-height:1.7;margin-top:28px}
+.cms-admin .cms-account{color:white;font-size:14px;margin:24px 12px 0}
+.cms-admin .tr-sidebar :where(a,summary):focus-visible{outline-color:white}
+.cms-admin .cms-module-menu{border-top:1px solid #ffffff66;margin:28px 12px 0;padding-top:16px}
+.cms-admin .cms-module-menu summary{cursor:pointer;font-size:14px;min-height:36px}
+.cms-admin .tr-global-nav{display:grid;margin:6px 0 0;gap:2px;overflow:visible}
+.cms-admin .tr-global-nav a{justify-content:flex-start;min-height:40px;padding:8px;border:0;font:400 14px/1.5 var(--tr-font-body);border-radius:6px;color:white}
+.cms-admin .tr-global-nav [aria-current='page']{background:#ffffff24}
+.cms-admin .tr-main{padding:26px 32px 48px;max-width:1500px}
+.cms-admin .tr-breadcrumb{font-size:13px;margin-bottom:10px}
+.cms-admin .tr-title{font-size:30px;letter-spacing:-.8px;color:var(--tr-text)}
+.cms-admin .tr-page-heading{margin-bottom:12px}
+.cms-admin .cms-command-area{background:var(--tr-background);margin-bottom:18px}
+.cms-admin .cms-savebar{background:var(--tr-background);padding:4px 0 8px}
+.cms-admin .tr-button,.cms-admin :where(#editor,#main-menu) button{font:400 15px/1.5 var(--tr-font-body);border-radius:8px;padding:8px 13px;color:var(--tr-text);border-color:var(--tr-line)}
+.cms-admin .tr-button--primary{background:var(--module-color);color:white;border-color:var(--module-color)}
+.cms-admin .tr-button--primary:hover{background:var(--module-hover)}
+.cms-admin .cms-more summary{color:var(--module-color)}
+.cms-admin #message{font-size:14px}
+.cms-admin .tr-card{box-shadow:none;border-color:var(--tr-line);border-radius:13px}
+.cms-admin .cms-workspace{grid-template-columns:190px minmax(0,1fr);gap:20px}
+.cms-admin .cms-pages{background:transparent;border:0;padding:12px 0}
+.cms-admin .cms-pages summary{font-size:16px;padding:0 10px}
+.cms-admin #pages button{padding:10px;border-radius:7px;color:var(--tr-text);font-size:15px}
+.cms-admin #pages button[aria-current]{background:var(--module-soft);color:var(--tr-text);box-shadow:inset 2px 0 var(--module-color)}
+.cms-admin #pages small{font-size:13px}
+.cms-admin .cms-pages>p{font-size:14px;line-height:1.7;padding:0 10px}
+.cms-admin .cms-pages>#add-page{margin:6px 10px;max-width:calc(100% - 20px)}
+.cms-admin .cms-editor{padding:22px}
+.cms-admin .cms-editor h2{font:600 21px/1.4 var(--tr-font-heading)}
+.cms-admin .fields label{font-size:14px;font-weight:600}
+.cms-admin .fields :where(input,select,textarea){border-color:var(--tr-control-line);border-radius:7px;font:400 16px/1.5 var(--tr-font-body)}
+.cms-admin fieldset{border-color:var(--tr-line);background:white;border-radius:9px;padding:16px;margin:18px 0}
+.cms-admin .cms-editor .hint{font-size:14px;margin:8px 0 18px}
+.cms-admin .fields{gap:14px;margin-bottom:14px}
+@media(min-width:851px) and (max-width:1100px){
+  .cms-admin{--tr-sidebar-width:185px}
+  .cms-admin .tr-sidebar{padding:24px 10px}
+  .cms-admin .tr-main{padding:22px 18px 48px}
+  .cms-admin .cms-workspace{grid-template-columns:155px minmax(0,1fr);gap:14px}
+}
+@media(max-width:850px){
+  .cms-admin{--tr-header-height:64px}
+  .cms-admin .tr-header{display:flex;min-height:64px;background:var(--module-color);padding:10px 18px;gap:12px}
+  .cms-admin .cms-mobile-brand{color:white;text-decoration:none;font-size:19px;font-weight:700}
+  .cms-admin .tr-header .tr-button{color:white;border-color:#ffffff99;background:transparent;min-height:44px}
+  .cms-admin .tr-sidebar{top:64px;height:auto;max-height:calc(100dvh - 64px);padding:18px}
+  .cms-admin .tr-main{padding:16px 18px 48px}
+  .cms-admin .tr-sidebar-title{margin-bottom:14px}
+  .cms-admin .cms-workspace{grid-template-columns:1fr;gap:12px}
+  .cms-admin .cms-pages{padding:10px 0}
+  .cms-admin .cms-editor{padding:18px}
+}
+@media(forced-colors:active){
+  .cms-admin .tr-sidebar,.cms-admin .tr-header{background:Canvas;color:CanvasText;border:1px solid CanvasText}
+  .cms-admin .tr-sidebar :where(a,h2,small,p,summary),.cms-admin .cms-mobile-brand{color:CanvasText}
+  .cms-admin .tr-nav [aria-current='page']{outline:2px solid Highlight}
+  .cms-admin .tr-sidebar :where(a,summary):focus-visible{outline-color:Highlight}
+}
