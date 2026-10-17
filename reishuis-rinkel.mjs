@@ -81,7 +81,8 @@ export function createRinkelIncoming({secret=process.env.RINKEL_WEBHOOK_SECRET||
    const mark=instance+':'+counter,valid=typeof cursor==='string'&&cursor.startsWith(instance+':'),after=valid?Number(cursor.slice(instance.length+1)):0;
    if(!index||failed)return {enabled:true,ready:false,cursor:valid?cursor:undefined,failed};
    const effective=new Map(index);for(const [id,local] of Object.entries(state.dossiers||{}))if(Object.hasOwn(local.personal||{},'phone')){const phone=normalizePhone(local.personal.phone,local.personal.country||'');if(phone)effective.set(id,hash(phone));else effective.delete(id);}
-   const fresh=events.filter(e=>e.seq>after).map(e=>({id:e.id,at:e.at,anonymous:!e.fromHash,lastFour:e.lastFour,matches:e.fromHash?bookings.filter(b=>effective.get(b.id)===e.fromHash||Object.entries(state.rinkelNumbers||{}).some(([id,numbers])=>(id===b.id||(state.links[id]&&state.links[id]===state.links[b.id]))&&numbers.some(n=>n.digest===e.fromHash))).map(b=>({id:b.id,index:b.index,name:b.name,departure:b.departure})):[]}));
+   const extra=new Map();for(const [id,dossier] of Object.entries(state.dossiers||{}))extra.set(id,new Set((dossier.contacts?.phones||[]).map(p=>normalizePhone(p.value)).filter(Boolean).map(hash)));
+   const fresh=events.filter(e=>e.seq>after).map(e=>({id:e.id,at:e.at,anonymous:!e.fromHash,lastFour:e.lastFour,matches:e.fromHash?bookings.filter(b=>effective.get(b.id)===e.fromHash||[...extra].some(([id,numbers])=>(id===b.id||(state.links[id]&&state.links[id]===state.links[b.id]))&&numbers.has(e.fromHash))||Object.entries(state.rinkelNumbers||{}).some(([id,numbers])=>(id===b.id||(state.links[id]&&state.links[id]===state.links[b.id]))&&numbers.some(n=>n.digest===e.fromHash))).map(b=>({id:b.id,index:b.index,name:b.name,departure:b.departure})):[]}));
    return {enabled:true,ready:true,cursor:mark,failed,recent:!valid,events:fresh};
   }
  };

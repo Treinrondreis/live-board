@@ -75,3 +75,7 @@ test('historical conversation can be linked without a current call and survives 
  service.linkCall(state,{call:'history-fixture',booking:'fixture-one',confirm:true,remember:true},bookings,'fixture');assert.equal(service.dossier(JSON.parse(JSON.stringify(state)),'fixture-one').calls[0].at,now-86400000);
  time+=1800001;assert.throws(()=>service.linkCall(state,{call:'history-fixture',booking:'fixture-one',confirm:true,remember:false},bookings,'fixture'));
 });
+
+test('manually added second and third phones recognize calls without changing the primary number',async()=>{
+ const service=createRinkelIncoming(options),state=emptyReishuis();state.dossiers={'fixture-one':{contacts:{phones:[{value:'+31990000009',label:'Extra'}]}}};await service.poll({bookings,state});await tick();await event(service,{data:{...payload('extra-manual'),from:'+31990000009'}});await event(service,{data:payload('original')});const result=await service.poll({bookings,state});assert.equal(result.events.length,2);assert.ok(result.events.every(e=>e.matches[0].id==='fixture-one'));assert.ok(!JSON.stringify(result).includes('+31990000009'));
+});
