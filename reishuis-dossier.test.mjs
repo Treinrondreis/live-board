@@ -63,3 +63,16 @@ test('dossier endpoints enforce auth, origin, CSRF, source version and edit revi
  assert.equal((await req('/api/change','POST',input,valid)).status,200);assert.equal(saved.data.notes,'Bronnotitie');assert.equal(state.dossiers['private.fixture'].notes.notes,'Eigen');assert.equal((await req('/api/change','POST',input,valid)).status,409);
  assert.equal((await req('/api/dossier?id=private.fixture')).data.dossier.notes,'Eigen');allowed=false;assert.equal((await req('/api/dossier?id=private.fixture')).status,403);
 });
+
+test('extra contact data is local, validated, canonical and independent of original contact fields',()=>{
+ const d=source(),s=emptyReishuis();d.personal.country='nl';changeDossier(s,{booking:'private.fixture',section:'contacts',values:{phones:[{value:'099 000 0002',label:'Partner'},{value:'+31990000003',label:'Werk'}],emails:[{value:'extra@example.test',label:'Partner'}]}},d);
+ const result=mergeDossier(d,s.dossiers['private.fixture']);assert.equal(result.contacts.phones[0].value,'+31990000002');assert.equal(result.contacts.emails[0].value,'extra@example.test');assert.equal(result.personal.phone,d.personal.phone);assert.equal(d.contacts,undefined);
+ for(const values of [{phones:[{value:'invalid',label:''}],emails:[]},{phones:[],emails:[{value:'invalid',label:''}]},{phones:[{value:'+31990000002',label:''},{value:'0990000002',label:''}],emails:[]},{phones:[],emails:[{value:'x@example.test',label:''},{value:'X@example.test',label:''}]},{phones:[],emails:[],source:'forged'}])assert.throws(()=>changeDossier(emptyReishuis(),{booking:'private.fixture',section:'contacts',values},d),{status:400});
+});
+test('done flag wins over legacy pending status; unknown statuses are visible and unrelated local edits follow source status',()=>{
+ const d=normalizeDossier({...raw(),todos:[{_key:'task-1',title:'Taak',done:true,status:'pending'},{_key:'other',status:'future-state'}]});assert.equal(d.todos[0].status,'done');assert.equal(d.todos[1].status,'unknown');
+ const s=emptyReishuis();changeDossier(s,{booking:'private.fixture',section:'todo',item:d.todos[0].id,values:{description:'Eigen tekst',status:'done'}},d);
+ const fresh=normalizeDossier({...raw(),todos:[{_key:'task-1',title:'Taak',done:false,status:'doing'}]});let result=mergeDossier(fresh,s.dossiers['private.fixture']);assert.equal(result.todos[0].status,'doing');assert.equal(result.todos[0].localStatus,false);
+ changeDossier(s,{booking:'private.fixture',section:'todo',item:d.todos[0].id,values:{status:'planned'}},fresh);result=mergeDossier(fresh,s.dossiers['private.fixture']);assert.equal(result.todos[0].status,'planned');assert.equal(result.todos[0].sourceStatus,'doing');assert.equal(result.todos[0].localStatus,true);
+ changeDossier(s,{booking:'private.fixture',section:'todo',item:d.todos[0].id,resetStatus:true},fresh);result=mergeDossier(fresh,s.dossiers['private.fixture']);assert.equal(result.todos[0].status,'doing');assert.equal(result.todos[0].description,'Eigen tekst');
+});
