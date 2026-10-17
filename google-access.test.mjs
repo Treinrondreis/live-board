@@ -7,7 +7,7 @@ import {createGoogleAccess} from './google-access.mjs';
 import {adminAuthenticated,seal,totp} from './admin-security.mjs';
 import {hash,googleSessionFor,accessState} from './google-access-state.mjs';
 const origin='https://example.test',secret='JBSWY3DPEHPK3PXP';
-process.env.BOARD_ADMIN_PASSWORD='test-google-security-key';process.env.RAILWAY_ENVIRONMENT_ID='test';
+process.env.BOARD_ADMIN_PASSWORD='fixture-key';process.env.RAILWAY_ENVIRONMENT_ID='test';
 test('Google onboarding, least privilege, lasting approvals and immediate revocation',async()=>{
  const db=new DatabaseSync(':memory:');await initBoardCache({sqlite:db});let now=Date.now();const original=Date.now;Date.now=()=>now;
  try{
