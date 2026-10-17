@@ -79,11 +79,7 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    const path=url.pathname.slice(prefix.length);
    if(req.method==='GET'){
     if(path==='/api/access')return reply(200,{ok:true});
-    if(path==='/api/rinkel'){
-     if(!rinkel.configured)return reply(200,{enabled:false});const [list,record]=await Promise.all([bookings(),read()]),result=await rinkel.poll({cursor:url.searchParams.get('cursor'),bookings:list,state:record.state});let changed=false;
-     for(const event of result.events||[])if(event.matches.length===1&&!record.state.rinkelCalls?.[event.id]){rinkel.linkCall(record.state,{call:event.id,booking:event.matches[0].id,remember:false,confirm:true},list,'rinkel-exact-match');changed=true;}
-     if(changed)await write(record.state,record.revision);return reply(200,result);
-    }
+    if(path==='/api/rinkel'){if(!rinkel.configured)return reply(200,{enabled:false});const [list,record]=await Promise.all([bookings(),read()]);return reply(200,await rinkel.poll({cursor:url.searchParams.get('cursor'),bookings:list,state:record.state}));}
     const files={'':'reishuis.html','/':'reishuis.html','/reishuis.js':'reishuis.js','/reishuis.css':'reishuis.css','/reishuis-view.mjs':'reishuis-view.mjs','/reishuis-payments.mjs':'reishuis-payments.mjs','/reishuis-dossier-ui.js':'reishuis-dossier-ui.js','/reishuis-rinkel-ui.js':'reishuis-rinkel-ui.js'};
     if(files[path]){const file=files[path],ext=file.split('.').pop();res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});res.end(await readFile(new URL('./'+file,import.meta.url)));return true;}
     if(path==='/api/rinkel/media'||path==='/api/rinkel/audio'){
@@ -126,6 +122,7 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
     if(input.sourceVersion!==snapshot.version)return reply(409,{error:'De bron is bijgewerkt. Heropen het dossier en controleer je wijziging.'});
     input.source=snapshot.data;
    }
+   if(input.action==='rinkel-link'&&input.confirm===true&&input.remember===false&&record.state.rinkelCalls?.[key(input.call)]?.booking===input.booking)return reply(200,{revision:record.revision});
    const state=input.action==='rinkel-link'?rinkel.linkCall(record.state,input,list,who):input.action==='rinkel-number-remove'?rinkel.removeNumber(record.state,input,who):applyChange(record.state,input,list,who);
    return reply(200,{revision:await write(state,record.revision)});
   }catch(e){return reply([400,409].includes(e.status)?e.status:503,{error:e.status===400?'Controleer de invoer en de bevestiging.':e.status===409?'Naam of koppeling is ambigu, of gegevens zijn gewijzigd. Herlaad en controleer.':'Reishuis is tijdelijk niet beschikbaar. Controleer de leesverbinding en opslag.'});}

@@ -165,10 +165,9 @@ andere AI-dienst gestuurd. Dit is getest met fictieve providerantwoorden; echte
 providerverificatie wacht op goedgekeurde API-toegang. Historische gesprekken van
 vóór de aansluiting worden nog niet geïmporteerd.
 
-Exact één herkend dossier wordt bij een geautoriseerde poll automatisch gekoppeld,
+Exact één herkend dossier wordt via een geautoriseerde CSRF-beveiligde POST automatisch gekoppeld,
 zonder een extra herkenningsnummer op te slaan. Bij ambiguïteit wordt niets gekozen.
-Een opslagconflict geeft een fout vóór het uitgeven van de volgende cursor zodat
-de browser dezelfde events kan herhalen; bestaande koppelingen worden niet verplaatst.
+Bij een opslagconflict blijft handmatig koppelen beschikbaar; bestaande koppelingen worden niet verplaatst.
 De gebruiker heeft de aparte accountbrede Rinkel-sleutel expliciet goedgekeurd nadat
 bleek dat het aanmaakvenster geen beperkte rechten ondersteunt. De applicatiegrens
 is GET-only en twee lijnen; de sleutel zelf biedt technisch bredere accounttoegang.

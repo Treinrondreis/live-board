@@ -14,6 +14,7 @@ export function createIncomingCalls({node,open,isEditing,onDenied,bookings=()=>[
    status.hidden=false;status.textContent=data.ready?'Rinkel: nummerherkenning actief':data.failed?'Rinkel: nummerherkenning tijdelijk niet beschikbaar.':'Rinkel: nummerherkenning voorbereiden…';
    if(!data.ready)return;
    const events=(data.events||[]).filter(e=>Date.now()-e.at<1800000);if(!events.length)return;
+   for(const event of events)if(event.matches?.length===1){try{await link({action:'rinkel-link',call:event.id,booking:event.matches[0].id,remember:false,confirm:true});}catch{status.textContent='Rinkel: gesprek nog niet opgeslagen; koppel het handmatig.';}if(seq!==generation)return;}
    for(const t of noticeTimers)clearTimeout(t);noticeTimers=[];root.replaceChildren();root.hidden=false;root.append(node('strong',data.recent?'Recente oproep'+(events.length===1?'':'en'):events.length===1?'Inkomende oproep':'Inkomende oproepen'));
    const active=document.querySelector('dialog[open]');if(active)active.prepend(root);else home();
    for(const event of events){
