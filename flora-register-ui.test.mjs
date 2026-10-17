@@ -21,7 +21,7 @@ test('train number and departure date intersect; numeric search is exact',async(
 test('booking opens with document and all days; local filters do not cross bookings',async()=>{
  const {get,input}=await setup([leg({sequence:2,train_number:'TEST 211'}),leg({sequence:1}),leg({sequence:3,travel_date:'2031-06-11',arrival_date:'2031-06-12',to_station:'Voorbeeld Oost',train_number:'NIGHT 900'}),leg({dossier:'OTHER-A',train_number:'TEST 777'})]);
  input('booking-number','demo');assert.equal(get('booking-detail').hidden,false);assert.match(get('booking-header').innerHTML,/Reisschema openen/);assert.match(get('booking-header').innerHTML,/document-button/);assert.match(get('day-summary').textContent,/3 ritten op 2 reisdagen/);assert.doesNotMatch(get('booking-days').innerHTML,/TEST 777/);
- const html=get('booking-days').innerHTML;assert.ok(html.indexOf('TEST 210')<html.indexOf('TEST 211'));assert.match(html,/Aankomst 12-06-2031/);
+ const html=get('booking-days').innerHTML;assert.ok(html.indexOf('TEST 210')<html.indexOf('TEST 211'));assert.match(html,/12-06-2031/);
  input('booking-date','2031-06-11');input('booking-route','Noord → Oost');input('booking-train','900');assert.match(get('day-summary').textContent,/1 rit op 1 reisdag/);
  input('booking-train','777');assert.match(get('booking-days').innerHTML,/Geen ritten gevonden binnen deze boeking/);
  get('clear-booking').onclick();assert.match(get('day-summary').textContent,/3 ritten op 2 reisdagen/);
@@ -44,4 +44,15 @@ test('source fields are escaped and document links are restricted in both views'
 test('failed refresh clears both views and never exposes internal errors',async()=>{
  const {get,input,fail}=await setup([leg()]);input('booking-number','demo');assert.match(get('booking-days').innerHTML,/TEST 210/);
  fail();await get('refresh').onclick();assert.equal(get('register').innerHTML,'');assert.equal(get('booking-days').innerHTML,'');assert.equal(get('booking-header').innerHTML,'');assert.equal(get('booking-detail').hidden,true);assert.doesNotMatch(get('status').textContent,/private detail/);
+});
+
+
+test('journey columns follow departure route arrival and only backups carry a label',async()=>{
+ const {get,input}=await setup([leg(),leg({sequence:2,role:'backup',train_number:'TEST 211',arrival_date:'2031-06-11'})]);
+ input('booking-number','demo');const html=get('booking-days').innerHTML;
+ assert.ok(html.indexOf('>Vertrek</th>')<html.indexOf('>Traject</th>'));
+ assert.ok(html.indexOf('>Traject</th>')<html.indexOf('>Aankomst</th>'));
+ assert.match(html,/<td class="time-cell"><strong>10:00<\/strong>/);
+ assert.match(html,/arrival-date/);assert.match(html,/Back-up/);assert.doesNotMatch(html,/Hoofdrit|Vertrek \/ aankomst/);
+ assert.ok(html.indexOf('10:00')<html.indexOf('Voorbeeld Noord'));assert.ok(html.indexOf('Voorbeeld Zuid')<html.indexOf('12:00'));
 });
