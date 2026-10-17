@@ -39,5 +39,39 @@ test('expired notices disappear and failed phone refresh does not silently use a
 });
 test('Rinkel API and client module require explicit Reishuis authorization before state access',async()=>{
  let reads=0;const handler=createReishuisHandler({authenticate:async()=>false,read:async()=>{reads++;},rinkel:createRinkelIncoming(options)});
- for(const path of ['/api/rinkel','/reishuis-rinkel-ui.js']){const req=Readable.from([]);req.method='GET';req.headers={};let status;await handler(req,{setHeader(){},writeHead:s=>{status=s;},end(){}},new URL('https://example.test/seinhuis/reishuis'+path));assert.equal(status,403);}assert.equal(reads,0);
+ for(const path of ['/api/rinkel','/api/rinkel/dossier?id=fixture-one','/api/rinkel/media?id=fixture-call&booking=fixture-one','/api/rinkel/audio?id=fixture-call&booking=fixture-one','/reishuis-rinkel-ui.js']){const req=Readable.from([]);req.method='GET';req.headers={};let status;await handler(req,{setHeader(){},writeHead:s=>{status=s;},end(){}},new URL('https://example.test/seinhuis/reishuis'+path));assert.equal(status,403);}assert.equal(reads,0);
+});
+
+test('opening after a call returns recent notices after phone warmup, without replay on subsequent polls',async()=>{
+ let time=now;const service=createRinkelIncoming({...options,clock:()=>time}),state=emptyReishuis();await event(service);
+ const warming=await service.poll({bookings,state});assert.equal(warming.ready,false);assert.equal(warming.cursor,undefined);
+ await tick();const first=await service.poll({cursor:warming.cursor,bookings,state});assert.equal(first.recent,true);assert.equal(first.events.length,1);assert.deepEqual(first.events[0].matches,bookings);
+ assert.equal((await service.poll({cursor:first.cursor,bookings,state})).events.length,0);
+ const reload=await service.poll({bookings,state});assert.equal(reload.recent,true);assert.equal(reload.events.length,1);
+ time+=1800001;assert.equal((await service.poll({bookings,state})).events.length,0);
+});
+
+test('manual conversation links persist separately from recognition, use server event data and preserve primary phones',async()=>{
+ const service=createRinkelIncoming(options),state=emptyReishuis();await event(service);const input={call:'fixture-call',booking:'fixture-one',confirm:true,remember:false};
+ service.linkCall(state,input,bookings,'fixture');assert.equal(service.dossier(state,'fixture-one').calls.length,1);assert.equal(service.dossier(state,'fixture-one').numbers.length,0);
+ service.linkCall(state,{...input,remember:true},bookings,'fixture');assert.equal(service.dossier(state,'fixture-one').numbers.length,1);assert.ok(!JSON.stringify(state).includes(caller));assert.ok(!JSON.stringify(service.dossier(state,'fixture-one')).includes('digest'));
+ await assert.rejects(async()=>service.linkCall(state,{...input,call:'forged'},bookings,'fixture'));
+ await assert.rejects(async()=>service.linkCall(state,{...input,confirm:false},bookings,'fixture'));
+ const restored=JSON.parse(JSON.stringify(state));assert.equal(service.dossier(restored,'fixture-one').calls.length,1);
+ const number=service.dossier(state,'fixture-one').numbers[0].id;service.removeNumber(state,{booking:'fixture-one',number,confirm:true},'fixture');assert.equal(service.dossier(state,'fixture-one').numbers.length,0);assert.equal(service.dossier(state,'fixture-one').calls.length,1);
+});
+test('extra number matches linked customer bookings without replacing the existing phone, conflicts fail closed',async()=>{
+ const extra='+31990000009',service=createRinkelIncoming(options),state=emptyReishuis(),list=[...bookings,{...bookings[0],id:'fixture-two'}];
+ await event(service,{data:{...payload('extra'),from:extra}});service.linkCall(state,{call:'extra',booking:'fixture-one',confirm:true,remember:true},list,'fixture');
+ assert.throws(()=>service.linkCall(state,{call:'extra',booking:'fixture-two',confirm:true,remember:true},list,'fixture'));
+ await service.poll({bookings:list,state});await tick();let r=await service.poll({bookings:list,state});assert.deepEqual(r.events[0].matches,bookings);
+ state.links={'fixture-one':'customer-one','fixture-two':'customer-one'};r=await service.poll({bookings:list,state});assert.equal(r.events[0].matches.length,2);
+ await event(service,{data:payload('primary')});r=await service.poll({bookings:list,state});assert.equal(r.events.find(e=>e.id==='primary').matches[0].id,'fixture-one');
+});
+
+test('historical conversation can be linked without a current call and survives reload, but unverified ids cannot',()=>{
+ let time=now;const service=createRinkelIncoming({...options,clock:()=>time}),state=emptyReishuis();
+ const rows=service.history([{id:'history-fixture',at:now-86400000,phone:caller}]);assert.equal(rows.length,1);assert.ok(!JSON.stringify(rows).includes(caller));
+ service.linkCall(state,{call:'history-fixture',booking:'fixture-one',confirm:true,remember:true},bookings,'fixture');assert.equal(service.dossier(JSON.parse(JSON.stringify(state)),'fixture-one').calls[0].at,now-86400000);
+ time+=1800001;assert.throws(()=>service.linkCall(state,{call:'history-fixture',booking:'fixture-one',confirm:true,remember:false},bookings,'fixture'));
 });
