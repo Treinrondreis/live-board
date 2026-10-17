@@ -29,27 +29,3 @@ test('append check fixes destination, uses a header token and rejects forged act
  assert.equal(JSON.parse(request.options.body).actor,undefined);
 });
 
-// Exercise the real handler boundaries with isolated non-network dependencies.
-const handlerSource=await readFile(new URL('./flora.mjs',import.meta.url),'utf8');
-const names=[...handlerSource.matchAll(/^import \{([^}]+)\} from .*;$/gm)].flatMap(m=>m[1].split(',').map(n=>n.trim()));
-const isolated=names.map(n=>'const '+n+'=()=>{throw Error("Unexpected dependency");};').join('\n')+'\n'+handlerSource.replace(/^import .*;\n/gm,'');
-const {createFloraHandler}=await import('data:text/javascript;base64,'+Buffer.from(isolated).toString('base64'));
-async function call({signedIn=true,method='GET',origin='https://treinbord.up.railway.app',path='/api/register',input={}}={}){
- let accessed=0,status,body;
- const register={summary:async()=>{accessed++;return {configured:true,available:true,legs:[{dossier:'DEMO-A'}]};},recordCheck:async()=>{accessed++;return {ok:true};}};
- const handler=createFloraHandler({authenticate:async()=>signedIn,register});
- const req={method,headers:{origin,'x-flora':'1','content-type':'application/json'},async *[Symbol.asyncIterator](){yield JSON.stringify(input);}};
- const res={setHeader(){},writeHead(code){status=code;},end(value){body=JSON.parse(value);}};
- await handler(req,res,new URL('/seinhuis/flora'+path,'https://example.invalid'));
- return {status,body,accessed};
-}
-test('Flora authentication precedes register access',async()=>{
- const result=await call({signedIn:false});assert.equal(result.status,401);assert.equal(result.accessed,0);
- assert.equal((await call()).status,200);
-});
-test('append check requires the existing origin and CSRF boundary',async()=>{
- const rejected=await call({method:'POST',path:'/api/register/check',origin:'https://example.invalid'});
- assert.equal(rejected.status,403);assert.equal(rejected.accessed,0);
- assert.equal((await call({method:'POST',path:'/api/register/check'})).status,200);
-});
-

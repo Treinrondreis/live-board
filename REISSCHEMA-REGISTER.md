@@ -1,30 +1,27 @@
-# Centraal reisschemaregister in FloRA
+# Tijdelijk onderdeel Reisschema’s
 
-De treinenpagina toont een afzonderlijke lijst met ritten uit actuele reisschema’s.
-Die lijst vervangt geen ticketbewijs en markeert een reis niet automatisch als
-dienstregeling gecontroleerd. De bestaande zoekbalk filtert beide bronnen.
-Bij een onbereikbare dienst wordt geen oude registerkopie getoond.
+Het centrale register staat los van FloRA onder `/seinhuis/reisschemas/`,
+met een eigen tegel in Seinhuis. De pagina zoekt op dossier, trein, station en
+reisdatum en toont links naar actuele reisschema’s. Alleen bestaande
+Seinhuis-beheerders (owner/admin) hebben toegang. Er worden geen accountrechten
+toegevoegd of uitgebreid. Gewone FloRA-toegang geeft geen toegang tot dit onderdeel.
 
-Serverinstellingen, uitsluitend op de eigen Railway-dienst:
+Dit tijdelijke onderdeel is alleen-lezen. De oude FloRA-registerroutes zijn
+verwijderd; ook controles kunnen niet via deze pagina worden toegevoegd.
+Een actieve versie betekent niet dat de dienstregeling recent gecontroleerd is.
+Geen Sanity-wijzigingen, automatische controles of berichten.
 
-- `REISSCHEMA_REGISTER_URL`: privé-URL van de registerdienst met interne poort.
-- `REGISTER_FLORA_TOKEN`: aparte sleutel voor lezen en controles toevoegen.
+De bestaande serverinstellingen blijven behouden, zodat geen sleutels hoeven
+te worden verplaatst: `REISSCHEMA_REGISTER_URL` en `REGISTER_FLORA_TOKEN`.
+De historische modulenaam `flora-register.mjs` verwijst alleen naar de interne
+adapter en plaatst het onderdeel niet in FloRA. De sleutel blijft uitsluitend
+server-side. Het gebruikte serviceprofiel kan lezen en controles toevoegen;
+deze webpagina biedt uitsluitend lezen aan. Gebruik hier nooit een builder-
+of databasebeheersleutel.
 
-Gebruik nooit de builder- of databasebeheersleutel op Live Board. Sleutels blijven
-server-side en worden niet meegestuurd naar browser-JavaScript, Git of CI.
-Ontbreken beide instellingen, dan blijft het onderdeel expliciet niet aangesloten.
+De client leest alle pagina’s, gebruikt de private Railway-hostnaam en weigert
+redirects. De cache verloopt na dertig seconden; fouten verwijderen de oude
+cache. De browser wist de vorige lijst bij vernieuwen of een fout.
 
-De bestaande FloRA-login beschermt `/seinhuis/flora/api/register`. Voor
-`POST /seinhuis/flora/api/register/check` gelden bovendien de bestaande
-Origin-, JSON- en X-Flora-controles. Deze route accepteert controlebewijs,
-versie-ID en een stabiele request-ID; de centrale dienst bepaalt de actor.
-De koppeling kent geen route om schema’s te vervangen of Sanity te wijzigen.
-Er wordt geen automatische controle gestart en geen bericht verzonden.
-
-De lijst wordt maximaal dertig seconden in procesgeheugen bewaard. De
-client leest alle pagina’s, begrenst antwoorden en weigert redirects.
-Een actieve schemaversie is iets anders dan een recent gecontroleerde rit.
-
-Uitrol: eerst tests en review, daarna de aparte sleutel veilig invoeren en
-de instellingen handmatig activeren. Deze PR activeert geen productie-instellingen.
-
+Uitrol: passende tests, review en daarna een handmatige productie-uitrol.
+Deze wijziging migreert geen database en verandert geen bestaande ritten.
