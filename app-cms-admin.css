@@ -1,7 +1,8 @@
 /* Editor adapter only; the public app retains /app/cms.css. */
 .cms-admin .cms-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-.cms-admin .cms-savebar{position:sticky;top:var(--tr-header-height);z-index:10;padding:14px 0;margin-bottom:16px;background:var(--tr-background)}
-.cms-admin #message{margin-bottom:24px;white-space:pre-line;overflow-wrap:anywhere}.cms-admin #message:empty{display:none}
+.cms-admin .cms-command-area{position:sticky;top:var(--tr-header-height);z-index:10;margin-bottom:24px;padding-bottom:1px;background:var(--tr-background)}
+.cms-admin .cms-savebar{padding:14px 0;background:var(--tr-background)}
+.cms-admin #message{margin-bottom:16px;white-space:pre-line;overflow-wrap:anywhere}.cms-admin #message:empty{display:none}
 .cms-admin .cms-view{min-width:0}.cms-admin .cms-view p{line-height:1.65}
 .cms-admin .cms-more{position:relative;margin-left:auto}.cms-admin .cms-more summary{cursor:pointer;padding:12px;font-size:14px;font-weight:600;color:var(--tr-blue)}
 .cms-admin .cms-more>div{position:absolute;right:0;top:100%;padding:14px;min-width:270px;display:grid;gap:10px;background:white;border:1px solid var(--tr-line);border-radius:12px;box-shadow:var(--tr-shadow)}
@@ -22,4 +23,4 @@
 .cms-admin dialog{width:min(1100px,95vw);height:90dvh;padding:24px;border:1px solid var(--tr-line);border-radius:18px;color:var(--tr-text);background:white;box-shadow:0 20px 80px #143c4933}.cms-admin dialog::backdrop{background:#12384799}
 .cms-admin dialog .cms-actions{justify-content:space-between;margin-bottom:18px}.cms-admin dialog iframe{display:block;width:100%;height:calc(100% - 70px);border:1px solid var(--tr-line);border-radius:12px;background:white}
 @media(max-width:1150px){.cms-admin .cms-workspace{grid-template-columns:1fr}.cms-admin #pages{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:650px){.cms-admin .fields{grid-template-columns:1fr}.cms-admin .cms-savebar{position:static}.cms-admin .cms-savebar>button{flex:1 1 auto;font-size:14px;padding:10px 12px}.cms-admin .cms-more{margin-left:0}.cms-admin .cms-more>div{position:static;min-width:0}.cms-admin fieldset{padding:14px}.cms-admin .cms-editor{padding:18px}}
+@media(max-width:650px){.cms-admin .fields{grid-template-columns:1fr}.cms-admin .cms-command-area{position:static}.cms-admin .cms-savebar>button{flex:1 1 auto;font-size:14px;padding:10px 12px}.cms-admin .cms-more{margin-left:0}.cms-admin .cms-more>div{position:static;min-width:0}.cms-admin fieldset{padding:14px}.cms-admin .cms-editor{padding:18px}}

@@ -18,7 +18,9 @@ try{
   const title=page.locator('[data-scope="page"] input[data-key="title"]');await title.fill('Gewijzigd voorbeeld');
   await menu.getByRole('link',{name:'Appnavigatie',exact:true}).click();await page.locator('#main-menu input[data-key="title"]').first().fill('Voorbeeldmenu');
   await menu.getByRole('link',{name:'Pagina’s',exact:true}).click();assert.equal(await title.inputValue(),'Gewijzigd voorbeeld','view changes preserve unsaved editor values');
+  await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
   await page.getByRole('button',{name:'Concept opslaan',exact:true}).click();await page.locator('#message').getByText('Concept opgeslagen.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#message').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true,'save feedback stays visible while editing a long page');
   let stored=await preview.read();assert.equal(stored.value.draft.pages[0].title,'Gewijzigd voorbeeld');assert.equal(stored.value.draft.navigation[0].title,'Voorbeeldmenu');assert.equal(stored.value.published.pages[0].title,'Voorbeeldnieuws','draft save does not publish');
   await menu.getByRole('link',{name:'Feeds en bronnen',exact:true}).click();await page.locator('#cms-sources').getByText('Gewijzigd voorbeeld · onderdeel 1',{exact:true}).waitFor();
   await page.locator('#cms-sources').getByRole('button',{name:'Pagina bewerken',exact:true}).first().click();assert.equal(await title.inputValue(),'Gewijzigd voorbeeld');
