@@ -104,7 +104,6 @@ export function createGoogleAccess({login=createGoogleLogin(),configuration=goog
    const actor=current?.email||s.user.name;
    if(action==='permissions'){
     const a=g.accounts[input.email];if(!a)fail('Account niet gevonden.',404);
-    if(a.role==='admin')fail('Beheerders hebben toegang tot alle onderdelen.');
     if(!Array.isArray(input.apps)||input.apps.length>Object.keys(APP_SCOPES).length||input.apps.some(scope=>typeof scope!=='string'||!Object.hasOwn(APP_SCOPES,scope))||new Set(input.apps).size!==input.apps.length)fail('Kies geldige Seinhuis-onderdelen.');
     a.apps=[...input.apps];audit(g,'permissions-changed',actor,a.email+' · '+a.apps.map(v=>APP_SCOPES[v]).join(', '),time);
    }else if(action==='approve'){

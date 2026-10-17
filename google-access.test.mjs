@@ -56,7 +56,15 @@ test('Google onboarding, least privilege, lasting approvals and immediate revoca
   assert.equal(await adminAuthenticated(request(user,'GET'),'treinhuis'),false);
   assert.equal((await call(user,'permissions',{email:'tickets@treinrondreis.nl',apps:['stations']})).status,403,'users cannot grant themselves parts');
   assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['owner']})).status,400,'owner privilege is never an app scope');
-  assert.equal((await call(admin,'permissions',{email:'hildebrand@treinreiziger.nl',apps:[]})).status,400,'admin roles cannot be changed through app permissions');
+  assert.equal((await call(admin,'permissions',{email:'hildebrand@treinreiziger.nl',apps:[]})).status,200,'explicit app grants can be managed without changing the admin role');
+  assert.equal(await adminAuthenticated(request(admin,'GET')),true,'app grants never remove owner privileges');
+  assert.equal(await adminAuthenticated(request(admin,'GET'),'reishuis'),false,'admin has no automatic Reishuis grant');
+  const adminEmail=(await call(admin,'overview')).data.accounts.find(a=>a.role==='admin').email;
+  assert.equal((await call(admin,'permissions',{email:adminEmail,apps:['reishuis']})).status,200);
+  assert.equal(await adminAuthenticated(request(admin,'GET'),'reishuis'),true,'explicit Reishuis grant applies to existing admin session');
+  assert.equal(await adminAuthenticated(request({tr_admin_session:legacy},'GET'),'reishuis'),false,'legacy owner cannot bypass explicit Google grant');
+  assert.equal((await call(admin,'permissions',{email:adminEmail,apps:[]})).status,200);
+  assert.equal(await adminAuthenticated(request(admin,'GET'),'reishuis'),false,'revocation applies immediately');
   assert.equal((await call(admin,'permissions',{email:'tickets@treinrondreis.nl',apps:['stations','treinhuis','treinreiziger']})).status,200);
   for(const scope of ['stations','treinhuis','treinreiziger'])assert.equal(await adminAuthenticated(request(user,'GET'),scope),true,'granted scope '+scope);
   assert.equal(await adminAuthenticated(request(user,'GET'),'flora'),false,'removing a scope stops existing session access immediately');
