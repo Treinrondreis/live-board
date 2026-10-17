@@ -28,7 +28,7 @@ test('five-card paging, search, ordering and inclusive Amsterdam dates',()=>{
 });
 test('Sanity reads page by page using GET only; draft override and narrow photo projection',async()=>{
  let n=0;const all=await fetchReishuisBookings({config:{project:'il9cyh3m',dataset:'production',token:'fixture'},fetcher:async(u,o)=>{
-  assert.equal(o.method,'GET');assert.equal(o.redirect,'error');assert.equal(u.searchParams.get('perspective'),'raw');assert.match(u.searchParams.get('query'),/coalesce\(trip->imagesWithData\[0\]->image.asset->url,trip->imagesWithData\[0\]\.image.asset->url\)/);assert.doesNotMatch(u.searchParams.get('query'),/documents|passengers|notes/);
+  assert.equal(o.method,'GET');assert.equal(o.redirect,'error');assert.equal(u.searchParams.get('perspective'),'raw');assert.match(u.searchParams.get('query'),/coalesce\(trip->imagesWithData\[0\]->image.asset->url,trip->imagesWithData\[0\]\.image.asset->url\)/);assert.doesNotMatch(u.searchParams.get('query'),/documents|passengers|notes|pspId|dashboardUrl|_key/);
   n++;return {ok:true,json:async()=>({result:n===1?Array.from({length:100},(_,i)=>({_id:'a'+String(i).padStart(3,'0'),index:i,firstName:'Fictief'})):[{_id:'drafts.a000',index:0,firstName:'Concept'}]})};
  }});assert.equal(n,2);assert.equal(all.length,100);assert.equal(all.find(b=>b.id==='a000').name,'Concept');assert.equal(imageURL('https://evil.test/image.jpg'),null);assert.equal(imageURL('https://cdn.sanity.io/files/il9cyh3m/production/anything.pdf'),null);
 });

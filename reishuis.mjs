@@ -78,7 +78,7 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
      const who=await actor(req),record=await read(),snapshot=await bookingCache.get(),today=dayInAmsterdam(new Date(clock())),bookingVersion=snapshot.version+':'+today;
      const meta={version:'0.3',revision:record.revision,csrf:csrf(req),bookingVersion,syncedAt:new Date(snapshot.syncedAt).toISOString(),refreshing:snapshot.refreshing,stale:snapshot.stale,syncFailed:snapshot.failed};
      if(url.searchParams.get('bookingVersion')===bookingVersion&&url.searchParams.get('revision')===String(record.revision))return reply(200,{...meta,unchanged:true});
-     const list=snapshot.bookings.map(({photo,payments,...b})=>({...b,hasPhoto:!!photo,photoVersion:photo?new URL(photo).pathname.split('/').pop():null,payment:paymentSummary(payments,today)}));
+     const list=snapshot.bookings.map(({photo,payments,updated,...b})=>({...b,hasPhoto:!!photo,photoVersion:photo?new URL(photo).pathname.split('/').pop():null,payment:paymentSummary(payments,today)}));
      const search=(url.searchParams.get('q')||'').slice(0,160),pages=(url.searchParams.get('pages')||'').split(',').map(Number);
      return reply(200,{...meta,rows:selectRows(list,record.state.preferences[who]||defaultRows,pages,search),statuses:[...new Set([...statuses,...list.map(b=>b.status)])],customers:record.state.customers,links:record.state.links,notes:record.state.notes,bookings:list});
     }
