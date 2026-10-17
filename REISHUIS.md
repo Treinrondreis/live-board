@@ -177,3 +177,17 @@ responses; expired/revoked access clears the dossier and dashboard. Tests use on
 fictional contacts, notes, tasks and financial values, including persistence,
 source immutability, stale edits, invalid numbers/dates, injection, loaded module
 authorization, mobile layout and role revocation.
+
+## Compact todo checklist
+
+Todos are shown directly as a compact list with a completion checkbox, title,
+dates, confirmation number, annotation preview and status selector. Checking a task
+saves only its status locally; unchecking restores Te doen. The status selector also
+offers Gepland, Mee bezig and Opletten. Gepland is a Reishuis-only status value
+`planned`; there is no Sanity schema change or write. Editing the full task remains
+available via its title or Bewerken. General notes are collapsed separately below
+the task list. Quick status saves use the same CSRF, edit/source version and input
+validation as other dossier edits; failed saves restore the visible saved status.
+A concurrent in-flight operation rejects a second quick edit visibly, preventing an
+unsaved checkbox from appearing saved. All source annotations and other fields are
+preserved when only a status changes.
