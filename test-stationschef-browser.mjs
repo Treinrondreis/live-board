@@ -13,7 +13,18 @@ try{
   await page.getByRole('heading',{name:title,exact:true}).waitFor();
   assert.equal(await page.locator('main').count(),1,'single main landmark');
   assert.equal(await page.getByRole('navigation',{name:'Menu Stationschef',exact:true}).locator('[aria-current="page"]').count(),1,'one active contextual link');
-  if(key==='borden'){await page.locator('#title').fill('Fictieve wijziging');await page.locator('#save').click();await page.locator('#message.success').waitFor();assert.equal(fixture.state().boards[0].settings.title,'Fictieve wijziging');}
+  if(key==='borden'){
+   assert.equal(await page.locator('#message').isVisible(),false,'empty status does not reserve a bar');
+   for(const width of [1920,1440,1024]){
+    await page.setViewportSize({width,height:1000});
+    const layout=await page.evaluate(()=>({preview:document.querySelector('.layout>.preview').getBoundingClientRect().toJSON(),editor:document.querySelector('.layout>section:not(.preview)').getBoundingClientRect().toJSON(),header:document.querySelector('.sc-main>header').getBoundingClientRect().toJSON()}));
+    assert.ok(layout.header.bottom<90,'compact header at '+width);
+    assert.ok(layout.preview.top<120,'preview starts high at '+width);
+    if(width>=1440)assert.ok(layout.preview.width>layout.editor.width*1.4,'preview gets more space than editor at '+width);
+    else assert.ok(layout.preview.width>550,'laptop preview uses full content column');
+   }
+   await page.setViewportSize({width:1440,height:1000});await page.locator('#title').fill('Fictieve wijziging');await page.locator('#save').click();await page.locator('#message.success').waitFor();assert.equal(fixture.state().boards[0].settings.title,'Fictieve wijziging');
+  }
   if(key==='aansluitingen'){await page.locator('#add').click();assert.equal(await page.locator('#rules>details').count(),2);await page.locator('#save').click();await page.locator('#message').getByText('Opgeslagen.',{exact:false}).waitFor();assert.equal(fixture.state().rules.rules.length,2);}
   if(key==='perrons'){await page.locator('#groups summary').first().click();await page.locator('[data-field="notes"]').first().fill('Fictieve spooruitleg');await page.locator('#save').click();await page.locator('#saveStatus').getByText('Station opgeslagen',{exact:false}).waitFor();assert.equal(fixture.state().platform.groups[0].notes,'Fictieve spooruitleg');}
   if(key==='treinbord'){await page.locator('#name').fill('Fictief scherm');await page.getByRole('button',{name:'Instellingen opslaan',exact:true}).click();await page.locator('#status').getByText('Opgeslagen',{exact:false}).waitFor();assert.equal(fixture.state().screens[0].settings.name,'Fictief scherm');}
