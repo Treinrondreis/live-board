@@ -1,7 +1,8 @@
 import {readFile} from 'node:fs/promises';
 import {randomUUID,createHmac,timingSafeEqual} from 'node:crypto';
 import {fetchReishuisBookings,selectRows,defaultRows,statuses} from './reishuis-data.mjs';
-import {readReishuis,writeReishuis,readBookingSnapshot,writeBookingSnapshot} from './reishuis-store.mjs';
+import {readReishuis,writeReishuis,readBookingSnapshot,writeBookingSnapshot,readDossierSnapshot,writeDossierSnapshot} from './reishuis-store.mjs';
+import {fetchReishuisDossier,createDossierCache,mergeDossier,changeDossier} from './reishuis-dossier.mjs';
 import {createBookingsCache} from './reishuis-cache.mjs';
 import {paymentSummary} from './reishuis-payments.mjs';
 import {dayInAmsterdam} from './reishuis-view.mjs';
@@ -37,6 +38,9 @@ export function applyChange(state,input,bookings,actor){
  }else if(input.action==='note'){
   const id=key(input.id);if(input.kind==='customer')customer(id);else if(input.kind!=='booking'||!bookings.some(b=>b.id===id))invalid();
   state.notes[input.kind+':'+id]=text(input.note,10000);
+ }else if(input.action==='dossier'){
+  if(!bookings.some(b=>b.id===input.booking)||!input.source)invalid();
+  changeDossier(state,input,input.source);
  }else if(input.action==='rows'){
   if(!Array.isArray(input.rows)||input.rows.length!==5||input.rows.some(r=>!r||typeof r.status!=='string'||r.status.length>160||(!statuses.includes(r.status)&&!bookings.some(b=>b.status===r.status))||!['created','departure'].includes(r.sort)))invalid();
   state.preferences[actor]=input.rows.map(({status,sort})=>({status,sort}));
@@ -44,9 +48,10 @@ export function applyChange(state,input,bookings,actor){
  state.history.push({at:new Date().toISOString(),actor,action:input.action,...(input.action==='merge'?{from:input.from,to:input.to}:{})});state.history=state.history.slice(-500);
  return state;
 }
-export function createReishuisHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req,'reishuis'),actor=async req=>(await import('./admin-security.mjs')).authenticatedActor(req),read=readReishuis,write=writeReishuis,readSnapshot=readBookingSnapshot,writeSnapshot=writeBookingSnapshot,fetchBookings=fetchReishuisBookings,fetcher=fetch,origin=process.env.SEINHUIS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app',clock=Date.now}={}){
+export function createReishuisHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req,'reishuis'),actor=async req=>(await import('./admin-security.mjs')).authenticatedActor(req),read=readReishuis,write=writeReishuis,readSnapshot=readBookingSnapshot,writeSnapshot=writeBookingSnapshot,fetchBookings=fetchReishuisBookings,readDossier=readDossierSnapshot,writeDossier=writeDossierSnapshot,fetchDossier=fetchReishuisDossier,fetcher=fetch,origin=process.env.SEINHUIS_PUBLIC_ORIGIN||'https://treinbord.up.railway.app',clock=Date.now}={}){
  const bookingCache=createBookingsCache({readSnapshot,writeSnapshot,fetchBookings,clock});
  const bookings=async()=>(await bookingCache.get()).bookings;
+ const dossiers=createDossierCache({readSnapshot:readDossier,writeSnapshot:writeDossier,fetchDossier,clock});
  const photos=new Map(),photoPending=new Map();let photoBytes=0;
  async function photo(url){
   const saved=photos.get(url);if(saved&&saved.until>clock())return saved;
@@ -72,8 +77,13 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    const path=url.pathname.slice(prefix.length);
    if(req.method==='GET'){
     if(path==='/api/access')return reply(200,{ok:true});
-    const files={'':'reishuis.html','/':'reishuis.html','/reishuis.js':'reishuis.js','/reishuis.css':'reishuis.css','/reishuis-view.mjs':'reishuis-view.mjs','/reishuis-payments.mjs':'reishuis-payments.mjs'};
+    const files={'':'reishuis.html','/':'reishuis.html','/reishuis.js':'reishuis.js','/reishuis.css':'reishuis.css','/reishuis-view.mjs':'reishuis-view.mjs','/reishuis-payments.mjs':'reishuis-payments.mjs','/reishuis-dossier-ui.js':'reishuis-dossier-ui.js'};
     if(files[path]){const file=files[path],ext=file.split('.').pop();res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});res.end(await readFile(new URL('./'+file,import.meta.url)));return true;}
+    if(path==='/api/dossier'){
+     const id=key(url.searchParams.get('id'));if(!(await bookings()).some(b=>b.id===id))return reply(404,{error:'Boeking niet gevonden.'});
+     const snapshot=await dossiers.get(id),record=await read();
+     return reply(200,{id,revision:record.revision,sourceVersion:snapshot.version,syncedAt:new Date(snapshot.syncedAt).toISOString(),stale:snapshot.stale,refreshing:snapshot.refreshing,syncFailed:snapshot.syncFailed,dossier:mergeDossier(snapshot.data,record.state.dossiers?.[id])});
+    }
     if(path==='/api/state'){
      const who=await actor(req),record=await read(),snapshot=await bookingCache.get(),today=dayInAmsterdam(new Date(clock())),bookingVersion=snapshot.version+':'+today;
      const meta={version:'0.3',revision:record.revision,csrf:csrf(req),bookingVersion,syncedAt:new Date(snapshot.syncedAt).toISOString(),refreshing:snapshot.refreshing,stale:snapshot.stale,syncFailed:snapshot.failed};
@@ -94,7 +104,14 @@ export function createReishuisHandler({authenticate=async req=>(await import('./
    let input;try{input=JSON.parse(Buffer.concat(parts).toString());}catch{return reply(400,{error:'Ongeldig verzoek.'});}
    if(!input||!Number.isSafeInteger(input.revision)||input.revision<0)invalid();
    const who=await actor(req),record=await read();if(input.revision!==record.revision)return reply(409,{error:'Gegevens zijn gewijzigd. Herlaad en controleer je keuze.'});
-   const state=applyChange(record.state,input,await bookings(),who);
+   const list=await bookings();
+   // Never trust a client-supplied source; only the authorized server snapshot can seed edits.
+   if(input.action==='dossier'){
+    const id=key(input.booking);if(!list.some(b=>b.id===id))invalid();const snapshot=await dossiers.get(id);
+    if(input.sourceVersion!==snapshot.version)return reply(409,{error:'De bron is bijgewerkt. Heropen het dossier en controleer je wijziging.'});
+    input.source=snapshot.data;
+   }
+   const state=applyChange(record.state,input,list,who);
    return reply(200,{revision:await write(state,record.revision)});
   }catch(e){return reply([400,409].includes(e.status)?e.status:503,{error:e.status===400?'Controleer de invoer en de bevestiging.':e.status===409?'Naam of koppeling is ambigu, of gegevens zijn gewijzigd. Herlaad en controleer.':'Reishuis is tijdelijk niet beschikbaar. Controleer de leesverbinding en opslag.'});}
  };
