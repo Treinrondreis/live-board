@@ -32,7 +32,10 @@ try{
   await page.getByRole('button',{name:'Concept opslaan',exact:true}).click();await page.locator('#message').getByText('De inhoud is elders gewijzigd.',{exact:false}).waitFor();
   for(const width of [850,390,320]){
     await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no overflow at '+width);
-    const toggle=page.getByRole('button',{name:'Menu',exact:true});await toggle.click();await menu.getByRole('link',{name:'Appnavigatie',exact:true}).click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#cms-main').evaluate(e=>e===document.activeElement),true);
+    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+    const toggle=page.getByRole('button',{name:'Menu',exact:true});await toggle.click();
+    assert.equal(await menu.evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.top<innerHeight&&r.bottom<=innerHeight+1;}),true,'mobile menu remains on screen after scrolling');
+    await menu.getByRole('link',{name:'Appnavigatie',exact:true}).click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#cms-main').evaluate(e=>e===document.activeElement),true);
     await toggle.click();await page.keyboard.press('Escape');assert.equal(await toggle.getAttribute('aria-expanded'),'false');
     await toggle.click();await menu.getByRole('link',{name:'Pagina’s',exact:true}).click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   }

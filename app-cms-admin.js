@@ -46,7 +46,7 @@ function showView(view,updateHash=true){
  document.querySelectorAll('.tr-nav [data-view]').forEach(link=>{if(link.dataset.view===view)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
  $('view-title').textContent=views[view][0];$('view-description').textContent=views[view][1];
  if(document.body.classList.contains('tr-menu-open')){$('cms-main').focus({preventScroll:true});closeCmsMenu();}
- if(updateHash)history.replaceState(null,'','#'+view);
+ if(updateHash){history.replaceState(null,'','#'+view);$('cms-main').scrollIntoView({block:'start'});}
 }
 function renderOverview(){
  const stats=[['Pagina’s',draft.pages.length,'Bewerkbare app-pagina’s'],['Zichtbare menu-items',(draft.navigation||[]).filter(n=>n.visible).length,'In de onderste appnavigatie'],['Gebruikte feeds',new Set(draft.pages.flatMap(p=>p.sections.filter(s=>s.kind==='feed').map(s=>s.feed))).size,'Bronnen in het concept']];

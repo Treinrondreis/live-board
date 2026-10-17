@@ -132,7 +132,7 @@ body.tr-ui { margin: 0; }
   .tr-ui .tr-logo { width: 195px; }
   .tr-ui .tr-header-title { display: none; }
   .tr-ui .tr-layout { grid-template-columns: minmax(0, 1fr); }
-  .tr-ui .tr-sidebar { display: none; position: static; height: auto; padding: 16px; border-bottom: 1px solid var(--tr-line); }
+  .tr-ui .tr-sidebar { display: none; position: fixed; top: var(--tr-header-height); left: 0; right: 0; z-index: 15; height: auto; max-height: calc(100dvh - var(--tr-header-height)); padding: 16px; border-bottom: 1px solid var(--tr-line); box-shadow: 0 8px 20px #173b501a; }
   .tr-ui.tr-menu-open .tr-sidebar { display: block; }
   .tr-ui .tr-menu-button { display: inline-flex; margin-left: auto; min-height: 44px; padding: 9px 12px; font-size: 14px; }
   .tr-ui .tr-global-nav { order: 3; flex: 1 1 100%; width: 100%; margin: 0; }
