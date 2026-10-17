@@ -7,7 +7,7 @@ const prefix='/seinhuis/reisschemas';
 export function createReisschemasHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req),register=floraRegister,lookupPlans=async(number,date)=>(await import('./journeys.mjs')).journeyPlansForDate(number,date)}={}){
  return async(req,res,url)=>{
   if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
-  for(const [k,v] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow, noarchive','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}))res.setHeader(k,v);
+  for(const [k,v] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow, noarchive','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}))res.setHeader(k,v);
   const reply=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));return true;};
   if(!await authenticate(req)){
    if(req.method==='GET'&&[prefix,prefix+'/'].includes(url.pathname)){res.writeHead(303,{Location:'/seinhuis'});res.end();return true;}

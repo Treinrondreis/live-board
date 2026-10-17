@@ -30,3 +30,11 @@ test('Flora no longer imports, reads or writes the itinerary register',async()=>
  assert.doesNotMatch(flora,/floraRegister|register\.summary|register\.recordCheck|api\/register/);assert.doesNotMatch(ui,/renderRegistry|reisschema-register/);
  const hub=await readFile(new URL('./admin-hub.mjs',import.meta.url),'utf8');assert.match(hub,/hubSections\.reisschemas=/);assert.match(hub,/reisschemas:'owner'/);
 });
+
+test('favicon is linked and allowed by the page image policy',async()=>{
+ const page=await call({path:'/seinhuis/reisschemas/'});
+ assert.match(page.headers['Content-Security-Policy'],/img-src 'self';/);
+ assert.match(page.headers['Content-Security-Policy'],/default-src 'none';/);
+ assert.match(page.body,/rel="icon"[^>]+reisschemas\.svg/);
+ assert.match(page.body,/rel="icon"[^>]+reisschemas\.ico/);
+});
