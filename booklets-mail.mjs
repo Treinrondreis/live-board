@@ -4,7 +4,7 @@ import {fetchBookings} from './flora-sanity.mjs';
 import {readFlora} from './flora-store.mjs';
 import {safeTicketURL,decodeEntities,plainHTML} from './flora-mail-source.mjs';
 import {nsOption} from './flora-options.mjs';
-import {createCarrierMail,providerKey,safeCarrierPDF,referenceDates,referenceContinuationDates,isoDate,carrierReferences,bookingJourneyDates,coraReferences} from './booklets-carrier-mail.mjs';
+import {createCarrierMail,providerKey,safeCarrierPDF,referenceDates,referenceContinuationDates,isoDate,carrierReferences,bookingJourneyDates,gatePassOmissionReferences} from './booklets-carrier-mail.mjs';
 
 const senders=['no-reply@confirmation.nsinternational.nl','ns@treinrondreis.nl'];
 export const nsTicketSender=from=>/^(?:[^<>]*<)?(?:no-reply@confirmation\.nsinternational\.nl|ns@treinrondreis\.nl)>?$/i.test(String(from||'').trim());
@@ -47,7 +47,7 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
    }
    messages.sort((a,b)=>b.date.localeCompare(a.date));const latest=new Set();
    for(const m of messages){const group=m.reference||m.id;m.latest=!latest.has(group);latest.add(group);m.selected=m.latest&&!!m.reference&&!m.cancelled&&m.tickets.length>0;}
-   return {provider:'NS International',providerKey:'ns',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],coraReferences:booking?coraReferences(booking):[],referenceDates:booking?referenceDates(booking,bookingReferences(booking)):[],referenceContinuationDates:booking?referenceContinuationDates(booking,bookingReferences(booking)):[],journeyDates:booking?bookingJourneyDates(booking):[],travelDates:booking?[...new Set((booking.todos||[]).map(t=>isoDate(t.startDate)).filter(Boolean))]:[],messages};
+   return {provider:'NS International',providerKey:'ns',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],gatePassOmissionReferences:booking?gatePassOmissionReferences(booking):[],referenceDates:booking?referenceDates(booking,bookingReferences(booking)):[],referenceContinuationDates:booking?referenceContinuationDates(booking,bookingReferences(booking)):[],journeyDates:booking?bookingJourneyDates(booking):[],travelDates:booking?[...new Set((booking.todos||[]).map(t=>isoDate(t.startDate)).filter(Boolean))]:[],messages};
   },
   async download(payload){
    clean();const item=tickets.get(payload.ticket);if(!item)throw Error('Deze ticketselectie is verlopen. Zoek de mails opnieuw.');if(busy){const e=Error('Er wordt al een ticket opgehaald. Probeer zo opnieuw.');e.status=429;throw e;}busy=true;

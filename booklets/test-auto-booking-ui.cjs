@@ -66,7 +66,7 @@ test('NS cancellation, missing reference and unavailable PDF never leave partial
 });
 
 test('only the matching CORA reference asks to omit NS gate pages during import',async()=>{
- const f=fixture({mail:{references:['ABCDEF','GHIJKL'],coraReferences:['ABCDEF'],messages:[{id:'cora',reference:'ABCDEF',latest:true,tickets:[{id:'a',title:'CORA ticket'}]},{id:'other',reference:'GHIJKL',latest:true,tickets:[{id:'c',title:'Other ticket'}]}]}});
+ const f=fixture({mail:{references:['ABCDEF','GHIJKL'],gatePassOmissionReferences:['ABCDEF'],messages:[{id:'cora',reference:'ABCDEF',latest:true,tickets:[{id:'a',title:'CORA ticket'}]},{id:'other',reference:'GHIJKL',latest:true,tickets:[{id:'c',title:'Other ticket'}]}]}});
  await f.exec('autoFillBookingDocuments()');const inspections=f.calls.filter(c=>c.path==='/api/tickets/inspect'&&c.b.provider==='ns');
  assert.equal(inspections.find(c=>c.b.asset==='uploaded-a').b.omitGatePass,true);
  assert.equal(inspections.find(c=>c.b.asset==='uploaded-c').b.omitGatePass,false);

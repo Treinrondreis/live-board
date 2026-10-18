@@ -1,19 +1,24 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createBookletsMail,bookingReferences} from './booklets-mail.mjs';
-import {carrierReferences,carrierMessageReferences,referenceDates,referenceContinuationDates,coraReferences,isoDate,carrierSender,safeCarrierPDF,ticketAttachment,carrierSearchQuery,bookingJourneyDates} from './booklets-carrier-mail.mjs';
+import {carrierReferences,carrierMessageReferences,referenceDates,referenceContinuationDates,gatePassOmissionReferences,isoDate,carrierSender,safeCarrierPDF,ticketAttachment,carrierSearchQuery,bookingJourneyDates} from './booklets-carrier-mail.mjs';
 
 test('CORA gate-page omission is bound to the matching NS reference, including CORA2',()=>{
- const booking={todos:[{title:'Trein CORA',supplierBookingNumber:'ABCDEF'},{title:'CORA2',supplierBookingNumber:'GHIJKL'},{title:'NS trein',supplierBookingNumber:'MNOPQR'},{title:'Coral hotel',supplierBookingNumber:'STUVWX'}]};
- assert.deepEqual(coraReferences(booking),['ABCDEF','GHIJKL']);
+ const booking={todos:[{title:'Nightjet CORA',supplierBookingNumber:'ABCDEF'},{title:'Eurostar CORA2',supplierBookingNumber:'GHIJKL'},{title:'NS trein',supplierBookingNumber:'MNOPQR'},{title:'Coral hotel',supplierBookingNumber:'STUVWX'}]};
+ assert.deepEqual(gatePassOmissionReferences(booking),['ABCDEF','GHIJKL']);
  assert.deepEqual(carrierReferences(booking,'ns'),['ABCDEF','GHIJKL','MNOPQR']);
 });
 
+test('other or unknown trains and mixed train references keep their gate pages',()=>{
+ const todos=[{title:'ICE CORA',supplierBookingNumber:'ABCDEF'},{title:'CORA',supplierBookingNumber:'GHIJKL'},{title:'Nightjet CORA',supplierBookingNumber:'MNOPQR'},{title:'ICE CORA2',supplierBookingNumber:'MNOPQR'},{title:'Eurostar CORA',supplierBookingNumber:'STUVWX'}];
+ assert.deepEqual(gatePassOmissionReferences({todos}),['STUVWX']);
+});
+
 test('the NS search response includes only CORA-linked references for page omission',async()=>{
- const booking={_id:'fixture-cora',index:1234,todos:[{title:'CORA',supplierBookingNumber:'ABCDEF'},{title:'NS trein',supplierBookingNumber:'GHIJKL'}]};
+ const booking={_id:'fixture-cora',index:1234,todos:[{title:'Nightjet CORA',supplierBookingNumber:'ABCDEF'},{title:'NS trein',supplierBookingNumber:'GHIJKL'}]};
  const control=createBookletsMail({bookings:async()=>[booking],google:{status:async()=>({connected:true}),reader:async()=>async()=>({messages:[]})}});
  const result=await control.search({query:'1234A',bookingId:'fixture-cora'});
- assert.deepEqual(result.coraReferences,['ABCDEF']);assert.deepEqual(result.references,['ABCDEF','GHIJKL']);
+ assert.deepEqual(result.gatePassOmissionReferences,['ABCDEF']);assert.deepEqual(result.references,['ABCDEF','GHIJKL']);
 });
 
 test('shared journey moments include different carriers and explicit onward ToDos, never hotel checkout',()=>{
