@@ -50,8 +50,8 @@ import {punctualityView} from './punctuality-view.mjs';
    const changed=next&&(next!==old||nextDate!==oldDate);
    const showDate=(day)=>day&&day!==r.travel_date?'<span class="arrival-date">'+escape(date(day))+'</span>':'';
    const p=punctualityView(r,mode),displayed=changed?next:old;
-   const measured=p?(p.planned!==displayed?'<span class="source-note">Bronplanning '+escape(p.planned)+'</span>':'')+(p.label?'<span class="delay-minutes" aria-label="Vertraging in minuten">'+escape(p.label)+'</span>':'')+'<span class="source-note">'+escape(p.cancelled?'Uitval gemeld':p.kind+' '+p.time+(p.delay===0?' · op tijd':''))+'</span>':'';
-   return '<td class="time-cell">'+(changed?'<del aria-label="Tijd uit reisschema">'+escape(old||'Onbekend')+showDate(oldDate)+'</del><strong class="new-time" aria-label="Nieuwe gecontroleerde tijd">'+escape(next)+showDate(nextDate)+'</strong>':'<strong>'+escape(old||'Onbekend')+'</strong>'+showDate(oldDate))+measured+'</td>';
+   const measured=p?(p.planned!==displayed?'<span class="source-note">Bronplanning '+escape(p.planned)+'</span>':'')+(p.label?'<span class="delay-minutes" aria-label="Vertraging in minuten">'+escape(p.label)+'</span>':'')+'<span class="source-note" title="'+escape(p.kind)+'">'+escape(p.cancelled?'Uitval gemeld':'Actueel '+p.time+(p.delay===0?' · op tijd':''))+'</span>':'';
+   return '<td class="time-cell">'+(p?'<span class="source-note">Gepland</span>':'')+(changed?'<del aria-label="Tijd uit reisschema">'+escape(old||'Onbekend')+showDate(oldDate)+'</del><strong class="new-time" aria-label="Nieuwe gecontroleerde tijd">'+escape(next)+showDate(nextDate)+'</strong>':'<strong>'+escape(old||'Onbekend')+'</strong>'+showDate(oldDate))+measured+'</td>';
   };
   return '<table class="journey-table"><thead><tr>'+heads.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+sortLegs(rows).map(r=>{
    const c=changeState(r),messages=[],policy=controlPolicy(r),number=numberAssessment(r,r.observation);
