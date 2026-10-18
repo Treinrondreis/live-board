@@ -487,6 +487,7 @@ class Handler(BaseHTTPRequestHandler):
     def get(self):
         path=urlparse(self.path).path
         if path=='/':return self.send(200,(ROOT/'index.html').read_bytes(),'text/html; charset=utf-8')
+        if path=='/batch-builder.js':return self.send(200,(ROOT/'batch-builder.js').read_bytes(),'application/javascript; charset=utf-8',{'Cache-Control':'no-store'})
         if path=='/api/session':
             with db() as c:setup=c.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0
             s=self.auth();return self.send(200,{'setup':setup,'user':s['user'] if s else None,'version':APP_VERSION})

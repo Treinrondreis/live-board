@@ -1,0 +1,75 @@
+/* A bounded, sequential browser queue. Saved books are the recovery records. */
+function batchApi(path,body){const prefix=typeof location!=='undefined'&&location.pathname.startsWith('/seinhuis/boekjesmaker')?'/seinhuis/boekjesmaker':'';return api(prefix+path,body);}
+function batchId(){return crypto.randomUUID().replaceAll('-','');}
+function validBatchId(value){return /^[a-f0-9]{32}$/.test(value||'');}
+function batchTemplates(){return byKind('template').filter(o=>!o.body.archived&&!o.body.deletedAt).sort((a,b)=>Number(!!b.body.pinned)-Number(!!a.body.pinned)||a.title.localeCompare(b.title));}
+function parseBatchNumbers(text){const raw=String(text).trim().split(/[\s,;]+/).filter(Boolean).map(n=>n.toUpperCase());if(!raw.length||raw.length>5||raw.some(n=>!/^\d{3,8}[A-Z]?$/.test(n)))throw Error('Vul één tot vijf boekingsnummers in, gescheiden door een nieuwe regel of komma.');return [...new Set(raw.map(n=>n.replace(/[A-Z]$/,'')))];}
+function batchGroups(){const groups=new Map();for(const book of byKind('book')){const g=book.body.batchGroup;if(!book.body.deletedAt&&g&&validBatchId(g.id)&&!groups.has(g.id))groups.set(g.id,g);}return [...groups.values()].sort((a,b)=>String(b.created).localeCompare(String(a.created))).slice(0,10);}
+function openBatchBuilder(templateId=''){if(!leave())return;stopBookingAutoLoad();cancelExportCheck();if($('#modal').open)closeModal();dirty=false;draft=null;batchSession={id:batchId(),templateId,rows:[],phase:'setup',running:false,fill:true};view='batch';shell();}
+function batchBackToSetup(){if(batchSession?.running)return;batchSession.phase='setup';renderBatch();}
+function batchStatus(row){return ({queued:'Nog controleren',preparing:'Documenten ophalen en controleren…',ready:'Klaar om te genereren',review:'Controle nodig',error:'Document of controle ontbreekt',generating:'PDF maken…',done:'PDF gereed'})[row.status]||'Nog controleren';}
+function renderBatch(){
+ const b=batchSession,m=$('#main');if(!b){m.innerHTML='<p>Geen groep geopend.</p>';return;}
+ const running=b.running,templates=batchTemplates();
+ m.innerHTML=`<div class="bar"><div><h1>Meerdere boekjes maken</h1><p>Eén sjabloon · maximaal vijf boekingen · een eigen PDF per boeking</p></div><button ${running?'disabled':''} onclick="navigate('books')">Terug naar boekingen</button></div>`;
+ if(b.phase==='setup'){
+  m.innerHTML+=`<div class="panel"><label for="batchTemplate">Sjabloon</label><select id="batchTemplate">${templates.map(o=>`<option value="${esc(o.id)}" ${b.templateId===o.id?'selected':''}>${esc(o.title)}</option>`).join('')}</select><label for="batchNumbers">Boekingsnummers</label><textarea id="batchNumbers" maxlength="100" rows="5" placeholder="Eén boekingsnummer per regel">${esc(b.numbersText||'')}</textarea><label class="check"><input type="checkbox" id="batchFill" ${b.fill?'checked':''}>Bij drukwerk vulpagina’s gebruiken voor een veelvoud van vier</label><p class="muted">Downloadbare PDF’s zonder drukwerkeisen krijgen geen drukwerkvulling. Bij uitgeschakelde vulling mogen druk-PDF’s een afwijkend pagina-aantal hebben.</p><button id="batchLookupButton" class="primary" ${b.lookingUp||!templates.length?'disabled':''} onclick="lookupBatchBookings()">Boekingen controleren</button><p class="muted">Hierna kies je de juiste boekingen voordat er nieuwe boekjes worden opgeslagen.</p></div>${batchGroups().length?`<div class="panel" style="margin-top:20px"><h2>Eerdere groepen hervatten</h2>${batchGroups().map(g=>`<p><button onclick="openBatchGroup('${g.id}')">${esc(g.templateName||'Sjabloon')} · ${esc(g.created?new Date(g.created).toLocaleString('nl-NL'):'')}</button></p>`).join('')}</div>`:''}`;return;
+ }
+ const ready=b.rows.filter(r=>r.status==='ready'),done=b.rows.filter(r=>r.status==='done');
+ m.innerHTML+=`<div class="notice"><b>${esc(b.templateName||'')}</b><p>De boekjes worden afzonderlijk opgeslagen. Laat dit scherm open tijdens het ophalen en genereren. Opgeslagen boekjes kun je later via dit overzicht hervatten.</p>${running?`<p role="status">${esc(b.progress||'Bezig…')}</p><button ${b.stopRequested?'disabled':''} onclick="batchSession.stopRequested=true;renderBatch()">${b.stopRequested?'Stopt na dit boekje':'Stoppen na dit boekje'}</button>`:''}</div><div class="batch-list">${b.rows.map((r,i)=>`<div class="panel batch-row"><div><h2>${esc(r.booking?.number||r.number)}${r.booking?' · '+esc(r.booking.name):''}</h2>${r.options?.length>1&&!r.bookId?`<label>Kies de juiste boeking</label><select ${running?'disabled':''} aria-label="Boeking ${esc(r.number)}" onchange="selectBatchBooking(${i},this.value)"><option value="">Kies een boeking…</option>${r.options.map(o=>`<option value="${esc(o.id)}" ${r.booking?.id===o.id?'selected':''}>${esc(o.name)} · ${esc(o.departure)} · ${esc(o.trip)}</option>`).join('')}</select>`:''}<p><b>${esc(batchStatus(r))}</b>${r.plan?` · ${r.plan.checkedPages||r.plan.pages} pagina’s`:''}</p>${(r.messages||[]).map(x=>`<p class="error">${esc(x)}</p>`).join('')}${r.warnings?.length?`<details><summary>${r.warnings.length} melding${r.warnings.length===1?'':'en'} bekijken</summary>${r.warnings.map(x=>`<p class="notice">${esc(x)}</p>`).join('')}</details>`:''}</div><div class="actions">${r.status==='ready'?`<label class="check"><input type="checkbox" ${r.selected!==false?'checked':''} ${running?'disabled':''} onchange="batchSession.rows[${i}].selected=this.checked;renderBatch()">Deze PDF maken</label>`:''}${r.bookId?`<button ${running?'disabled':''} onclick="openBatchBook(${i})">Openen / oplossen</button>`:''}${r.exportId&&validBatchId(r.exportId)?`<a class="button" href="${batchFileUrl(r.exportId)}" target="_blank">PDF downloaden</a>`:''}</div></div>`).join('')}</div><div class="actions" style="margin-top:20px">${b.phase==='lookup'?`<button ${running?'disabled':''} onclick="batchBackToSetup()">Invoer wijzigen</button><button class="primary" ${running||b.rows.some(r=>!r.booking)?'disabled':''} onclick="prepareBatchBooks()">Boekjes voorbereiden</button>`:`<button ${running?'disabled':''} onclick="prepareBatchBooks()">Niet-afgeronde boekjes opnieuw controleren</button><button class="primary" ${running||!ready.some(r=>r.selected!==false)?'disabled':''} onclick="generateBatchBooks()">Geselecteerde PDF’s maken (${ready.filter(r=>r.selected!==false).length})</button>`}</div><p class="muted">${done.length} van ${b.rows.length} PDF’s gereed. Een probleem bij één boeking houdt de andere boekingen niet tegen.</p>`;
+}
+function batchFileUrl(id){return (typeof location!=='undefined'&&location.pathname.startsWith('/seinhuis/boekjesmaker')?'/seinhuis/boekjesmaker':'')+'/files/export/'+id;}
+function selectBatchBooking(i,id){const r=batchSession?.rows[i];if(!r||batchSession.running)return;r.booking=r.options.find(o=>o.id===id)||null;renderBatch();}
+function lookupBatchBookings(){return run(async()=>{
+ const b=batchSession;if(!b||b.running||b.lookingUp)return;const templateId=$('#batchTemplate').value,text=$('#batchNumbers').value,fill=$('#batchFill').checked,numbers=parseBatchNumbers(text);b.lookingUp=true;$('#batchLookupButton').disabled=true;$('#batchLookupButton').textContent='Boekingen zoeken…';b.numbersText=text;b.templateId=templateId;b.fill=fill;
+ try{await refresh();const source=find(templateId);if(source?.kind!=='template'||source.body.archived||source.body.deletedAt)throw Error('Kies een beschikbaar sjabloon.');const rows=[];
+  for(const number of numbers){const r=await batchApi('/api/booking-data/search',{number});if(batchSession!==b||view!=='batch')return;const options=(r.items||[]).filter(o=>String(o.number)===number);rows.push({number,options,booking:options.length===1?options[0]:null,status:'queued',messages:options.length?[]:['Geen boeking met dit nummer gevonden.']});}
+  b.rows=rows;b.templateName=source.title;b.phase='lookup';renderBatch();
+ }finally{b.lookingUp=false;if(batchSession===b&&view==='batch'&&b.phase==='setup')renderBatch();}
+});}
+function batchBookRecord(b,row,index,source){const book=bookFromTemplate(source);book.id=row.bookId||batchId();book.body.sanityBooking=clone(row.booking);book.body.values=clone(row.booking.values||{});book.title=row.booking.number+' · '+row.booking.name;book.body.batchGroup={id:b.id,templateId:source.id,templateName:source.title,created:b.created,index,fill:b.fill};return book;}
+async function saveBatchBook(book){const r=await batchApi('/api/save',book);book.id=r.id;book.revision=r.revision;dirty=false;return book;}
+function batchRowBook(row){const book=find(row.bookId);if(!book||book.kind!=='book'||book.body.deletedAt||book.body.sanityBooking?.id!==row.booking?.id||book.body.batchGroup?.id!==batchSession.id)throw Error('Dit boekje is gewijzigd of verwijderd. Open het boekje om dit te controleren.');return clone(book);}
+function batchExistingExport(row){return state.exports.find(e=>e.book_id===row.bookId&&!e.deleted_at);}
+function batchReviewSignature(body){return JSON.stringify(body,(key,value)=>['_googlePreparation','checkedAt'].includes(key)?undefined:value);}
+async function batchPrepareSources(){await checkBookingDocumentSources();if(draft.body.sections.some(s=>(s.choice?s.selected:s)?.googleDoc)){const r=await batchApi('/api/google/prepare',{body:draft.body});if(r.errors?.length)throw Error(r.errors.map(e=>e.title+': '+e.message).join(' · '));draft.body=r.body;await refresh();}if(draft.body.sections.some(s=>(s.choice?s.selected:s)?.sanityText)){const r=await batchApi('/api/sanity/prepare',{body:draft.body});draft.body=r.body;}}
+async function checkBatchRow(b,row){
+ refreshDraftBlocks();await batchPrepareSources();const fill=b.fill&&draft.body.outputMode!=='screen',plan=await checkExport(draft.body,fill);if(!plan)throw Error('De controle is onderbroken. Controleer dit boekje opnieuw.');
+ const issues=bookIssueEntries().map(e=>e.title+': '+e.message);
+ for(const s of draft.body.sections)if(s.autoProposal&&!s.autoProposal.confirmed)issues.push((s.title||'Keuzepagina')+': bevestig de voorgestelde keuze.');
+ issues.push(...(plan.errors||[]).map(e=>e.title+': '+e.message),...(plan.missing||[]).map(title=>title+': kies een pagina of sla deze bewust over in het boekje.'));
+ if(fill&&plan.needed&&!plan.canFill)issues.push('Er zijn onvoldoende vulpagina’s voor een veelvoud van vier. Controleer de drukwerkkeuze in het boekje.');
+ await saveBatchBook(draft);row.checkedRevision=draft.revision;row.reviewSignature=batchReviewSignature(draft.body);row.plan=plan;row.messages=[...new Set(issues)];row.warnings=[...new Set([...(plan.warnings||[]),...(plan.fillerWarnings||[]),...activeSections().flatMap(s=>s.warnings||[])])];row.status=issues.length?'review':'ready';row.selected=true;
+}
+async function runBatchQueue(mode){
+ const b=batchSession;if(!b||b.running||!b.rows.length||b.rows.length>5)return;
+ if(new Set(b.rows.map(r=>r.booking?.id)).size!==b.rows.length||b.rows.some(r=>!r.booking))throw Error('Kies voor iedere regel een andere, eenduidige boeking.');
+ b.running=true;b.stopRequested=false;b.phase='review';dirty=false;renderBatch();
+ try{
+  await refresh();const source=find(b.templateId);if(mode==='prepare'&&b.rows.some(r=>!r.bookId||!find(r.bookId))&&(source?.kind!=='template'||source.body.archived||source.body.deletedAt))throw Error('Het sjabloon is niet meer beschikbaar.');b.created??=new Date().toISOString();
+  // Save distinct drafts first, so a closed tab cannot lose the group or mix customers.
+  if(mode==='prepare')for(let i=0;i<b.rows.length;i++){const row=b.rows[i];if(!row.bookId||!find(row.bookId)){const book=batchBookRecord(b,row,i,source);row.bookId=book.id;try{await saveBatchBook(book);}catch(e){row.status='error';row.messages=[e.message];}}}
+  await refresh();
+  for(const row of b.rows){
+   if(b.stopRequested)break;
+   const existing=batchExistingExport(row);if(existing){row.status='done';row.exportId=existing.id;continue;}
+   if(mode==='generate'&&(row.status!=='ready'||row.selected===false))continue;
+   try{
+    draft=batchRowBook(row);if(mode==='generate'&&draft.revision!==row.checkedRevision)throw Error('Het boekje is sinds de controle gewijzigd. Controleer het opnieuw.');
+    const approvedSignature=row.reviewSignature,approvedWarnings=JSON.stringify(row.warnings||[]);row.status=mode==='generate'?'generating':'preparing';row.messages=[];b.progress=row.booking.number+' · '+row.booking.name;renderBatch();
+    if(mode==='prepare'){await applyBookingChoices(false);await autoFillBookingDocuments();await saveBatchBook(draft);}
+    await checkBatchRow(b,row);
+    if(mode==='generate'&&row.status==='ready'){
+     if(row.reviewSignature!==approvedSignature||JSON.stringify(row.warnings)!==approvedWarnings){row.status='review';row.messages=['Pagina’s of meldingen zijn sinds je controle gewijzigd. Controleer dit boekje opnieuw.'];}
+     else{const fill=b.fill&&draft.body.outputMode!=='screen';const r=await batchApi('/api/export',{id:draft.id,revision:draft.revision,fill,allowUneven:!fill,skipChoices:false,libraryStamp:row.plan.libraryStamp});row.exportId=r.id;row.status='done';row.plan={...row.plan,checkedPages:r.report.pages};row.warnings=[...new Set([...row.warnings,...(r.storageWarning?[r.storageWarning]:[])])];}
+    }
+   }catch(e){row.status='error';row.messages=[e.message];}
+   finally{draft=null;dirty=false;cancelExportCheck();stopBookingAutoLoad();await refresh();const exported=batchExistingExport(row);if(exported){row.status='done';row.exportId=exported.id;}renderBatch();}
+  }
+ }finally{draft=null;dirty=false;b.running=false;b.progress='';renderBatch();}
+}
+function prepareBatchBooks(){return run(()=>runBatchQueue('prepare'));}
+function generateBatchBooks(){return run(()=>runBatchQueue('generate'));}
+function openBatchBook(i){return run(async()=>{const b=batchSession,row=b?.rows[i];if(!row||b.running||!leave())return;await refresh();if(batchSession!==b)return;draft=batchRowBook(row);dirty=false;view='books';renderDraft();const index=bookIssueEntries()[0]?.i??row.plan?.errors?.find(e=>Number.isInteger(e.section))?.section;if(Number.isInteger(index))goToBookIssue(index);});}
+function openBatchGroup(id){return run(async()=>{if(!validBatchId(id)||!leave())return;await refresh();const books=byKind('book').filter(o=>!o.body.deletedAt&&o.body.batchGroup?.id===id).sort((a,b)=>a.body.batchGroup.index-b.body.batchGroup.index);if(!books.length||books.length>5)throw Error('Deze groep is niet beschikbaar.');const group=books[0].body.batchGroup;batchSession={id,templateId:group.templateId,templateName:group.templateName,created:group.created,fill:group.fill!==false,phase:'review',running:false,rows:books.map(book=>{const e=state.exports.find(e=>e.book_id===book.id&&!e.deleted_at);return {bookId:book.id,booking:clone(book.body.sanityBooking),number:book.body.sanityBooking?.number,status:e?'done':'queued',exportId:e?.id,messages:[],warnings:[]};})};draft=null;dirty=false;view='batch';shell();});}
+function returnToBookBatch(){return run(async()=>{if(!draft?.body.batchGroup||batchSession?.running)return;const id=draft.body.batchGroup.id;if(dirty)await persistDraft();draft=null;dirty=false;await openBatchGroup(id);});}
