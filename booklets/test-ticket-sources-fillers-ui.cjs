@@ -46,6 +46,14 @@ test('at least one source suffices, no sources requires explicit omit or upload,
  const none=fixture({missing:['ns','obb']});await none.exec('autoFillBookingDocuments()');assert.equal(none.slot().selected,null);assert.match(none.slot().issue,/Geen tickets/);
  const fallback=fixture();fallback.exec("draft.body.sections[0].ticketSourceMode='fallback'");await fallback.exec('autoFillBookingDocuments()');assert.equal(fallback.slot().selected.pages,1);assert(!fallback.calls.some(c=>c.b?.provider==='obb'));
 });
+
+test('no pages for the chosen journey never imports opposite-direction tickets or sends an empty composition',async()=>{
+ const f=fixture({missing:['obb']});f.exec("draft.body.sanityBooking.journeyDates=['2026-10-12','2026-10-14'];draft.body.sections[0].ticketMoment=1");await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected,null);assert.match(f.slot().issue,/Geen ticketpagina’s gevonden voor reismoment 1/);assert(!f.calls.some(c=>c.path==='/api/tickets/compose'));
+});
+
+test('an ÖBB link-only confirmation explains that a ticket PDF must be downloaded first',()=>{
+ const f=fixture();assert.throws(()=>f.ctx.autoTicketMessages({provider:'ÖBB',references:['1111222233334444'],messages:[{reference:'1111222233334444',latest:true,tickets:[],manualLinks:[{url:'https://shop.oebbtickets.at/en/ticket/postcheckout/example'}]}]}),/alleen een ticketlink.*download de ticket-PDF/);
+});
 test('supplemental failures are visible, no partial pages from a failed provider and retry is atomic',async()=>{
  const f=fixture({fail:'obb'});await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.pages,1);assert.match(f.slot().selected.warnings[0],/ÖBB.*PDF niet beschikbaar/);
  const old=f.slot().selected;f.ctx.fetch=async()=>{throw Error('Unavailable');};await f.exec('autoFillBookingDocuments(draft.body.sections[0])');assert.equal(f.slot().selected,old);assert.match(f.slot().issue,/Unavailable/);
