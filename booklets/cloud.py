@@ -1,3 +1,4 @@
+import export_names
 """Private WSGI adapter. Seinhuis authenticates every customer-data request."""
 import hmac
 import json
@@ -114,7 +115,7 @@ def application(environ,start_response):
             if stream:stream.close()
             return response(500,{'error':'De druk-PDF kon niet worden geopend. Probeer opnieuw.'})
         mode='attachment' if 'download=' in environ.get('QUERY_STRING','') else 'inline'
-        try:start_response('200 OK',[('Content-Type','application/pdf'),('Content-Length',str(length)),('Content-Disposition',f'{mode}; filename="boekje-{ident[:8]}.pdf"'),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff')])
+        try:start_response('200 OK',[('Content-Type','application/pdf'),('Content-Length',str(length)),('Content-Disposition',export_names.disposition(server,ident,mode)),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff')])
         except Exception:
             if stream:stream.close()
             raise

@@ -30,15 +30,15 @@ test('NS first source date can be the second journey date after another carrier'
  assert.throws(()=>f.exec(`momentPages([{asset:'return',page:0,travelDate:'2026-10-18'}],draft.body.sections[0])`),/bestaat niet/);
 });
 
-test('hotel PDF attachments use original bytes and remain blocked until voucher review',async()=>{
+test('hotel PDF attachments use original bytes without blanket voucher review',async()=>{
  const f=fixture({api:async(path,b)=>{
   if(path==='/api/booking-data/documents')return {items:[],attachments:[{id:'hotel-file',title:'Hotel',recommended:true}],booking:{todos:[]}};
   if(path==='/api/booking-data/attachment')return {kind:'voucher',originalPdf:'synthetic-only',attachment:true,travelDate:'2026-10-12'};
   if(path==='/api/booking-documents/render')return {asset:'hotel-source',pages:1,bookingDocument:{attachment:true,documentId:'hotel-file',digest:'synthetic'},warnings:[]};
  }});
  f.exec(`draft.body.sections[0].documentKind='voucher';draft.body.sections[0].ticketSources=[]`);
- await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.reviewRequired,true);assert.equal(f.slot().selected.documentOrigin,'sanity-attachment');
- assert.equal(f.slot().selected.bookingDocuments[0].attachment,true);assert.match(f.slot().issue,/Originele hotel-PDF/);
+ await f.exec('autoFillBookingDocuments()');assert(!f.slot().selected.reviewRequired);assert.equal(f.slot().selected.documentOrigin,'sanity-attachment');
+ assert.equal(f.slot().selected.bookingDocuments[0].attachment,true);assert(!f.slot().issue);
  assert(!f.calls.some(c=>c.path==='/api/booking-documents/drive-search'));
 });
 test('at least one source suffices, no sources requires explicit omit or upload, fallback avoids extra downloads',async()=>{

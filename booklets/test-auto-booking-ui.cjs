@@ -46,7 +46,7 @@ test('duplicate booking numbers never pick a Drive customer document automatical
  const f=fixture();f.exec('draft.body.sanityBooking.sameNumberBookings=2');await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[1].issue,/niet uniek/);assert(!f.calls.some(c=>c.path.includes('drive-')));assert(f.slots()[0].selected);
 });
 
-test('approved vouchers and original attachments combine with mandatory review; attachment failure rolls back the whole replacement',async()=>{
+test('approved vouchers and original attachments combine without blanket review; attachment failure rolls back the whole replacement',async()=>{
  for(const fail of [false,true]){
   const f=fixture({api:async(path)=>{
    if(path==='/api/booking-data/documents')return {booking:{todos:[]},items:[{id:'voucher',kind:'voucher',approved:true}],attachments:[{id:'attached',title:'Hotel',recommended:true}]};
@@ -56,7 +56,7 @@ test('approved vouchers and original attachments combine with mandatory review; 
   await f.exec('autoFillBookingDocuments()');
   const slot=f.slots()[0];
   if(fail){assert.equal(slot.selected,null);assert.match(slot.issue,/Attachment unavailable/);}
-  else{assert.equal(slot.selected.pages,4);assert.equal(slot.selected.reviewRequired,true);assert.equal(slot.selected.bookingDocuments.length,2);assert(slot.selected.warnings.some(w=>w.includes('dubbel')));}
+  else{assert.equal(slot.selected.pages,4);assert(!slot.selected.reviewRequired);assert.equal(slot.selected.bookingDocuments.length,2);assert(slot.selected.warnings.some(w=>w.includes('dubbel')));}
  }
 });
 test('NS cancellation, missing reference and unavailable PDF never leave partial tickets in the book',async()=>{
@@ -111,6 +111,28 @@ test('Drive voucher stay selection errors remain actionable',async()=>{
  assert(f.slots()[3].selected.reviewRequired);assert.match(f.slots()[3].issue,/bestaat niet/);
 });
 
+test('stored attachment warnings are removed while concrete warnings and date checks remain',()=>{
+ const f=fixture();f.exec(`draft.body.sections=[{documentKind:'voucher',issue:'Originele hotel-PDF uit de Sanity-bijlagen opgehaald. Controleer klant, hotel, datums en reserveringsnummer via Voucher controleren.',selected:{documentOrigin:'sanity-attachment',reviewRequired:true,warnings:[legacyAttachmentNotice,'Reserveringsnummer ontbreekt'],pageSources:[{travelDate:'2027-03-08'}]}}];clearLegacyVoucherReviews(draft.body)`);
+ assert(!f.slots()[0].issue);assert(!f.slots()[0].selected.reviewRequired);assert.deepEqual(Array.from(f.slots()[0].selected.warnings),['Reserveringsnummer ontbreekt']);
+ assert.equal(f.exec('documentWarnings([legacyAttachmentNotice])'),'');
+ f.exec(`draft.body.sections[0].issue='Originele hotel-PDF uit de Sanity-bijlagen opgehaald. Controleer klant, hotel, datums en reserveringsnummer via Voucher controleren.';draft.body.sections[0].selected.pageSources=[{dateNeedsReview:true}];clearLegacyVoucherReviews(draft.body)`);
+ assert(f.slots()[0].selected.reviewRequired);assert.match(f.slots()[0].issue,/incheckdatums/);
+});
+
+test('ambiguous alternative hotel PDFs require a choice; distinct dated stays can combine',()=>{
+ const f=fixture();
+ assert.throws(()=>f.exec(`proposedVoucherAttachments({attachments:[{id:'a',recommended:true,travelDate:'2027-03-08'},{id:'b',recommended:true,travelDate:'2027-03-08'}]})`),/Meerdere hotelvouchers/);
+ assert.throws(()=>f.exec(`proposedVoucherAttachments({attachments:[{id:'a',recommended:true},{id:'b',recommended:true}]})`),/Meerdere hotelvouchers/);
+ assert.equal(f.exec(`proposedVoucherAttachments({attachments:[{id:'a',recommended:true,travelDate:'2027-03-08'},{id:'b',recommended:true,travelDate:'2027-03-10'}]}).length`),2);
+});
+
+test('a manually chosen Sanity PDF attachment can be saved without voucher confirmation',async()=>{
+ const f=fixture();f.exec(`documentPagesStart({book:draft,slot:draft.body.sections[3],bookingId:draft.body.sanityBooking.id},{asset:'attachment',pages:1,format:'A4',bookingDocument:{attachment:true},pageSources:[{asset:'attachment',page:0,travelDate:'2027-03-08',dateSource:'pdf',dateNeedsReview:false}]},{source:'sanity-attachment',attachment:true});`);
+ assert(!f.node('#modal').innerHTML.includes('id="voucherReviewed"'));f.node('#voucherReviewed').checked=false;
+ f.exec('documentPagesSave({disabled:false})');await f.ctx.lastRun;
+ assert.equal(f.slots()[3].selected.documentOrigin,'sanity-attachment');assert(!f.slots()[3].selected.reviewRequired);assert(!f.slots()[3].selected.reviewedAt);
+});
+
 test('legacy Drive confirmation is removed without clearing other review reasons',async()=>{
  const f=fixture();
  f.exec(`draft.body.sections=[
@@ -118,11 +140,11 @@ test('legacy Drive confirmation is removed without clearing other review reasons
   {documentKind:'voucher',issue:'Voucher uit Google Drive opgehaald. Controleer klant, hotel, datums en reserveringsnummer via Voucher controleren voordat u de PDF maakt.',selected:{documentOrigin:'drive',reviewRequired:true,pageSources:[{travelDate:'',dateNeedsReview:true}]}},
   {documentKind:'voucher',issue:'Kies de pagina’s opnieuw',selected:{documentOrigin:'drive',reviewRequired:true}},
   {documentKind:'voucher',issue:'Controleer voucher',selected:{documentOrigin:'sanity-attachment',reviewRequired:true}}
- ];clearLegacyDriveVoucherReviews(draft.body)`);
+ ];clearLegacyVoucherReviews(draft.body)`);
  assert(!f.slots()[0].selected.reviewRequired);assert(!f.slots()[0].issue);
  assert(f.slots()[1].selected.reviewRequired);assert.match(f.slots()[1].issue,/incheckdatums/);
  assert(f.slots()[2].selected.reviewRequired);assert(f.slots()[3].selected.reviewRequired);
- assert.equal(f.exec('clearLegacyDriveVoucherReviews(draft.body)'),false);
+ assert.equal(f.exec('clearLegacyVoucherReviews(draft.body)'),false);
 });
 
 test('duplicate filenames in the hotel folder require a choice instead of importing both versions',async()=>{

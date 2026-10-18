@@ -1,3 +1,4 @@
+import export_names
 """Private Drive storage for finished exports only; sources and snapshots stay local."""
 import hashlib
 import json
@@ -185,7 +186,7 @@ def verify(item, row, instance, allow_trashed=False):
 def upload(path, row, cfg, title, token, mime='application/pdf', properties=None, name=None):
     # Bounded chunks; a retry always uses the reserved file ID, never overwrites.
     url = UPLOAD + '?' + urlencode({'uploadType': 'resumable', 'fields': 'id'})
-    body = {'id': row['file_id'], 'name': name or title[:160] + ' - ' + row['id'][:8] + '.pdf',
+    body = {'id': row['file_id'], 'name': name or export_names.clean(title) + '.pdf',
             'mimeType': mime, 'parents': [row['folder']],
             'appProperties': properties or {'bookletsExport': row['id'], 'bookletsInstance': cfg['instance']}}
     try:
@@ -256,7 +257,7 @@ def archive(s, ident, seconds=110):
                 raise ValueError('De eerder opgeslagen PDF is niet meer bereikbaar in Drive. Herstel het Drive-bestand.')
             if not path.is_file() or fingerprints(path) != (row['size'], row['md5'], row['sha256']):
                 raise ValueError('De lokale PDF ontbreekt of is gewijzigd. Er is niets verwijderd.')
-            upload(path, row, cfg, export['title'], token)
+            upload(path, row, cfg, export_names.from_row(export)[:-4], token)
             item = metadata(token, row['file_id'])
         verify(item, row, cfg['instance'])
         with s.db() as c:

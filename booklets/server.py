@@ -5,7 +5,7 @@ import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
 import field_background,field_flow
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
-import export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks
+import export_names,export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks
 import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
@@ -546,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
                     if export_history.deleted(c,i):return self.send(404,{'error':'Deze drukversie staat in de prullenbak.'})
                     if not c.execute('SELECT id FROM exports WHERE id=?',(i,)).fetchone():return self.send(404,{'error':'Niet gevonden.'})
                 with export_storage.pdf(SimpleNamespace(**globals()),i) as p:
-                    return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':f'{"attachment" if parse_qs(urlparse(self.path).query).get("download") else "inline"}; filename="boekje-{i[:8]}.pdf"'})
+                    return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':export_names.disposition(SimpleNamespace(**globals()),i,'attachment' if parse_qs(urlparse(self.path).query).get('download') else 'inline')})
             a=asset(i);p=DATA/'pdfs'/f'{i}.pdf'
             if kind=='asset':return self.send(200,p.read_bytes(),'application/pdf')
             page=int(page or 0)

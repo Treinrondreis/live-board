@@ -12,7 +12,7 @@ export function voucherAttachments(b){
  const compact=d=>d.slice(8,10)+d.slice(5,7);
  return (b.documents||[]).filter(d=>d.asset?.mimeType==='application/pdf'&&/^file-[a-f0-9]{40}-pdf$/.test(d.asset._id||''))
  .filter(d=>!/factuur|invoice|rechnung|ticket|fahrkarte|reisschema|tijdlijn|itinerary/i.test((d.title||'')+' '+(d.asset.originalFilename||'')))
- .map(d=>{const title=d.title||d.asset.originalFilename||'PDF-bijlage',name=title+' '+(d.asset.originalFilename||'');const matching=stays.filter(t=>new RegExp(compact(t.startDate)+'[-_ ]+'+compact(t.endDate)).test(name)),dates=[...new Set(matching.map(t=>isoDate(t.startDate)))];return {id:d.asset._id,title,kind:'voucher',attachment:true,requiresReview:true,recommended:/voucher|hotel|accommodation/i.test(name)||matching.length>0,...(dates.length===1?{travelDate:dates[0]}:{})};});
+ .map(d=>{const title=d.title||d.asset.originalFilename||'PDF-bijlage',name=title+' '+(d.asset.originalFilename||'');const matching=stays.filter(t=>new RegExp(compact(t.startDate)+'[-_ ]+'+compact(t.endDate)).test(name)),dates=[...new Set(matching.map(t=>isoDate(t.startDate)))];return {id:d.asset._id,title,kind:'voucher',attachment:true,requiresReview:false,recommended:/voucher|hotel|accommodation/i.test(name)||matching.length>0,...(dates.length===1?{travelDate:dates[0]}:{})};});
 }
 
 function current(rows){const by=new Map();for(const row of rows||[]){const id=row._id.replace(/^drafts\./,'');if(!by.has(id)||row._id.startsWith('drafts.'))by.set(id,{...row,_id:id});}return [...by.values()];}
@@ -86,7 +86,20 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
   const by=new Map(docs.map(d=>[d._id,d]));b.docs=refs.map(id=>by.get(id)).filter(Boolean);return b;
  }
  return {
-  async search(p){const number=cleanNumber(p.number);const bookings=await query(`*[_type=="tourBooking" && index==$number] | order(_id asc)[0...101]{_id,index,firstName,lastName,dateDeparture,dateReturn,status,_updatedAt,trip->{title}}`,{number:Number(number)});const unique=current(bookings);if(bookings.length>100||unique.length>50)throw Error('Te veel boekingen gevonden voor dit nummer.');return {items:unique.map(b=>{const item=bookingSummary(b);item.sameNumberBookings=unique.length;item.number=String(p.number).trim().toUpperCase();item.values.boekingsnummer=item.number;return item;})};},
+  async search(p){
+   const term=String(p.number||'').trim(),numeric=/^\d+[a-z]?$/i.test(term),fields='_id,index,firstName,lastName,dateDeparture,dateReturn,status,_updatedAt,trip->{title}';
+   let rows;
+   if(numeric)rows=await query(`*[_type=="tourBooking" && index==$number] | order(_id asc)[0...101]{${fields}}`,{number:Number(cleanNumber(term))});
+   else{
+    if(term.length<3||term.length>80||!/^[\p{L}\p{N} .’'\-]+$/u.test(term))throw Error('Gebruik minimaal drie letters van de naam, een postcode of een boekingsnummer.');
+    const needle='*'+term.toLowerCase()+'*',compact=term.replace(/\s/g,'').toLowerCase(),postalSpaced=/^\d{4}[a-z]{2}$/.test(compact)?compact.slice(0,4)+' '+compact.slice(4):term.toLowerCase();
+    rows=await query(`*[_type=="tourBooking" && (lower(firstName) match $needle || lower(lastName) match $needle || lower(firstName+" "+lastName) match $needle || lower(postalCode) match $postal || lower(postalCode) match $postalSpaced)] | order(dateDeparture desc)[0...101]{${fields}}`,{needle,postal:compact,postalSpaced});
+   }
+   const unique=current(rows);if(rows.length>100||unique.length>50)throw Error('Te veel boekingen gevonden. Gebruik een specifiekere zoekterm.');
+   let counts;
+   if(!numeric&&unique.length){const numbers=[...new Set(unique.map(b=>b.index))],all=await query('*[_type=="tourBooking" && index in $numbers][0...501]{_id,index}',{numbers});counts=all.length<=500?current(all):[];}
+   return {items:unique.map(b=>{const item=bookingSummary(b);item.sameNumberBookings=numeric?unique.length:counts.filter(x=>x.index===b.index).length;if(numeric){item.number=term.toUpperCase();item.values.boekingsnummer=item.number;}return item;})};
+  },
   async documents(p){const b=await selected(p);return {booking:{...bookingSummary(b),todos:(b.todos||[]).slice(0,500).map(t=>({title:String(t.title||'').slice(0,2000),description:String(t.description||'').slice(0,4000),startDate:isoDate(t.startDate),endDate:isoDate(t.endDate)}))},attachments:voucherAttachments(b),items:(b.docs||[]).filter(d=>d&&documentKind(d)).map(d=>({id:d._id,title:d.title,kind:documentKind(d),updatedAt:d._updatedAt,status:d._status||'',approved:d.approved===true,requiresReview:documentKind(d)==='voucher'&&d.approved!==true}))};},
   async attachment(p){
    const b=await selected(p),item=voucherAttachments(b).find(d=>d.id===p.documentId);if(!item)throw Error('Deze PDF-bijlage hoort niet bij de geselecteerde boeking of is geen mogelijke hotelvoucher.');
@@ -94,7 +107,7 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
    const expected='/files/'+c.project+'/'+c.dataset+'/'+item.id.slice(5,-4)+'.pdf';
    if(u.protocol!=='https:'||u.hostname!=='cdn.sanity.io'||u.port||u.username||u.password||u.search||u.hash||u.pathname!==expected)throw Error('De Sanity-bijlage heeft geen geldige bestandslocatie.');
    if(!(asset.size>0&&asset.size<=30*1024*1024))throw Error('De PDF-bijlage mag maximaal 30 MB zijn.');
-   const meta={bookingId:b._id,documentId:item.id,kind:'voucher',title:item.title,attachment:true,approved:false,content:[],...(item.travelDate?{travelDate:item.travelDate}:{}),revision:item.id,digest:createHash('sha256').update(item.id).digest('hex'),loadedAt:new Date().toISOString(),warnings:['Originele PDF-bijlage bij de Sanity-boeking. Controleer klant, hotel, verblijfdatums en reserveringsnummer.']};
+   const meta={bookingId:b._id,documentId:item.id,kind:'voucher',title:item.title,attachment:true,approved:false,content:[],...(item.travelDate?{travelDate:item.travelDate}:{}),revision:item.id,digest:createHash('sha256').update(item.id).digest('hex'),loadedAt:new Date().toISOString(),warnings:[]};
    if(p.metadataOnly===true)return meta;
    const response=await fetcher(u,{method:'GET',headers:{Authorization:'Bearer '+c.token},redirect:'error',signal:AbortSignal.timeout(25000)});
    if(!response.ok)throw Error('De originele hotelbijlage kon niet worden gelezen. Controleer de Sanity-leestoegang of upload de PDF.');
