@@ -251,3 +251,44 @@ manual coverage records display neutrally, including older records. Structured s
 conflicts still require attention, and the independent Nightjet DB rule is preserved.
 An unchecked onward leg alone no longer triggers a connection warning; an observed
 shortened or broken connection still does. Observations/control history remain append-only.
+
+## Permanent punctuality evidence
+
+The application database now keeps compact punctuality_events, punctuality_current and
+punctuality_legs tables, separate from the temporary board/journey history. The regular
+3/30-day cleanup does not include these tables. All configured large-screen variants
+select relevant train/station/source events, including on-time events with explicit realtime
+coverage; active registered itinerary endpoints additionally select their own events.
+Unchanged polls extend last_seen_at, changed estimates/actuals/cancellations create history.
+Raw provider payloads, customer names, ticket contents and dossier numbers are not copied;
+private leg/version IDs establish the link. Removed/replaced itineraries do not delete history.
+
+The existing collectors feed this archive without new external timetable requests.
+Full journey snapshots retain arrival and departure separately; point boards prove only
+their own station/event. Number, endpoint name and actual event calendar date must agree,
+with at most 30 minutes between the source planning and a registered/verified planned time.
+No +/-one-day matching is used for night trains. Ambiguous repeated station occurrences in
+the existing full journey reader remain subject to its safeguards. New itinerary versions
+can link previously retained matching board evidence. Original itinerary fields/documents
+and planning observations are never rewritten by punctuality ingestion.
+
+Only explicit actualTimestamp, or snapshot realizationConfirmed plus actualTime, is accepted
+as realized; a future actual timestamp is rejected. An EstimatedTime, expected timestamp,
+Actueel forecast or departed flag is never promoted to actual. Realized evidence takes
+priority over later forecasts. Planned-only rows never create an on-time result. Unknown
+remains unknown. Source time, first/last received time, planned/expected/actual timestamps,
+delay and cancellation flag are preserved. The UI leaves the planned time visible and
+adds red +minutes, with Verwacht/Werkelijk labels. A differing source planning is identified
+separately so a planning correction is not silently called a live delay.
+
+Owner-only GET enrichment batches at most 200 leg IDs and only reads persisted evidence;
+GETs do not collect or write. Per-leg history returns the latest 500 states without deleting
+older states. Authenticated history requests require a leg from the accessible current
+register. The page reports archive errors; no mail or Sanity mutation follows from live delay.
+
+On service start, surviving temporary non-zero delay/cancellation rows from the preceding
+31 days are copied in batches of 200 when relevant. Their timestamps and forecast status
+are preserved, and no actual or zero-delay proof is invented from old temporary rows.
+Already purged history cannot be reconstructed. Live collection continues independently;
+a backfill error remains visible rather than falsely reporting completion. Existing database
+backups remain the recovery mechanism; this feature does not configure or verify backups.

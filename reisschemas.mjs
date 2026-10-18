@@ -4,6 +4,7 @@ import {enrichChanges} from './reisschema-changes.mjs';
 import {controlRoutes} from './reisschema-runtime.mjs';
 import {assess,dayAt} from './reisschema-control.mjs';
 import {applyNumberPolicy} from './reisschema-number-policy.mjs';
+import {enrichPunctuality,punctualityHistory,punctualityStatus} from './punctuality.mjs';
 
 const prefix='/seinhuis/reisschemas';
 // Separate owner-only section; original itineraries stay immutable.
@@ -18,7 +19,13 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
   }
   const path=url.pathname.slice(prefix.length);
   if(await controls(req,res,url))return true;
-  async function summary(){const data=await register.summary();let notifications=[];if(data.available&&register.notificationContexts)notifications=await register.notificationContexts();return {...data,legs:data.available?await enrichChanges(data.legs,lookupPlans):[],notifications};}
+  async function summary(){const data=await register.summary();let notifications=[];if(data.available&&register.notificationContexts)notifications=await register.notificationContexts();return {...data,legs:data.available?await enrichPunctuality(await enrichChanges(data.legs,lookupPlans)):[],notifications,punctualityStatus:punctualityStatus()};}
+  if(path==='/api/punctuality'&&req.method==='GET'){
+   const id=url.searchParams.get('legId');if(!/^[a-f0-9-]{36}$/.test(id||''))return reply(400,{error:'Ongeldige rit.'});
+   const data=await register.summary();if(!data.available)return reply(503,{error:'Register niet bereikbaar.'});
+   if(!data.legs.some(r=>r.leg_id===id))return reply(404,{error:'Rit niet gevonden.'});
+   return reply(200,{measurements:await punctualityHistory(id)});
+  }
   if(req.method==='POST'&&['/api/observation','/api/communication'].includes(path)){
    if(req.headers.origin!=='https://'+req.headers.host||req.headers['x-reisschemas']!=='1'||req.headers['content-type']?.split(';')[0]!=='application/json')return reply(403,{error:'Open deze actie op de eigen beheerpagina.'});
    try{
@@ -51,7 +58,7 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
   }
   if(req.method!=='GET')return reply(405,{error:'Actie niet beschikbaar.'});
   if(path==='/api/register')return reply(200,await summary());
-  const files={'':'reisschemas.html','/':'reisschemas.html','/reisschemas.js':'reisschemas.js','/reisschemas.css':'reisschemas.css','/reisschema-number-policy.mjs':'reisschema-number-policy.mjs'};
+  const files={'':'reisschemas.html','/':'reisschemas.html','/reisschemas.js':'reisschemas.js','/reisschemas.css':'reisschemas.css','/reisschema-number-policy.mjs':'reisschema-number-policy.mjs','/punctuality-view.mjs':'punctuality-view.mjs'};
   if(!files[path])return reply(404,{error:'Niet gevonden.'});
   const file=files[path],ext=file.split('.').pop();
   res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});
