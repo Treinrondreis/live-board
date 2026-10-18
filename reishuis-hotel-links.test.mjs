@@ -22,8 +22,8 @@ test('ambiguous names, dates, duplicate lines/tasks, room conflicts and occupied
  const occupied=source();occupied.todos.push({id:'local-owner',component:{line:occupied.lines[0].id},tag:'option'});assert.equal(hotelMatches(occupied,hotels)[occupied.todos[0].id].component,undefined);
  const rooms=[{...hotels[0],rooms:[...hotels[0].rooms,{key:'single',title:'Eenpersoonskamer',titleShort:'Single'}]}];const mismatch=normalizeDossier({_id:'fixture',todos:[todo],lines:[{...line,title:'03 jan.: Voorbeeld AMS | Single'}]});assert.equal(hotelMatches(mismatch,rooms)[mismatch.todos[0].id].component,undefined);
 });
-test('minimal hotel index preserves dossier keyed identity, excludes keyless/duplicate keys and private content',()=>{
- const index=hotelTodoIndex([{...todo,description:'Fictieve privénotitie',supplierBookingNumber:'fixture-private'}, {title:'Zonder sleutel'},{...todo,_key:'duplicate'},{...todo,_key:'duplicate'}]);assert.equal(index.length,1);assert.equal(index[0].id,source().todos[0].id);assert.equal(index[0].description,undefined);assert.equal(index[0].supplierBookingNumber,undefined);
+test('minimal hotel index preserves identity and requested supplier reference, excluding notes and keyless/duplicate rows',()=>{
+ const index=hotelTodoIndex([{...todo,description:'Fictieve privénotitie',supplierBookingNumber:'fixture-private'}, {title:'Zonder sleutel'},{...todo,_key:'duplicate'},{...todo,_key:'duplicate'}]);assert.equal(index.length,1);assert.equal(index[0].id,source().todos[0].id);assert.equal(index[0].description,undefined);assert.equal(index[0].supplierBookingNumber,'fixture-private');
 });
 test('hotel overview applies local moves, archives, dates, rooms and cancellation without duplicate old stays',()=>{
  const id=source().todos[0].id,b={id:'fixture-booking',index:'9901',name:'Fictieve Reiziger',status:'te verwerken',hotelTodos:hotelTodoIndex([todo])},state=emptyReishuis();
