@@ -9,7 +9,9 @@ export const reisschemaCycle=createControlCycle({register:floraRegister,read:rea
 export const changeMail=createChangeMail({register:floraRegister,read:readMail,write:writeMail,gmail:draftGoogle,origin:process.env.FLORA_PUBLIC_ORIGIN||'https://treinbord.up.railway.app'});
 export function startReisschemaControls(){
  const run=()=>void reisschemaCycle.tick().catch(()=>{});
- setTimeout(run,90000).unref();setInterval(run,15*60000).unref();
+ // Wake on the minute; the durable cycle admits one scheduled round after 00:30 Amsterdam.
+ const minute=()=>{run();setTimeout(minute,60000-Date.now()%60000).unref();};
+ setTimeout(minute,1000).unref();
 }
 const session=req=>String(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>/^(tr_google_session|tr_admin_session)=/.test(s))||'';
 export function createControlRoutes({cycle=reisschemaCycle,mail=changeMail,google=draftGoogle}={}){

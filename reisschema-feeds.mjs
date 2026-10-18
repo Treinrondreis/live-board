@@ -130,27 +130,54 @@ async function download(url,headers,fetcher,now){
  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>30*1024*1024)throw Error('Bestand te groot');parts.push(value);}}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
  return {bytes:new Uint8Array(Buffer.concat(parts)),modified:new Date(modified).toISOString()};
 }
+export const sourceCheckFresh=(result,now)=>{
+ const evidence=(result.sources||[]).map(s=>{try{return JSON.parse(s);}catch{return {};}});
+ return evidence.length>0&&evidence.every(s=>Number.isFinite(Date.parse(s.downloaded_at))&&now-Date.parse(s.downloaded_at)<=4*3600000&&Date.parse(s.downloaded_at)<=now+60000);
+};
+export function reconcilePlanningSources(matches,now){
+ if(!matches.length)return null;
+ const evidence=matches.flatMap(m=>(m.sources||[]).map(s=>{try{return JSON.stringify({...JSON.parse(s),compared_departure_date:m.observation.departure_date,compared_departure_time:m.observation.departure_time,compared_arrival_date:m.observation.arrival_date,compared_arrival_time:m.observation.arrival_time});}catch{return s;}}));
+ if(matches.length>1){
+  const clocks=['departure','arrival'].map(mode=>matches.map(m=>Date.parse(m.observation[mode+'_date']+'T'+m.observation[mode+'_time']+':00Z')/60000));
+  const conflict=clocks.some(times=>times.some(t=>!Number.isFinite(t))||Math.max(...times)-Math.min(...times)>=3)||new Set(matches.map(m=>!!m.observation.cancelled)).size>1;
+  if(matches.some(m=>!sourceCheckFresh(m,now)))return {sourceConflict:true,reason:'Bronvergelijking nog niet bevestigd: raadpleging maximaal 4 uur oud vereist; handmatig controleren',sources:evidence};
+  if(conflict)return {sourceConflict:true,reason:'Bronnen spreken elkaar tegen (minimaal 3 minuten of andere uitvalstatus); binnen 4 uur geraadpleegd; '+matches.map(m=>m.observation.source+': '+m.observation.departure_time+' → '+m.observation.arrival_time+(m.observation.cancelled?' (uitval)':'')).join('; ')+'; handmatig controleren',sources:evidence};
+ }
+ // Keep the stable source order; never average times or discard supporting evidence.
+ return {...matches[0],sources:evidence,reason:matches.length>1?'Bronnen vergeleken; maximaal 2 minuten verschil geaccepteerd':''};
+}
 export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.now}={}){
  const enabled=()=>env.REISSCHEMA_PATRICK_ENABLED==='1';
  return {
   async prepare(legs,heartbeat=async()=>{}){
-   const outputs=[],statuses=[];
+   const outputs=[],statuses=[],refreshed=new Set();
    const feeds=[{kind:'iff',name:'NDOV IFF',url:'https://data.ndovloket.nl/ns/ns-latest.zip'},
     ...(enabled()?[{kind:'gtfs',name:'GTFS.de',url:'https://download.gtfs.de/treinrondreis/latest.zip',headers:{Authorization:'Basic '+Buffer.from((env.REISSCHEMA_PATRICK_USER||'')+':'+(env.REISSCHEMA_PATRICK_PASSWORD||'')).toString('base64')}}]:[]),
     ...(env.REISSCHEMA_SNCF_ENABLED==='1'?[{kind:'gtfs',name:'SNCF GTFS',url:'https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip'}]:[]),
     ...(env.REISSCHEMA_NMBS_ENABLED==='1'&&env.BMC_PARTNER_KEY?[{kind:'gtfs',name:'NMBS GTFS',url:'https://api-management-opendata-production.azure-api.net/api/gtfs/feed/nmbssncb/static',headers:{'bmc-partner-key':env.BMC_PARTNER_KEY}}]:[])];
-   for(const source of feeds){
+   const load=async(source,rowsToCheck)=>{
     await heartbeat();
     try{const {bytes,modified}=await download(source.url,source.headers||{},fetcher,clock()),meta={name:source.name,hash:createHash('sha256').update(bytes).digest('hex'),loadedAt:new Date(clock()).toISOString(),modified};
-     const rows=await new Promise((resolve,reject)=>{const worker=new Worker(new URL(import.meta.url),{workerData:{kind:source.kind,bytes,legs,meta},transferList:[bytes.buffer],resourceLimits:{maxOldGenerationSizeMb:256}});const timer=setTimeout(()=>{void worker.terminate();reject(Error('Verwerking verlopen'));},120000);worker.once('message',resolve);worker.once('error',()=>reject(Error('Verwerking mislukt')));worker.once('exit',code=>{clearTimeout(timer);if(code)reject(Error('Verwerking gestopt'));});});outputs.push(rows);
-     statuses.push({name:source.name,status:'ready',modified,matched:Object.values(rows).filter(r=>r.observation).length});
-    }catch{statuses.push({name:source.name,status:'unavailable',matched:0});outputs.push(Object.fromEntries(legs.map(l=>[l.leg_id,{reason:source.name+' niet bereikbaar of niet bruikbaar',sources:[]}])));}
-   }
+     const rows=await new Promise((resolve,reject)=>{const worker=new Worker(new URL(import.meta.url),{workerData:{kind:source.kind,bytes,legs:rowsToCheck,meta},transferList:[bytes.buffer],resourceLimits:{maxOldGenerationSizeMb:256}});const timer=setTimeout(()=>{void worker.terminate();reject(Error('Verwerking verlopen'));},120000);worker.once('message',resolve);worker.once('error',()=>reject(Error('Verwerking mislukt')));worker.once('exit',code=>{clearTimeout(timer);if(code)reject(Error('Verwerking gestopt'));});});
+     return {rows,status:{name:source.name,status:'ready',modified,matched:Object.values(rows).filter(r=>r.observation).length}};
+    }catch{return {rows:Object.fromEntries(rowsToCheck.map(l=>[l.leg_id,{reason:source.name+' niet bereikbaar of niet bruikbaar',sources:[]}])),status:{name:source.name,status:'unavailable',matched:0}};}
+   };
+   for(const source of feeds){const loaded=await load(source,legs);outputs.push(loaded.rows);statuses.push(loaded.status);}
    return {statuses,async lookup(leg){
-    const matches=outputs.map(o=>o[leg.leg_id]).filter(r=>r?.observation);
-    // Conflicting sources are never silently prioritized.
-    if(matches.length>1&&new Set(matches.map(r=>JSON.stringify(fields({departure:{date:r.observation.departure_date,time:r.observation.departure_time},arrival:{date:r.observation.arrival_date,time:r.observation.arrival_time}})))).size>1)return {reason:'Bronnen spreken elkaar tegen; controleer DB',sources:matches.flatMap(m=>m.sources)};
-    const result=matches[0];
+    let matches=outputs.map(o=>o[leg.leg_id]).filter(r=>r?.observation);
+    // Fresh means fetched/checked within four hours, not that the weekly timetable was published today.
+    // Refresh an old participating source once; a failed refresh cannot erase the contradiction.
+    let refreshFailed=false;
+    if(matches.length>1)for(let i=0;i<feeds.length;i++){
+     const old=outputs[i][leg.leg_id];if(!old?.observation||sourceCheckFresh(old,clock()))continue;
+     if(refreshed.has(i))continue;refreshed.add(i);
+     const loaded=await load(feeds[i],legs);statuses[i]=loaded.status;
+     if(!loaded.rows[leg.leg_id]?.observation){refreshFailed=true;continue;}outputs[i]=loaded.rows;
+    }
+    matches=outputs.map(o=>o[leg.leg_id]).filter(r=>r?.observation);
+    if(refreshFailed)return {sourceConflict:true,reason:'Andere bron opnieuw geraadpleegd maar niet bevestigd; handmatig controleren',sources:matches.flatMap(m=>m.sources)};
+    const result=reconcilePlanningSources(matches,clock());
+    if(result?.sourceConflict)return result;
     if(result&&Date.parse(result.observation.observed_at)<Date.parse(leg.observation?.observed_at))return {reason:'Bron ouder dan de laatst vastgelegde controle; handmatig beoordelen',sources:result.sources};
     if(result&&(!leg.departure_time||!leg.arrival_time))return {reason:'Oorspronkelijke tijden ontbreken; eerst reisschema controleren',sources:result.sources};
     return result||{reason:outputs.map(o=>o[leg.leg_id]?.reason).filter(Boolean).join('; ')||'Geen bruikbare bron; controleer DB',sources:outputs.flatMap(o=>o[leg.leg_id]?.sources||[])};

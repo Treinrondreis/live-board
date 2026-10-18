@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assess,dueLeg,connections,createControlCycle} from './reisschema-control.mjs';
+import {assess,dueLeg,connections,createControlCycle,dailyControlDue,nextDailyControlAt} from './reisschema-control.mjs';
 const leg={status:'active',leg_id:'leg-a',version_id:'version-a',sequence:1,role:'primary',travel_date:'2031-06-10',arrival_date:'2031-06-10',departure_time:'10:00',arrival_time:'12:00',from_station:'Example North',to_station:'Example South'};
 const observation={departure_date:leg.travel_date,departure_time:'09:56',arrival_date:leg.travel_date,arrival_time:'12:10',cancelled:false,connection_broken:false,backup_communicated:false,source:'Fictional',observed_at:'2031-06-02T12:00:00.000Z'};
 test('per-leg date window includes D-15, D0; fallback D-8; never inactive',()=>{
@@ -58,4 +58,46 @@ test('manual retry after partial failure resumes the same round instead of creat
  await createControlCycle(h.deps).tick({manual:true});
  assert.equal(h.prepares,1);assert.equal(h.events.filter(e=>e.k==='observation').length,1);
  assert.equal(h.events.filter(e=>e.k==='control').length,1);
+});
+
+test('00:30 Amsterdam schedule follows summer/winter time and excludes 00:29',()=>{
+ assert.equal(dailyControlDue(Date.parse('2026-10-24T22:29:00Z')),false);
+ assert.equal(dailyControlDue(Date.parse('2026-10-24T22:30:00Z')),true);
+ assert.equal(nextDailyControlAt(Date.parse('2026-10-24T22:29:00Z')),'2026-10-24T22:30:00.000Z');
+ assert.equal(nextDailyControlAt(Date.parse('2026-10-24T22:31:00Z')),'2026-10-25T23:30:00.000Z');
+ assert.equal(nextDailyControlAt(Date.parse('2026-03-28T23:31:00Z')),'2026-03-29T22:30:00.000Z');
+});
+
+test('scheduled round runs after 00:30 once per day, with manual checks still available',async()=>{
+ const h=harness();let now=Date.parse('2031-06-01T22:29:00Z');h.deps.clock=()=>now;
+ const cycle=createControlCycle(h.deps);await cycle.tick();assert.equal(h.prepares,0);
+ now+=60000;await cycle.tick();assert.equal(h.prepares,1);
+ h.rows=[leg,{...leg,leg_id:'new-leg'}];await cycle.tick();assert.equal(h.prepares,1);
+ await cycle.tick({manual:true});assert.equal(h.prepares,2);
+});
+
+test('conflicting sources always create a manual task even at D-15',async()=>{
+ const h=harness();h.rows=[{...leg,travel_date:'2031-06-17'}];
+ h.deps.sources.prepare=async()=>({lookup:async()=>({sourceConflict:true,reason:'Bronnen spreken elkaar tegen',sources:['Fictional']})});
+ await createControlCycle(h.deps).tick();assert.equal(h.events.length,1);assert.equal(h.events[0].e.outcome,'manual');
+});
+
+test('evidence older than four hours is looked up again after an interrupted round',async()=>{
+ const h=harness({failControl:true});let now=Date.parse('2031-06-02T12:00:00Z');h.deps.clock=()=>now;
+ await createControlCycle(h.deps).tick();now+=4*3600000+1;
+ await createControlCycle(h.deps).tick();assert.equal(h.prepares,2);
+});
+
+test('enabling after 00:30 schedules the next night without an unexpected immediate run',async()=>{
+ const h=harness(),stored=h.kv.get('reisschema-control');stored.value.enabled=false;let now=Date.parse('2031-06-02T12:00:00Z');h.deps.clock=()=>now;
+ const cycle=createControlCycle(h.deps);await cycle.enable(true);await cycle.tick();assert.equal(h.prepares,0);
+ await cycle.tick({manual:true});assert.equal(h.prepares,1);
+ now=Date.parse('2031-06-02T22:30:00Z');await cycle.tick();assert.equal(h.prepares,2);
+});
+
+test('queue freshness uses the source fetch time, not only the later control timestamp',async()=>{
+ const h=harness({failControl:true});let now=Date.parse('2031-06-02T12:00:00Z'),prepares=0;h.deps.clock=()=>now;
+ h.deps.sources.prepare=async()=>{prepares++;return {lookup:async()=>({observation,sources:[JSON.stringify({downloaded_at:'2031-06-02T11:50:00Z'})]})};};
+ await createControlCycle(h.deps).tick();now=Date.parse('2031-06-02T15:55:00Z');
+ await createControlCycle(h.deps).tick();assert.equal(prepares,2);
 });
