@@ -64,6 +64,13 @@ test('NS cancellation, missing reference and unavailable PDF never leave partial
   const f=fixture(options);await f.exec('autoFillBookingDocuments()');assert.equal(f.slots()[2].selected,null);assert(f.slots()[2].issue);assert(f.slots()[3].selected);
  }
 });
+
+test('only the matching CORA reference asks to omit NS gate pages during import',async()=>{
+ const f=fixture({mail:{references:['ABCDEF','GHIJKL'],coraReferences:['ABCDEF'],messages:[{id:'cora',reference:'ABCDEF',latest:true,tickets:[{id:'a',title:'CORA ticket'}]},{id:'other',reference:'GHIJKL',latest:true,tickets:[{id:'c',title:'Other ticket'}]}]}});
+ await f.exec('autoFillBookingDocuments()');const inspections=f.calls.filter(c=>c.path==='/api/tickets/inspect'&&c.b.provider==='ns');
+ assert.equal(inspections.find(c=>c.b.asset==='uploaded-a').b.omitGatePass,true);
+ assert.equal(inspections.find(c=>c.b.asset==='uploaded-c').b.omitGatePass,false);
+});
 test('missing Google permission becomes a chapter issue, not a failure of the other imports',async()=>{
  const f=fixture({api:async path=>{if(path.includes('drive-search'))throw Error('Koppel Google Drive met leestoegang');}});await f.exec('autoFillBookingDocuments()');assert.match(f.slots()[1].issue,/leestoegang/);assert(f.slots()[0].selected);assert(f.slots()[2].selected);assert(f.slots()[3].selected);
 });
