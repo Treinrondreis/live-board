@@ -45,6 +45,18 @@ test('shared journey moments include different carriers and explicit onward ToDo
  assert.deepEqual(bookingJourneyDates(booking),['2026-10-12','2026-10-18','2026-10-19']);
 });
 
+test('an NS station note retains the shared reference and both departure dates in the search response',async()=>{
+ const booking={_id:'fixture-station-note',index:1234,todos:[{title:'Nightjet heen',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-10'},{title:'Nightjet terug',supplierBookingNumber:'ABCDEFG  Voorbeeldstad Centraal',startDate:'2027-02-13'},{title:'Hotel',supplierBookingNumber:'HIJKLMN  Voorbeeldstad Centraal',startDate:'2027-02-11'}]};
+ assert.deepEqual(carrierReferences(booking,'ns'),['ABCDEFG']);assert.deepEqual(referenceDates(booking,['ABCDEFG']),[{reference:'ABCDEFG',dates:['2027-02-10','2027-02-13']}]);assert.deepEqual(bookingJourneyDates(booking),['2027-02-10','2027-02-13']);
+ const queries=[],control=createBookletsMail({bookings:async()=>[booking],google:{status:async()=>({connected:true}),reader:async()=>async(path,args)=>{queries.push(args.q);return {messages:[]};}}});
+ const result=await control.search({query:'1234A',bookingId:booking._id});assert.deepEqual(result.referenceDates,[{reference:'ABCDEFG',dates:['2027-02-10','2027-02-13']}]);assert.deepEqual(result.journeyDates,['2027-02-10','2027-02-13']);assert(queries.every(q=>!q.includes('Voorbeeldstad')));
+});
+
+test('station-note parsing does not truncate two references, scan prose or alter other carriers',()=>{
+ const todos=[{title:'Treinticket',supplierBookingNumber:'ABCDEF GHIJKL'},{title:'Treinticket',supplierBookingNumber:'Opmerking bij ABCDEF'},{title:'Hotel',supplierBookingNumber:'MNOPQR Voorbeeldstad Centraal'},{title:'Treinticket',description:'STUVWX Voorbeeldstad Centraal'},{title:'Treinticket',supplierBookingNumber:'YZABCD Voorbeeldstad Centraal; HIJKLM'}];
+ assert.deepEqual(carrierReferences({todos},'ns'),['YZABCD','HIJKLM']);assert.deepEqual(carrierReferences({todos},'obb'),['HIJKLM']);
+});
+
 test('NS continuation hints use only the following day of a matching train ToDo',()=>{
  const booking={todos:[{title:'Nightjet',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-23',endDate:'2027-02-24'},{title:'Hotel',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-24',endDate:'2027-02-25'},{title:'Nightjet',supplierBookingNumber:'HIJKLMN',startDate:'2027-02-26',endDate:'2027-02-27'},{title:'Nightjet',supplierBookingNumber:'ABCDEFG',startDate:'2027-02-23',endDate:'2027-02-28'}]};
  assert.deepEqual(referenceContinuationDates(booking,['ABCDEFG']),[{reference:'ABCDEFG',dates:['2027-02-24']}]);
