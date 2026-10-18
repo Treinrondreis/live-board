@@ -1,5 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {changeKey} from './reisschema-changes.mjs';
+import {numberAssessment,controlPolicy} from './reisschema-number-policy.mjs';
 
 export const dayAt=now=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
 const localMinute=now=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Amsterdam',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);return Number(p.find(x=>x.type==='hour').value)*60+Number(p.find(x=>x.type==='minute').value);};
@@ -18,10 +19,10 @@ export const fingerprint=o=>createHash('sha256').update(JSON.stringify(o)).diges
 export function assess(leg,o){
  const departure=minute(o.departure_date,o.departure_time)-minute(leg.travel_date,leg.departure_time);
  const arrival=minute(o.arrival_date,o.arrival_time)-minute(leg.arrival_date||leg.travel_date,leg.arrival_time);
- const stationChanged=!!o.station_changed,changed=departure!==0||arrival!==0||o.cancelled||o.connection_broken||stationChanged;
+ const n=numberAssessment(leg,o),stationChanged=!!o.station_changed,changed=departure!==0||arrival!==0||o.cancelled||o.connection_broken||stationChanged||n.notify;
  return {changed,departure,arrival,urgent:departure<=-4||o.cancelled||o.connection_broken||stationChanged,
-  draftRequired:Math.abs(departure)>=4||o.cancelled||o.connection_broken||stationChanged,
-  reservationReview:!!(o.cancelled||o.connection_broken||stationChanged),backupReview:changed,
+  draftRequired:Math.abs(departure)>=4||o.cancelled||o.connection_broken||stationChanged||n.notify,
+  reservationReview:!!(o.cancelled||o.connection_broken||stationChanged||n.notify),backupReview:changed,
   tightConnectionReview:false};
 }
 export function dueLeg(leg,today,usable){
@@ -39,7 +40,7 @@ export function connections(rows){
   // An unchecked onward train is never treated as a verified departure.
   const gap=dep?minute(dep.departure_date,dep.departure_time)-minute(arr.arrival_date,arr.arrival_time):NaN;
   const observation={...arr,connection_broken:Number.isFinite(gap)&&gap<=0,backup_communicated:false,connection_calculated:true};
-  observation.change_key=changeKey(row.leg_id,observation);
+  observation.change_key=changeKey(row.leg_id,observation,row);
   return {...row,observation,tightConnectionReview:!dep||Number.isFinite(gap)&&gap>0&&gap<oldGap};
  });
 }
@@ -75,7 +76,7 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
      if(due)checked.push({...row,result,observation:result.observation||null,controlAt:new Date(clock()).toISOString()});
     }
     checkpoint.queue=connections(checked);checkpoint.queueDay=today;checkpoint.queueSelection=selectionKey;
-    checkpoint.lastSummary={selected:selected.length,checked:checked.filter(r=>r.observation).length,manual:checked.filter(r=>!r.observation).length,pending:checked.length,sources:prepared.statuses||[]};await save();
+    checkpoint.lastSummary={selected:selected.length,checked:checked.filter(r=>r.observation).length,manual:checked.filter(r=>!r.observation).length,extraDb:checked.filter(r=>controlPolicy({control:{sources:r.result.sources}}).extra_db_required).length,numberNotices:checked.filter(r=>r.observation&&numberAssessment(r,r.observation).notify).length,pending:checked.length,sources:prepared.statuses||[]};await save();
    }
    for(const row of checkpoint.queue||[]){
     const runKey=checkpoint.queueRun||today;

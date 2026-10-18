@@ -40,10 +40,11 @@ after restart, rather than recomputing timestamps with the same idempotency key.
 | Sweden | `sweden.mjs`, Trafikverket announcements | Inventoried; no unverified future-data coverage assertion. Manual DB fallback |
 | OeBB | `oebb.mjs`, HAFAS/Scotty board calls | Inventoried; existing departures are not a verified 15-day full-route plan. Manual DB fallback |
 
-ICE/Nightjet through NDOV requires both checked endpoints to be in the Netherlands.
-An international leg with only one Dutch endpoint is NOT marked fully checked by NDOV.
+ICE through NDOV still requires both checked endpoints to be in the Netherlands.
+Nightjet can now use the full international IFF endpoint pair when the dated through
+journey is explicitly present. It additionally requires a visible manual DB verification.
 EuroCity/EuroCity Direct can match an international IFF leg only when both registered
-endpoints, number/category, calendar and times really occur in the same supported segment.
+endpoints, numeric number, calendar and times really occur in the same supported segment.
 
 GTFS splits with the same explicit train number may join only at a shared boundary station,
 on the same service day, in chronological order; all source IDs are retained. Missing middle
@@ -191,3 +192,33 @@ empty: this is missing coverage, not proof of cancellation. This sample does not
 complete coverage or independent correctness; both products may use underlying NMBS data.
 Raw public responses and the authenticated ZIP stay outside Git. No customer dataset
 was used in the quality sample. See https://docs.irail.be/ for limits and semantics.
+
+## Agreed train-number rules (18 October 2026)
+
+Same numeric train number with a different designation is accepted. For a genuinely
+different number, require one unique full endpoint/date match with exactly the original
+departure AND arrival date/times, or source-proven number segments in one IFF through
+journey. Never choose the nearest train or silently join unrelated numbers. Exact-number
+matches take precedence; ambiguous candidates remain manual. Alternative GTFS discovery
+keeps only registered endpoint calls and at most 20,000 alternate trips. Reaching the
+bound prevents an alternative from being approved; exact-number matching still works.
+
+ICE, RJ, ECE, FR and EC (including EuroCity) default operationally to 'with reservation'
+for number alerts. Other kinds default to 'without reservation'. This is not a statement
+of legal reservation requirements or ticket validity. A per-leg manual observation can
+explicitly override the default. TGV (including Lyria) and NJ always tolerate number changes.
+A reserved numeric change creates a 'Treinnummer gewijzigd. Was X; nu Y' notification,
+reservation review and reviewed-draft eligibility, with its own change identity. Accepted
+changes remain informational and visible; source evidence and baseline numbers are retained.
+
+NDOV Nightjet times may be checked while an independent DB task remains open. A deliberate
+manual DB checkbox records source 'DB handmatig'; proof survives later feed observations.
+It covers only the same endpoint times, dates, cancellation status and boarding number,
+and must be at most four hours old. It is not fabricated from NDOV or a button opening DB.
+Changing the observed plan or expiry brings the additional DB task back. No automated
+DB website access or customer email is performed.
+
+The owner UI provides Meldingen, Treinnummer gewijzigd and Handmatige DB-taken filters,
+shows the current number and full reason, and searches original and current numbers.
+Control reasons, source-policy metadata, reservation overrides and observations are
+append-only in the private register; original customer itineraries remain untouched.

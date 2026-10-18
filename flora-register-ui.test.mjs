@@ -2,13 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
-const source=await readFile(new URL('./reisschemas.js',import.meta.url),'utf8');
+import {numberAssessment,controlPolicy} from './reisschema-number-policy.mjs';
+// The real browser loads the policy as an ES module; inject those same exports into this DOM unit harness.
+const source=(await readFile(new URL('./reisschemas.js',import.meta.url),'utf8')).replace(/^import \{numberAssessment,controlPolicy\} from '\.\/reisschema-number-policy\.mjs';\r?\n/,'');
 const leg=(extra={})=>({dossier:'DEMO-A',booking_key:'Fictieve reis',sequence:1,travel_date:'2031-06-10',arrival_date:'2031-06-10',train_number:'TEST 210',from_station:'Voorbeeld Noord',to_station:'Voorbeeld Zuid',departure_time:'10:00',arrival_time:'12:00',role:'primary',document_url:'https://docs.google.com/document/d/fictional/edit',...extra});
 async function setup(rows,now='2031-06-10T22:30:00Z'){
  class FixedDate extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return Date.parse(now);}}
  const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,{value:'',innerHTML:'',textContent:'',disabled:false,hidden:false,attributes:{},setAttribute(k,v){this.attributes[k]=v;}});return nodes.get(id);};
  let fail=false;
- runInNewContext(source,{Date:FixedDate,document:{getElementById:get},URL,fetch:async url=>{assert.equal(url,'/seinhuis/reisschemas/api/register');if(fail)throw Error('private detail');return {ok:true,json:async()=>({configured:true,available:true,legs:rows})};}});
+ runInNewContext(source,{numberAssessment,controlPolicy,Date:FixedDate,document:{getElementById:get},URL,fetch:async url=>{assert.equal(url,'/seinhuis/reisschemas/api/register');if(fail)throw Error('private detail');return {ok:true,json:async()=>({configured:true,available:true,legs:rows})};}});
  await get('refresh').onclick();
  return {get,input(id,value){get(id).value=value;get(id).oninput();},fail(){fail=true;},choice(i){get('booking-results').onclick({target:{closest:()=>({dataset:{choice:String(i)}})}});}};
 }
@@ -87,4 +89,12 @@ test('missed connection alerts unless a suitable backup was communicated; cancel
  const broken=await setup([leg({observation:observation({departure_time:'10:00',connection_broken:true})})]);assert.match(broken.get('register').innerHTML,/Aandacht nodig/);
  const backed=await setup([leg({observation:observation({departure_time:'10:00',connection_broken:true,backup_communicated:true})})]);assert.doesNotMatch(backed.get('register').innerHTML,/Aandacht nodig/);assert.match(backed.get('register').innerHTML,/back-up gecommuniceerd/);
  const cancelled=await setup([leg({observation:observation({departure_time:'10:00',cancelled:true,backup_communicated:true})})]);assert.match(cancelled.get('register').innerHTML,/Aandacht nodig/);
+});
+test('number notices retain both numbers, escape the reason and are searchable in both views',async()=>{
+ const row=leg({train_number:'ICE 700',observation:observation({train_number:'ICE 701'}),control:{outcome:'checked',checked_at:'2031-06-09T12:00:00Z',reason:'Treinnummer gewijzigd. Nu ICE 701 <unsafe>'}});
+ const {get,input}=await setup([row,leg({sequence:2,train_number:'IC 702'})]);
+ get('filter-numbers').onclick();assert.match(get('summary').textContent,/1 rit/);assert.equal(get('filter-numbers').attributes['aria-pressed'],'true');assert.match(get('register').innerHTML,/Nu ICE 701/);assert.match(get('register').innerHTML,/&lt;unsafe&gt;/);
+ input('train-number','701');assert.match(get('summary').textContent,/1 rit/);
+ input('search','nummer gewijzigd');assert.match(get('summary').textContent,/1 rit/);
+ input('booking-number','demo');input('booking-train','701');assert.match(get('day-summary').textContent,/1 rit/);
 });

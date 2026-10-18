@@ -10,7 +10,7 @@ export function composeChangeMail(row,{destination,advice,receiptUrl,signature})
  const subject=a.departure<=-4?`Belangrijk: uw trein naar ${destination} op ${day} vertrekt eerder – ${row.dossier}`:`Belangrijk: reisschema aangepast voor uw reis naar ${destination} op ${day} – ${row.dossier}`;
  const time=(oldDate,oldTime,newDate,newTime)=>`${escapeHtml(date(oldDate))} <del>${escapeHtml(oldTime)}</del><br>${escapeHtml(date(newDate))} <strong>${escapeHtml(newTime)}</strong>`;
  const html=`<p>Voor uw reis naar ${d} op ${day} heeft mijn automatische assistent uw reisschema gecontroleerd en een wijziging gevonden. Daarom ontvangt u van ons deze update.</p>
-<p>${escapeHtml(row.train_number)}: ${escapeHtml(row.from_station)} → ${escapeHtml(row.to_station)}</p>${o.station_changed?'<p><strong>Nieuw traject: '+escapeHtml(o.departure_station)+' → '+escapeHtml(o.arrival_station)+'</strong></p>':''}
+<p>${escapeHtml(row.train_number)}: ${escapeHtml(row.from_station)} → ${escapeHtml(row.to_station)}</p>${o.train_number&&a.reservationReview?'<p><strong>Treinnummer volgens de controle: '+escapeHtml(o.train_number)+'</strong></p>':''}${o.station_changed?'<p><strong>Nieuw traject: '+escapeHtml(o.departure_station)+' → '+escapeHtml(o.arrival_station)+'</strong></p>':''}
 <p>Vertrek: ${time(row.travel_date,row.departure_time,o.departure_date,o.departure_time)}<br>Aankomst: ${time(row.arrival_date||row.travel_date,row.arrival_time,o.arrival_date,o.arrival_time)}</p>
 ${o.cancelled?'<p><strong>Deze trein vervalt volgens de gecontroleerde bron.</strong></p>':''}${o.connection_broken?'<p><strong>De aansluiting is niet meer haalbaar.</strong></p>':''}
 <p>${escapeHtml(advice).replace(/\n/g,'<br>')}</p><p><a href="${escapeHtml(receiptUrl)}">Ontvangst bevestigen</a></p>

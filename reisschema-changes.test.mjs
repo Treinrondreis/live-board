@@ -8,11 +8,11 @@ const plan=()=>({trainNumber:'700',category:'TEST',completePlan:true,planningSou
  {station:'Example North',sequence:1,departure:{planning:{time:Date.parse('2031-06-10T07:56:00Z'),sourceTimestamp:observed}}},
  {station:'Example South',sequence:2,arrival:{planning:{time:Date.parse('2031-06-10T10:10:00Z'),sourceTimestamp:observed}}}
 ]});
-test('unique matching planning compares actual boarding station, local date and category',()=>{
+test('unique matching planning compares boarding station and date, tolerating a designation change',()=>{
  const r=leg({created_at:'2020-06-01T12:00:00Z'}),p=plan();
  const o=observationFromPlans(r,[p]);assert.equal(o.departure_time,'09:56');assert.equal(o.arrival_time,'12:10');
  assert.equal(observationFromPlans(r,[p,p]),null);
- assert.equal(observationFromPlans(r,[{...p,category:'OTHER'}]),null);
+ assert.equal(observationFromPlans(r,[{...p,category:'OTHER'}]).train_number,'OTHER 700');
  assert.equal(observationFromPlans(r,[{...p,completePlan:false}]),null);
  assert.equal(observationFromPlans({...r,created_at:'2020-06-03T12:00:00Z'},[p]),null);
  assert.equal(observationFromPlans({...r,from_station:'Ambiguous city'},[p]),null);

@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {numberAssessment,trainDigits} from './reisschema-number-policy.mjs';
 
 const normal=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
@@ -7,13 +8,13 @@ function localTime(time){
  const p=Object.fromEntries(parts.formatToParts(Number(time)).map(x=>[x.type,x.value]));
  return {date:`${p.year}-${p.month}-${p.day}`,time:`${p.hour}:${p.minute}`};
 }
-export function changeKey(legId,o){const values=[legId,o.departure_date,o.departure_time,o.arrival_date,o.arrival_time,o.cancelled,o.connection_broken,o.backup_communicated];if(o.station_changed)values.push(o.departure_station,o.arrival_station);return createHash('sha256').update(JSON.stringify(values)).digest('hex');}
+export function changeKey(legId,o,leg){const values=[legId,o.departure_date,o.departure_time,o.arrival_date,o.arrival_time,o.cancelled,o.connection_broken,o.backup_communicated];if(o.station_changed)values.push(o.departure_station,o.arrival_station);if(leg&&numberAssessment(leg,o).notify)values.push(trainDigits(o.train_number));return createHash('sha256').update(JSON.stringify(values)).digest('hex');}
 export function observationFromPlans(leg,plans){
  const candidates=[];
  for(const plan of plans){
   const number=String(leg.train_number||'').match(/\d+[a-z]?$/i)?.[0];
   const category=String(leg.train_number||'').match(/^[a-z]+/i)?.[0];
-  if(String(plan.trainNumber)!==number||!plan.category||normal(plan.category)!==normal(category)||!plan.completePlan||plan.planningAlternatives)continue;
+  if(String(plan.trainNumber)!==number||!plan.category||!plan.completePlan||plan.planningAlternatives)continue;
   const stops=(plan.stops||[]).filter(s=>s.inLatestPlan!==false&&s.stopType!=='D');
   const starts=stops.filter(s=>normal(s.station)===normal(leg.from_station));
   const ends=stops.filter(s=>normal(s.station)===normal(leg.to_station));
@@ -23,7 +24,7 @@ export function observationFromPlans(leg,plans){
   if(!d||!a||d.date!==leg.travel_date)continue;
   const observed=Math.min(Number(dep.sourceTimestamp),Number(arr.sourceTimestamp));
   if(!Number.isFinite(observed)||observed<Date.parse(leg.created_at)||observed>Date.now()+300000)continue;
-  candidates.push({departure_date:d.date,departure_time:d.time,arrival_date:a.date,arrival_time:a.time,cancelled:false,connection_broken:false,backup_communicated:false,source:plan.planningSource||dep.source||'Ritarchief',observed_at:new Date(observed).toISOString()});
+  candidates.push({departure_date:d.date,departure_time:d.time,arrival_date:a.date,arrival_time:a.time,cancelled:false,connection_broken:false,backup_communicated:false,source:plan.planningSource||dep.source||'Ritarchief',observed_at:new Date(observed).toISOString(),train_number:plan.category+' '+plan.trainNumber,reservation_status:leg.observation?.reservation_status||'auto'});
  }
  // Ambiguous sources are not silently resolved, even if one appears newer.
  if(candidates.length!==1)return null;
@@ -62,7 +63,7 @@ export async function enrichChanges(rows,lookup){
    const departure=Date.parse((next.observation?.departure_date||next.travel_date)+'T'+(next.observation?.departure_time||next.departure_time)+':00Z');
    if(Number.isFinite(arrival)&&Number.isFinite(departure)&&arrival>=departure){if(!o.connection_broken)o.connection_calculated=true;o.connection_broken=true;}
   }
-  o.change_key=changeKey(row.leg_id,o);row.observation=o;
+  o.change_key=changeKey(row.leg_id,o,row);row.observation=o;
   if(row.communication?.change_key!==o.change_key)row.communication=null;
  }
  return result;

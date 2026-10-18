@@ -76,13 +76,28 @@ test('same-number parts can join at a shared station, with every source trip ret
 test('SNCF uses its numeric headsign and explicit train category from the stop identifier',()=>{
  const bytes=gtfs({'routes.txt':'route_id,route_short_name,route_type\nr,C30,2\n','stops.txt':'stop_id,stop_name\nStopPoint:OCETrain TER-100,Example North\nStopPoint:OCETrain TER-200,Example South\n','trips.txt':'route_id,service_id,trip_id,trip_headsign\nr,s,t,700\n','stop_times.txt':'trip_id,stop_id,stop_sequence,arrival_time,departure_time\nt,StopPoint:OCETrain TER-100,1,25:10:00,25:12:00\nt,StopPoint:OCETrain TER-200,2,27:00:00,27:00:00\n'});
  assert.equal(parseGtfs(bytes,[{...leg,train_number:'TER 700'}],{...meta,name:'SNCF GTFS'}).example.observation.departure_time,'01:12');
- assert.equal(parseGtfs(bytes,[{...leg,train_number:'TGV 700'}],{...meta,name:'SNCF GTFS'}).example.observation,undefined);
+ assert.equal(parseGtfs(bytes,[{...leg,train_number:'TGV 700'}],{...meta,name:'SNCF GTFS'}).example.observation.train_number,'TER 700');
  assert.equal(parseGtfs(bytes,[{...leg,train_number:'TER 700'}],meta).example.observation,undefined);
 });
-test('IFF preserves origin service day and limits Nightjet checks to Dutch endpoints',()=>{
+test('IFF preserves origin service day and now accepts complete international Nightjet endpoints',()=>{
  const bytes=pack({'delivery.dat':'@100,10062031,12062031,1,Fictional','footnote.dat':'#00001\n111','stations.dat':'1,a,05,05,NL,0,,,Example North\n1,b,05,05,NL,0,,,Example South\n0,c,00,00,D,0,,,Example Abroad','timetbls.dat':'#1\n%202,00700,,001,003\n-00001,000,999\n&NJ,001,003\n>a,2512\n+b,2700,2702\n<c,2900'});
  const rows=[{...leg,train_number:'NJ 700'},{...leg,leg_id:'abroad',train_number:'NJ 700',to_station:'Example Abroad'}],r=parseIff(bytes,rows,meta);
- assert.equal(r.example.observation.arrival_time,'03:00');assert.equal(r.abroad.observation,undefined);
+ assert.equal(r.example.observation.arrival_time,'03:00');assert.equal(r.abroad.observation.arrival_time,'05:00');
+});
+test('IFF accepts equal numeric numbers across categories and explicit renumbering inside one through journey',()=>{
+ const bytes=pack({'delivery.dat':'@100,10062031,12062031,1,Fictional','footnote.dat':'#00001\n111','stations.dat':'1,a,05,05,NL,0,,,Example North\n1,b,05,05,D,0,,,Boundary\n1,c,05,05,A,0,,,Example South','timetbls.dat':'#1\n%202,00701,,001,002\n%202,00700,,002,003\n-00001,000,999\n&NJ,001,003\n>a,2512\n+b,2600,2605\n<c,2700'});
+ const r=parseIff(bytes,[{...leg,train_number:'NJ 700'}],meta).example;
+ assert.equal(r.observation.train_number,'NJ 701');assert.equal(r.observation.arrival_date,'2031-06-11');
+ assert.deepEqual(JSON.parse(r.sources[0]).route_train_numbers,['701','700']);
+ const other=pack({'delivery.dat':'@100,10062031,12062031,1,Fictional','footnote.dat':'#00001\n111','stations.dat':'1,a,05,05,NL,0,,,Example North\n1,c,05,05,NL,0,,,Example South','timetbls.dat':'#1\n%100,00700,,001,002\n-00001,000,999\n&SPR,001,002\n>a,2512\n<c,2700'});
+ assert.equal(parseIff(other,[{...leg,train_number:'RE 700'}],meta).example.observation.train_number,'SPR 700');
+});
+test('a different GTFS number requires identical full endpoint dates/times and uniqueness',()=>{
+ const bytes=gtfs({'trips.txt':'route_id,service_id,trip_id,trip_short_name,trip_headsign\nr,s,t,RJ 701,Example South\n'});
+ assert.equal(parseGtfs(bytes,[leg],meta).example.observation.train_number,'RJ701');
+ assert.equal(parseGtfs(bytes,[{...leg,departure_time:'01:13'}],meta).example.observation,undefined);
+ const ambiguous=gtfs({'trips.txt':'route_id,service_id,trip_id,trip_short_name,trip_headsign\nr,s,t,RJ 701,Example South\nr,s,u,RJ 702,Example South\n','stop_times.txt':'trip_id,stop_id,stop_sequence,arrival_time,departure_time\nt,a,1,25:10:00,25:12:00\nt,b,2,27:00:00,27:00:00\nu,a,1,25:10:00,25:12:00\nu,b,2,27:00:00,27:00:00\n'});
+ assert.equal(parseGtfs(ambiguous,[leg],meta).example.observation,undefined);
 });
 
 test('old participating feeds are fetched again once; fresh feeds avoid duplicate requests',async()=>{
