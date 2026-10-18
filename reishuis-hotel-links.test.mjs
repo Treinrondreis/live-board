@@ -66,3 +66,10 @@ test('automatic rate choice fills only a unique compatible variant and preserves
  const component={kind:'hotel',hotel:'fixture-hotel',room:'double'},h=[{id:'fixture-hotel',rooms:[{key:'double',apoRoom:{docId:'fixture-hotel',path:'apoRooms.rate'}}],apoRooms:[{key:'rate',prices:[{source:'fixture-one',boardType:'RO'},{source:'fixture-one',boardType:'RO'}]}]}];assert.equal(hotelRateChoice(component,h).provider,'fixture-one');assert.equal(hotelRateChoice({...component,board:'BB'},h).board,'BB');assert.equal(hotelRateChoice({...component,board:'BB'},h).provider,undefined);
  h[0].apoRooms[0].prices.push({source:'fixture-two',boardType:'RO'});assert.equal(hotelRateChoice(component,h).provider,undefined);assert.equal(hotelRateChoice({...component,provider:'fixture-one'},h).board,'RO');
 });
+
+test('default includes future and ongoing stays; checkout day is past; cancellation is explicit',()=>{
+ const b={id:'fixture-period',index:'9990',name:'Fictieve Reiziger',status:'te verwerken',hotelTodos:hotelTodoIndex([todo])},state=emptyReishuis();
+ for(const today of ['2027-01-01','2027-01-03','2027-01-04']){const r=hotelStays([b],state,hotels,hotels[0].id,today);assert.equal(r.total,1);assert.equal(r.stays[0].cancelled,false);assert.equal(hotelStays([b],state,hotels,hotels[0].id,today,'past').total,0);}
+ assert.equal(hotelStays([b],state,hotels,hotels[0].id,'2027-01-05','past').total,1);
+ for(const status of ['geannuleerd','Geannuleerd door klant','cancelled','canceled']){const cancelled={...b,status};assert.equal(hotelStays([cancelled],state,hotels,hotels[0].id,'2027-01-01').total,0);assert.equal(hotelStays([cancelled],state,hotels,hotels[0].id,'2027-01-01','cancelled').stays[0].cancelled,true);}
+});

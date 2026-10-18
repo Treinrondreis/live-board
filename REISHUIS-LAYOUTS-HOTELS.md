@@ -38,3 +38,9 @@ Hotels opent nu /seinhuis/reishuis/hotels/ als een normale beveiligde pagina; er
 Op mobiel gebruikt de lijst de beschikbare pagina tot een hotel is gekozen. Het lege detailpaneel is verborgen. De zoekbalk blijft boven de afzonderlijk scrollende resultaten staan; toetsenbord-viewport, zoeken in meerdere woorden/onafhankelijk van accenten, lege resultaten en scroll-reset zijn getest. Hotelkeuze sluit het toetsenbord. Hotels zoeken toont dezelfde filterlijst opnieuw. Op desktop staan lijst en detail naast elkaar.
 
 HTML en alle modules vallen onder de bestaande server-side Reishuis-rol, same-origin en private/no-store/privacyheaders. De zelfstandige pagina controleert toegang ook bij terugkeer naar het tabblad en iedere 30 seconden wanneer zichtbaar; bfcache-herstel herlaadt via de server. Bij ingetrokken toegang wordt private hotelinhoud gewist. De pagina voegt geen Sanity- of financiële schrijfactie toe.
+
+### Hotelboekingen: periode en annulering
+
+De standaardselectie **Aankomend en lopend** toont actieve verblijven waarvan de uitcheckdatum nog niet verstreken is. De uitcheckdag zelf valt onder **Eerdere boekingen**. Met **Geannuleerde boekingen** zijn annuleringen apart opvraagbaar: de gegevens zijn doorgestreept en krijgen het label Geannuleerd; de boekingslink blijft bruikbaar. Annuleringen tellen niet mee in de actieve standaardselectie. Dit is alleen een leesweergave, zonder wijzigingen in Sanity of financiële bedragen.
+
+Regressie: synthetische tests controleren toekomstige/lopende verblijven, de uitcheckgrens, eerdere boekingen, annuleringsstatussen en de zichtbare doorhaling met dossierlink.
