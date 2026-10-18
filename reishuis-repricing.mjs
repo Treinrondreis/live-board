@@ -1,3 +1,4 @@
+import {hotelNight} from './reishuis-hotel-pricing.mjs';
 import {hotelMatches,hotelRateChoice} from './reishuis-hotel-links.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {mergeDossier} from './reishuis-dossier.mjs';
@@ -12,9 +13,8 @@ const count=(v,max=100)=>{if(!Number.isInteger(v)||v<1||v>max)fail('Controleer h
 const total=l=>finite(l?.price)&&finite(l?.quantity)?money(l.price*l.quantity):null;
 export function hotelAmount(c,hotels){
  const hotel=hotels.find(h=>h.id===c.hotel),room=hotel?.rooms.find(r=>r.key===c.room);if(!hotel||!room)return {missing:'Kies een hotel en kamer.'};
- const link=room.apoRoom,rate=link&&hotels.find(h=>h.id===link.docId)?.apoRooms.find(r=>'apoRooms.'+r.key===link.path);if(!rate)return {missing:'Geen APO-koppeling voor deze kamer. Vul het totaal handmatig in.'};
  const start=day(c.checkin),end=day(c.checkout),nights=(Date.parse(end)-Date.parse(start))/86400000;count(nights,366);count(c.rooms);let amount=0;const nightsUsed=[];
- for(let i=0;i<nights;i++){const date=shiftDay(start,i),matches=rate.prices.filter(p=>p.date.slice(0,10)===date&&p.boardType===c.board&&p.source===c.provider&&finite(p.price)&&p.price>=0);if(matches.length!==1)return {missing:'Geen eenduidig tarief op '+date+'. Vul het totaal handmatig in.'};if(cents(matches[0].price)<=0)return {missing:'Niet beschikbaar voor deze datum: '+date+'. Toch wijzigen? Vul zelf een tarief in en controleer de beschikbaarheid.',unavailable:true,date};amount+=cents(matches[0].price)*c.rooms;nightsUsed.push({date,price:matches[0].price,source:matches[0].source,lastUpdate:matches[0].lastUpdate});}
+ for(let i=0;i<nights;i++){const result=hotelNight(hotel,room,shiftDay(start,i),hotels,c);if(result.missing)return result;amount+=cents(result.price)*c.rooms;nightsUsed.push(result);}
  if(amount>1000000000)fail('Het totaal is te groot.');return {amount:amount/100,nights:nightsUsed};
 }
 export function interrailAmount(c,passes){const pass=passes.find(p=>p.id===c.pass),variants=pass?.variants.filter(v=>v.class===c.class&&v.ageGroup===c.ageGroup)||[];count(c.count);if(!pass||variants.length!==1)return {missing:'Geen eenduidig Interrail-tarief. Controleer pas, klasse en doelgroep.'};return {amount:money(variants[0].price*c.count),unitPrice:variants[0].price};}
