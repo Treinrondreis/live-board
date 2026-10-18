@@ -36,3 +36,11 @@ test('concept OAuth is separate, requests no readonly scope and stores no plaint
  const url=new URL(await g.start('fictional-session'));assert.deepEqual(url.searchParams.get('scope').split(' '),DRAFT_SCOPES);assert.equal(url.searchParams.get('include_granted_scopes'),'false');
  const record=[...kv.values()][0].value;assert.equal(record.pending.session.length,43);await assert.rejects(g.callback(new URLSearchParams({state:url.searchParams.get('state'),code:'fictional'}),'another-session'));
 });
+
+test('selected run endpoint forwards only explicit selection and rejects other origins',async()=>{
+ let called=0;const handler=createControlRoutes({cycle:{requestSelected:async ids=>{called++;assert.deepEqual(ids,['fictional-leg']);return {accepted:true,count:1};}},mail:{},google:{}});
+ const request=async(origin,body)=>{let status,result;const req={method:'POST',headers:{host:'example.invalid',origin,'content-type':'application/json','x-reisschemas':'1'},async *[Symbol.asyncIterator](){yield JSON.stringify(body);}};await handler(req,{writeHead(s){status=s;},end(value){result=JSON.parse(value);}},new URL('https://example.invalid/seinhuis/reisschemas/api/run-controls'));return {status,result};};
+ assert.equal((await request('https://foreign.invalid',{legIds:['fictional-leg']})).status,403);assert.equal(called,0);
+ assert.equal((await request('https://example.invalid',{legIds:['fictional-leg']})).status,202);assert.equal(called,1);
+ assert.equal((await request('https://example.invalid',{legIds:['fictional-leg'],all:true})).status,400);assert.equal(called,1);
+});

@@ -48,7 +48,7 @@ export function connections(rows){
 // Durable checkpoint/lease and central append-only evidence. No timetable fetch in a GET handler.
 export function createControlCycle({register,read,write,sources,clock=Date.now}){
  let running=false;
- async function tick({manual=false}={}){
+ async function tick({manual=false,legIds=null}={}){
   if(running)return;running=true;
   const owner=randomUUID();let checkpoint,revision;
   const save=async()=>{revision=await write('reisschema-control',checkpoint,revision);};
@@ -59,20 +59,22 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
    if(!manual&&(!dailyControlDue(clock())||checkpoint.lastScheduledDay===today&&!checkpoint.queue?.length))return;
    checkpoint={...checkpoint,owner,leaseUntil:clock()+300000,error:null};await save();
    const data=await register.summary();if(!data.available)throw Error('register');
-   const selected=data.legs.filter(r=>dueLeg(r,today,true));
+   const requested=legIds||((checkpoint.queue?.length&&checkpoint.queueLegIds)||null);
+   const selected=data.legs.filter(r=>requested?requested.includes(r.leg_id)&&r.status==='active'&&['train','ferry'].includes(r.transport_type||'train'):dueLeg(r,today,true));
    const selectionKey=fingerprint(selected.map(r=>r.leg_id).sort());
-   if(!selected.length){checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.queue=[];checkpoint.lastSummary={selected:0,checked:0,manual:0,pending:0,sources:[]};if(!manual)checkpoint.lastScheduledDay=today;return;}
+   if(!selected.length){checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.queue=[];checkpoint.lastSummary={selected:0,checked:0,manual:0,pending:0,sources:[]};if(!manual&&!requested)checkpoint.lastScheduledDay=today;return;}
    const staleEvidence=r=>clock()-Date.parse(r.controlAt)>4*3600000||(r.result?.sources||[]).some(s=>{try{const at=Date.parse(JSON.parse(s).downloaded_at);return Number.isFinite(at)&&clock()-at>4*3600000;}catch{return false;}});
    if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey||manual&&!checkpoint.queue?.length||checkpoint.queue?.some(staleEvidence)){
+    checkpoint.queueLegIds=requested;
     checkpoint.queueRun=randomUUID();
-    checkpoint.queueScheduled=!manual;
+    checkpoint.queueScheduled=!requested&&!manual;
     const prepared=await sources.prepare(selected,async()=>{checkpoint.leaseUntil=clock()+300000;await save();}),checked=[];
     for(const row of selected){
      checkpoint.leaseUntil=clock()+300000;await save();
      let result;try{result=await prepared.lookup(row);}catch{result={reason:'Bron niet bereikbaar of verwerking mislukt',sources:[]};}
      const days=(Date.parse(row.travel_date)-Date.parse(today))/86400000;
      // Missing coverage is neutral; only a demonstrated conflict needs manual attention.
-     const due=result.observation||result.sourceConflict||row.control?.outcome==='checked'||days<=8&&!row.control;
+     const due=!!requested||result.observation||result.sourceConflict||row.control?.outcome==='checked'||days<=8&&!row.control;
      if(due)checked.push({...row,result,observation:result.observation||null,controlAt:new Date(clock()).toISOString()});
     }
     checkpoint.queue=connections(checked);checkpoint.queueDay=today;checkpoint.queueSelection=selectionKey;
@@ -100,10 +102,16 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
     if(checkpoint.lastSummary)checkpoint.lastSummary.pending=Math.max(0,checkpoint.lastSummary.pending-1);await save();
    }
    const active=new Set(data.legs.map(r=>r.leg_id));checkpoint.done=Object.fromEntries(Object.entries(checkpoint.done||{}).filter(([id])=>active.has(id)));
-   checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.lastSelection=selectionKey;checkpoint.queue=[];
+   checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.lastSelection=selectionKey;checkpoint.queue=[];checkpoint.queueLegIds=null;
    if(checkpoint.queueScheduled)checkpoint.lastScheduledDay=today;
   }catch{if(checkpoint?.owner===owner)checkpoint.error='Controle niet voltooid. Niet-afgeronde ritten worden opnieuw geprobeerd; ontbrekende bronnen blijven handmatig te controleren.';}
   finally{try{if(checkpoint?.owner===owner){checkpoint.leaseUntil=0;await save();}}catch{}running=false;}
  }
- return {tick,async status(){const {value}=await read('reisschema-control');return {enabled:value.enabled===true,scheduleTime:'00:30',timeZone:'Europe/Amsterdam',nextRunAt:nextDailyControlAt(clock()),lastRun:value.lastRun||null,summary:value.lastSummary||null,error:value.error||null,running:value.leaseUntil>clock()};},async enable(enabled){if(typeof enabled!=='boolean')throw Error('Ongeldige instelling');const {value,revision}=await read('reisschema-control');await write('reisschema-control',{...value,enabled,...(enabled&&!value.enabled&&dailyControlDue(clock())?{lastScheduledDay:dayAt(clock())}:{})},revision);}};
+ return {tick,async requestSelected(legIds){
+  if(!Array.isArray(legIds)||!legIds.length||legIds.length>100||new Set(legIds).size!==legIds.length||legIds.some(id=>typeof id!=='string'||!/^[-a-zA-Z0-9]{1,80}$/.test(id)))return {accepted:false,reason:'Selecteer 1 tot 100 ritregels.'};
+  const {value}=await read('reisschema-control');if(running||value.leaseUntil>clock()||value.queue?.length)return {accepted:false,reason:'Er loopt nog een controle of er staan resultaten klaar. Rond die eerst af.'};
+  const data=await register.summary();if(!data.available||legIds.some(id=>!data.legs.some(r=>r.leg_id===id&&r.status==='active'&&['train','ferry'].includes(r.transport_type||'train'))))return {accepted:false,reason:'Selectie is niet meer actueel. Vernieuw de pagina.'};
+  if(running)return {accepted:false,reason:'Er loopt al een controle.'};
+  void tick({manual:true,legIds}).catch(()=>{});return {accepted:true,count:legIds.length};
+ },async status(){const {value}=await read('reisschema-control');return {enabled:value.enabled===true,scheduleTime:'00:30',timeZone:'Europe/Amsterdam',nextRunAt:nextDailyControlAt(clock()),lastRun:value.lastRun||null,summary:value.lastSummary||null,error:value.error||null,running:value.leaseUntil>clock()};},async enable(enabled){if(typeof enabled!=='boolean')throw Error('Ongeldige instelling');const {value,revision}=await read('reisschema-control');await write('reisschema-control',{...value,enabled,...(enabled&&!value.enabled&&dailyControlDue(clock())?{lastScheduledDay:dayAt(clock())}:{})},revision);}};
 }
