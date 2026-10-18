@@ -290,7 +290,7 @@ verification based only on local tests.
 Een ticketknop die HTML in plaats van een PDF levert, krijgt de expliciete foutcode
 `TICKET_NOT_PDF`. De automatische en handmatige import slaan alleen die knop over;
 andere actuele ticket-PDF's blijven beschikbaar. De melding noemt de referentie en
-PDF-knop. Een automatische onvolledige import vraagt paginacontrole voor export.
+PDF-knop. Een overgeslagen niet-PDF-link is een rustige importnotitie; een ontbrekende actuele referentie of datumconflict blijft een controlepunt.
 Een expliciet geannuleerde referentie gebruikt nooit een oudere bevestigingsmail
 of een Drive-terugval. Andere referenties kunnen wel worden opgehaald. Netwerk-,
 rechten-, inspectie- en opslagfouten worden niet als annulering behandeld.
@@ -299,5 +299,34 @@ Bij een actuele ÖBB-mail met alleen een ticketportallink verschijnt direct een
 knop naar de ticketpagina, met uitleg dat de PDF eerst moet worden gedownload en
 geüpload. Alleen de gecontroleerde HTTPS-host en het bekende postcheckout-pad
 worden toegelaten. Er wordt geen ticket uitgegeven of automatisch gedownload bij
-ÖBB. Portallinks blijven uitsluitend tijdelijk in het browsergeheugen en worden
+ÖBB. Ticketportaal- en downloadlinks blijven uitsluitend tijdelijk in het browsergeheugen en worden
 niet in het boekje opgeslagen. Na herladen zoekt de knop de actuele mail opnieuw.
+
+
+### Ticketoverzicht en navigatie
+
+Ticketpagina's krijgen conservatieve weergavegegevens uit expliciete PDF-labels:
+route, reizigersaantal en eventueel ticketnummer. Het overzicht groepeert route,
+datum, documenttype en aantal personen. Vervolgpagina's van dezelfde ticketbron
+worden niet opnieuw geteld. Onbekende aantallen blijven onbekend; aantallen per
+richting of reservering zijn geen totaal aantal unieke reisdeelnemers. Bestaande
+boekjes kunnen de details opnieuw lezen zonder hun handmatig gekozen pagina's
+of bevestigde datums te vervangen. Het boekje blijft onopgeslagen tot opslaan.
+
+Alfabetische NS-referenties gelden niet impliciet als ÖBB-referentie. Korte
+ÖBB-codes vereisen een expliciete ÖBB-aanduiding; zestiencijferige boekingscodes
+blijven direct herkenbaar. Bestaande onterechte ÖBB-meldingen worden alleen
+opgeruimd als dezelfde code aantoonbaar in de opgeslagen NS-import zit; concrete
+ontbrekende andere referenties en datumproblemen blijven controlepunten.
+
+Uitgegeven ÖBB-ticketlinks onder het bekende `/en|de/ticket/voucher/`-pad mogen
+als PDF worden opgehaald. Ticketuitgifte- en bestelacties worden niet aangeroepen.
+Bij HTTP 403 meldt de app de weigering met een rechtstreekse downloadknop; de
+gebruiker kan de PDF zelf ophalen en uploaden. Beveiliging wordt niet omzeild.
+
+Browsergeschiedenis gebruikt uitsluitend schermsoort en object-/groeps-ID in
+de URL en history state, geen klantinhoud. Terug/vooruit en opnieuw laden openen
+het betreffende opgeslagen scherm. Onopgeslagen wijzigingen vragen de bestaande
+bevestiging en een lopende groep blokkeert verlaten. De vaste knop voor terug
+naar de groep en de actie bij pagina's kiezen bewaren de correctie, controleren
+dat ene boekje opnieuw en behouden de andere groepsregels.
