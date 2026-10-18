@@ -72,6 +72,8 @@ def moment_dates(body,slot,candidate):
 def inspect(s,payload):
     provider=payload.get('provider','ns')
     if provider not in PROVIDERS:raise ValueError('Onbekende vervoerder voor datumcontrole.')
+    omit_gate_pass=payload.get('omitGatePass',False)
+    if type(omit_gate_pass) is not bool:raise ValueError('Ongeldige keuze voor het weglaten van poortjespagina’s.')
     ident=payload.get('asset');asset=s.asset(ident)
     if not 1<=asset['pages']<=100:raise ValueError('Controleer één tot honderd documentpagina’s.')
     suggested=payload.get('suggestedDates',[]);allowed=payload.get('travelDates',[]);continuations=payload.get('continuationDates',[])
@@ -80,6 +82,7 @@ def inspect(s,payload):
     for n,page in enumerate(reader.pages):
         if time.monotonic()>deadline:raise ValueError('Datumcontrole duurt te lang. Upload minder pagina’s tegelijk.')
         text=page.extract_text() or ''
+        if provider=='ns' and omit_gate_pass and is_gate_pass(text):continue
         value,source,review=labelled_date(text,provider,allowed)
         if not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
@@ -90,6 +93,14 @@ def inspect(s,payload):
         for p in pages:
             if not p['travelDate'] and p['dateSource']=='unknown':p.update(travelDate=next(iter(dates)),dateSource='pdf-continuation',dateNeedsReview=True)
     return {'pages':pages}
+
+
+def is_gate_pass(text):
+    """Require the explicit non-ticket notice and independent gate-pass wording."""
+    normalized=' '.join(text.casefold().split())
+    return ('dit is geen vervoerbewijs' in normalized
+            and ('het station betreden of verlaten' in normalized or 'passageticket' in normalized)
+            and journey_details(text)['documentRole']=='unknown')
 
 def journey_details(text):
     """Only explicit standalone headings and departure labels are ordering hints."""

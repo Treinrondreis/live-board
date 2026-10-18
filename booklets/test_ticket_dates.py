@@ -5,6 +5,24 @@ import test_cloud,ticket_dates
 s=test_cloud.cloud.server
 
 class TicketDateTests(unittest.TestCase):
+    def test_cora_gate_page_is_omitted_without_changing_tickets_or_original_pdf(self):
+        gate='Het station betreden of verlaten\nDit is geen vervoerbewijs.\nDit passageticket is bedoeld voor het openen van poortjes.'
+        a,raw=self.upload(['Ticket\nDeparture: 08.03.2027',gate,'Seat reservation\nDeparture: 08.03.2027'])
+        ctx=SimpleNamespace(**vars(s))
+        result=ticket_dates.inspect(ctx,{'asset':a['id'],'provider':'ns','omitGatePass':True})
+        self.assertEqual([p['page'] for p in result['pages']],[0,2])
+        self.assertEqual((s.DATA/'pdfs'/f"{a['id']}.pdf").read_bytes(),raw)
+        for payload in ({'provider':'ns'},{'provider':'db','omitGatePass':True}):
+            self.assertEqual(len(ticket_dates.inspect(ctx,{'asset':a['id'],**payload})['pages']),3)
+        with self.assertRaises(ValueError):ticket_dates.inspect(ctx,{'asset':a['id'],'omitGatePass':'yes'})
+
+    def test_gate_detection_requires_both_markers_and_never_drops_a_ticket_or_reservation_heading(self):
+        self.assertTrue(ticket_dates.is_gate_pass('Het station betreden of verlaten\nDit is geen\nvervoerbewijs.'))
+        self.assertFalse(ticket_dates.is_gate_pass('Dit is geen vervoerbewijs.'))
+        self.assertFalse(ticket_dates.is_gate_pass('Het station betreden of verlaten'))
+        for heading in ('Ticket','Seat reservation'):
+            self.assertFalse(ticket_dates.is_gate_pass(heading+'\nHet station betreden of verlaten\nDit is geen vervoerbewijs.'))
+
     def test_voucher_written_check_in_dates_ignore_check_out_and_incheck_times(self):
         text='Hotelvoucher\nAankomst: 8 maart 2027\nVertrek: 10 maart 2027\nInchecken: Vanaf 15.00 uur tot middernacht'
         self.assertEqual(ticket_dates.labelled_date(text,'voucher'),('2027-03-08','pdf',False))
