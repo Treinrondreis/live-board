@@ -61,7 +61,8 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
    const selected=data.legs.filter(r=>dueLeg(r,today,true));
    const selectionKey=fingerprint(selected.map(r=>r.leg_id).sort());
    if(!selected.length){checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.queue=[];checkpoint.lastSummary={selected:0,checked:0,manual:0,pending:0,sources:[]};if(!manual)checkpoint.lastScheduledDay=today;return;}
-   if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey||manual&&!checkpoint.queue?.length||checkpoint.queue?.some(r=>clock()-Date.parse(r.controlAt)>4*3600000)){
+   const staleEvidence=r=>clock()-Date.parse(r.controlAt)>4*3600000||(r.result?.sources||[]).some(s=>{try{const at=Date.parse(JSON.parse(s).downloaded_at);return Number.isFinite(at)&&clock()-at>4*3600000;}catch{return false;}});
+   if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey||manual&&!checkpoint.queue?.length||checkpoint.queue?.some(staleEvidence)){
     checkpoint.queueRun=randomUUID();
     checkpoint.queueScheduled=!manual;
     const prepared=await sources.prepare(selected,async()=>{checkpoint.leaseUntil=clock()+300000;await save();}),checked=[];

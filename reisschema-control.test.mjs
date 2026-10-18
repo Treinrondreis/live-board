@@ -94,3 +94,10 @@ test('enabling after 00:30 schedules the next night without an unexpected immedi
  await cycle.tick({manual:true});assert.equal(h.prepares,1);
  now=Date.parse('2031-06-02T22:30:00Z');await cycle.tick();assert.equal(h.prepares,2);
 });
+
+test('queue freshness uses the source fetch time, not only the later control timestamp',async()=>{
+ const h=harness({failControl:true});let now=Date.parse('2031-06-02T12:00:00Z'),prepares=0;h.deps.clock=()=>now;
+ h.deps.sources.prepare=async()=>{prepares++;return {lookup:async()=>({observation,sources:[JSON.stringify({downloaded_at:'2031-06-02T11:50:00Z'})]})};};
+ await createControlCycle(h.deps).tick();now=Date.parse('2031-06-02T15:55:00Z');
+ await createControlCycle(h.deps).tick();assert.equal(prepares,2);
+});
