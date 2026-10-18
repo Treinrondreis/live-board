@@ -54,3 +54,10 @@ test('inline followup repair rejects wrong scope, forged links, duplicates and r
  }
  const local={components:{[id]:{...component,line:d.lines[1].id}}};assert.throws(()=>quoteChange(d,local,{...input,followupHotels:{[id]:{...repair,line:d.lines[3].id}}},catalogs),{status:400});
 });
+
+
+test('extra nights auto-resolve source invoice ranges for primary and followup hotels and retain the binding after commit',()=>{
+ const d=normalizeDossier({_id:'fixture',todos:[{_key:'stay',title:'Kort voorbeeld | Double',tag:'hotel',startDate:'2027-02-01',endDate:'2027-02-03',quantity:1},{_key:'next',title:'Kort voorbeeld | Double',tag:'hotel',startDate:'2027-02-03',endDate:'2027-02-04',quantity:1}],lines:[{_key:'stay',title:'01 feb. - 03 feb.: Voorbeeldhotel - 1x Tweepersoonskamer (incl. ontbijt)',quantity:1,price:200},{_key:'next',title:'03 feb. - 04 feb.: Voorbeeldhotel - 1x Tweepersoonskamer (incl. ontbijt)',quantity:1,price:100}]});
+ const h=[{...hotels[0],titleShort:'Kort voorbeeld',rooms:[{...hotels[0].rooms[0],title:'Tweepersoonskamer',titleShort:'Double'}]}],c={hotels:h,interrail:passes},input={...edit(d),title:d.todos[0].title,line:'',shiftIds:[d.todos[1].id]},plan=quoteChange(d,{},input,c);assert.equal(plan.missing.length,0);assert.equal(plan.changes[0].financial.line,d.lines[0].id);assert.equal(plan.changes[1].financial.line,d.lines[1].id);assert.equal(plan.newTotal,400);
+ const state=emptyReishuis();applyQuote(state,'fixture',d,plan,'fixture-user');const local=state.dossiers.fixture;assert.equal(local.components[d.todos[0].id].line,d.lines[0].id);assert.equal(local.components[d.todos[1].id].line,d.lines[1].id);const next=quoteChange(d,local,{...input,title:plan.changes[0].after.title,checkout:'2027-02-05'},c);assert.equal(next.changes[0].financial.line,d.lines[0].id);assert.equal(next.missing.length,0);
+});

@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
-import {hotelMatches,hotelStays,hotelTodoIndex} from './reishuis-hotel-links.mjs';
-import {normalizeDossier} from './reishuis-dossier.mjs';
+import {hotelMatches,hotelStays,hotelTodoIndex,hotelRateChoice} from './reishuis-hotel-links.mjs';
+import {normalizeDossier,mergeDossier} from './reishuis-dossier.mjs';
 import {createReishuisHandler} from './reishuis.mjs';
 import {emptyReishuis} from './reishuis-store.mjs';
 const hotels=[{id:'fixture-hotel',title:'Hotel Voorbeeld Amsterdam',titleShort:'Voorbeeld AMS',photos:[],rooms:[{key:'double',title:'Tweepersoonskamer',titleShort:'Double'}],apoRooms:[]},{id:'fixture-other',title:'Hotel Ander Voorbeeld',titleShort:'Ander',photos:[],rooms:[],apoRooms:[]}];
@@ -44,4 +44,25 @@ test('overview and automatic local links require role, origin, CSRF, membership,
  const input={action:'match-hotels',booking:'fixture-booking',sourceVersion:dossier.data.sourceVersion,revision:0,components:{forged:'never trusted'}};const headers={origin:'https://example.test','content-type':'application/json','x-reishuis-csrf':api.data.csrf};
  assert.equal((await request('/api/change','POST',input,{})).status,403);assert.equal((await request('/api/change','POST',input,{...headers,origin:'https://evil.test'})).status,403);assert.equal((await request('/api/change','POST',{...input,sourceVersion:'stale'},headers)).status,409);assert.equal((await request('/api/change','POST',{...input,booking:'missing'},headers)).status,400);assert.equal(writes,0);
  assert.equal((await request('/api/change','POST',input,headers)).status,200);assert.equal(state.dossiers['fixture-booking'].components[d.todos[0].id].line,d.lines[0].id);assert.equal(state.dossiers['fixture-booking'].components.forged,undefined);assert.equal(state.dossiers['fixture-booking'].lines,undefined);assert.equal(state.dossiers['fixture-booking'].todos,undefined);assert.equal(writes,1);assert.equal((await request('/api/change','POST',input,headers)).status,409);assert.equal((await request('/api/change','POST',{...input,revision:1},headers)).status,200);assert.equal(writes,1,'idempotent no-op');
+});
+
+
+test('invoice stay ranges, quantity prefixes and breakfast suffixes link the right short-name room',()=>{
+ const catalog=[{...hotels[0],rooms:[...hotels[0].rooms,{key:'twin',title:'Tweepersoonskamer met losse bedden',titleShort:'Twin'}]}];
+ for(const title of ['03 jan. - 05 jan.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer (incl. ontbijt)','3 januari – 5 januari: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer (inclusief ontbijt)','2027-01-03 — 2027-01-05: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer']){
+  const d=normalizeDossier({_id:'fixture',todos:[todo],lines:[{...line,title},{...line,_key:'twin',title:'03 jan. - 05 jan.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer met losse bedden (incl. ontbijt)'}]});const m=hotelMatches(d,catalog)[d.todos[0].id];assert.equal(m.component.line,d.lines[0].id);assert.equal(m.component.room,'double');
+ }
+ for(const title of ['03 jan. - 06 jan.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer','03 jan. - 31 feb.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer']){const d=normalizeDossier({_id:'fixture',todos:[todo],lines:[{...line,title}]});assert.equal(hotelMatches(d,catalog)[d.todos[0].id].component,undefined);}
+ const cross=normalizeDossier({_id:'fixture',todos:[{...todo,startDate:'2027-12-30',endDate:'2028-01-02'}],lines:[{...line,title:'30 dec. - 2 jan.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer (incl. ontbijt)'}]});assert.ok(hotelMatches(cross,catalog)[cross.todos[0].id].component);
+});
+
+
+test('an unlinked local date edit still resolves the original invoice period without reverting the local stay',()=>{
+ const original=normalizeDossier({_id:'fixture',todos:[todo],lines:[{...line,title:'3 jan. - 5 jan.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer (incl. ontbijt)'}]}),id=original.todos[0].id,local={todos:{[id]:{endDate:'2027-01-06',_edited:['endDate']}}},merged=mergeDossier(original,local);assert.equal(hotelMatches(merged,hotels)[id].component,undefined);const match=hotelMatches(merged,hotels,{},original)[id];assert.equal(match.component.line,original.lines[0].id);assert.equal(match.component.checkout,'2027-01-06');assert.equal(original.todos[0].endDate,'2027-01-05');
+});
+
+
+test('automatic rate choice fills only a unique compatible variant and preserves explicit selections',()=>{
+ const component={kind:'hotel',hotel:'fixture-hotel',room:'double'},h=[{id:'fixture-hotel',rooms:[{key:'double',apoRoom:{docId:'fixture-hotel',path:'apoRooms.rate'}}],apoRooms:[{key:'rate',prices:[{source:'fixture-one',boardType:'RO'},{source:'fixture-one',boardType:'RO'}]}]}];assert.equal(hotelRateChoice(component,h).provider,'fixture-one');assert.equal(hotelRateChoice({...component,board:'BB'},h).board,'BB');assert.equal(hotelRateChoice({...component,board:'BB'},h).provider,undefined);
+ h[0].apoRooms[0].prices.push({source:'fixture-two',boardType:'RO'});assert.equal(hotelRateChoice(component,h).provider,undefined);assert.equal(hotelRateChoice({...component,provider:'fixture-one'},h).board,'RO');
 });

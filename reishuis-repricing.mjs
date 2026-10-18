@@ -1,3 +1,4 @@
+import {hotelMatches,hotelRateChoice} from './reishuis-hotel-links.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {mergeDossier} from './reishuis-dossier.mjs';
 const fail=message=>{const e=Error(message);e.status=400;e.reishuisSafe=true;throw e;};
@@ -21,9 +22,10 @@ export function quoteChange(source,local,input,catalogs){
  if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['todo','kind','line','title','mode','amount','hotel','room','board','provider','checkin','checkout','rooms','pass','class','ageGroup','count','startDate','endDate','shiftIds','manualAmounts','followupHotels','ackWarnings'].includes(k)))fail('Controleer de wijziging.');
  const d=mergeDossier(source,local),todo=d.todos.find(t=>t.id===key(input.todo,'Deze todo is niet meer geldig. Heropen het dossier.')&&!t.review&&!t.archived);if(!todo)fail('Taak niet gevonden.');
  if(!['hotel','interrail','rename','option'].includes(input.kind)||!['auto','manual','keep'].includes(input.mode))fail('Kies het soort wijziging en tarief.');
- const line=d.lines.find(l=>l.id===key(input.line,'Kies de financiële regel die bij deze todo hoort.')&&!l.sourceRemoved);if(!line)fail('Kies bewust de financiële regel.');
+ const automatic=hotelMatches(d,catalogs.hotels,local.components,source),componentFor=id=>hotelRateChoice(local.components?.[id]||automatic[id]?.component,catalogs.hotels);
+ const line=d.lines.find(l=>l.id===key(input.line||componentFor(todo.id)?.line,'Kies de financiële regel die bij deze todo hoort.')&&!l.sourceRemoved);if(!line)fail('Kies bewust de financiële regel.');
  if(Object.entries(local.components||{}).some(([id,c])=>id!==todo.id&&c.line===line.id))fail('Deze financiële regel is al aan een andere taak gekoppeld.');
- const title=clean(input.title);if(!title)fail('Vul een naam in.');const oldComponent=local.components?.[todo.id];
+ const title=clean(input.title);if(!title)fail('Vul een naam in.');const oldComponent=componentFor(todo.id);
  if(oldComponent?.line&&oldComponent.line!==line.id)fail('Deze taak is al gekoppeld aan een financiële regel. Gebruik die bestaande koppeling.');
  let c=input.kind==='rename'&&oldComponent?{...oldComponent,line:line.id}:{kind:input.kind,line:line.id},after={...todo,title},quoted={amount:total(line)},delta=0;
  if(input.kind==='hotel'){
@@ -51,7 +53,7 @@ export function quoteChange(source,local,input,catalogs){
  if(shifted.length&&(!delta||input.kind!=='hotel'||!todo.endDate))fail('Er is geen verschuiving om toe te passen.');
  for(const id of shifted){const r=d.todos.find(t=>t.id===key(id,'Een geselecteerd vervolgonderdeel is niet meer geldig. Heropen het dossier.')&&t.id!==todo.id&&!t.review&&!t.archived);if(!r||!r.startDate||r.startDate.slice(0,10)<todo.endDate.slice(0,10))fail('Kies uitsluitend vervolgonderdelen na de oorspronkelijke check-out.');
   const next={...r};for(const k of ['startDate','endDate','deadline','bookableFrom'])if(r[k])next[k]=shiftDay(r[k].slice(0,10),delta);
-  let bound=local.components?.[id];if(r.tag==='hotel'||bound?.kind==='hotel'){
+  let bound=componentFor(id);if(r.tag==='hotel'||bound?.kind==='hotel'){
    const repair=repairs[id];if(repair){
     if(typeof repair!=='object'||Array.isArray(repair)||Object.keys(repair).some(k=>!['line','hotel','room','board','provider','rooms'].includes(k)))fail('Controleer de aangevulde hotelkoppeling.');
     const candidate={kind:'hotel',line:key(repair.line,'Kies de financiële regel van het vervolghotel.'),hotel:key(repair.hotel,'Kies het vervolghotel.'),room:key(repair.room,'Kies een kamer voor het vervolghotel.'),board:clean(repair.board||''),provider:clean(repair.provider||''),rooms:count(repair.rooms)};

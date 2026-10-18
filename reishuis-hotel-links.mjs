@@ -5,11 +5,12 @@ const name=v=>String(v||'').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase(
 const aliases=h=>[h.title,h.titleShort].map(name).filter(Boolean);
 const date=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v)&&Number.isFinite(Date.parse(v.slice(0,10)))&&new Date(v.slice(0,10)).toISOString().slice(0,10)===v.slice(0,10)?v.slice(0,10):'';
 const months=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const dateToken=String.raw`(?:\d{4}-\d{2}-\d{2}|\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{1,2}\s+[a-zA-Z]+\.?(?:\s+\d{4})?)`;
+const invoicePrefix=new RegExp('^('+dateToken+')(?:\\s+[-–—]\\s+('+dateToken+'))?\\s*:\\s*');
 function titleParts(title){
- let s=String(title||'').trim(),prefix='';
- const m=s.match(/^(\d{4}-\d{2}-\d{2}|\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{1,2}\s+[a-zA-Z]+\.?\s*(?:\d{4})?)\s*:\s*/);
- if(m){prefix=m[1];s=s.slice(m[0].length);}
- return {prefix,parts:s.split(/\s*\|\s*|\s+-\s+/).map(name).filter(Boolean)};
+ let s=String(title||'').trim(),prefix='',endPrefix='';
+ const m=s.match(invoicePrefix);if(m){prefix=m[1];endPrefix=m[2]||'';s=s.slice(m[0].length);}
+ return {prefix,endPrefix,parts:s.split(/\s*\|\s*|\s+-\s+/).map(name).filter(Boolean)};
 }
 function prefixDay(prefix,start){
  if(!prefix)return '';
@@ -25,26 +26,36 @@ function hotelResolver(hotels){
  return title=>{const parts=titleParts(title).parts;for(let i=parts.length;i>0;i--){const found=index.get(parts.slice(0,i).join(' '));if(found)return [...found];}return [];};
 }
 export function hotelsForTitle(title,hotels){return hotelResolver(hotels)(title);}
-function roomForTitle(title,hotel){const parts=titleParts(title).parts.slice(1);const matches=hotel.rooms.filter(r=>aliases(r).some(a=>parts.includes(a)));return matches.length===1?matches[0]:null;}
+function roomForTitle(title,hotel){
+ const parts=titleParts(title).parts.slice(1).flatMap(p=>{const value=p.replace(/^\d+\s*x\s+/,''),withoutBoard=value.replace(/\s+(?:incl|inclusief|excl|exclusief|zonder|met)\s+(?:ontbijt|breakfast)$/,'');return [value,withoutBoard];});
+ const matches=hotel.rooms.filter(r=>aliases(r).some(a=>parts.includes(a)));return matches.length===1?matches[0]:null;
+}
 
 // Only unique source keys are indexable. Never guess identities for legacy keyless rows.
 export function hotelTodoIndex(todos){const list=Array.isArray(todos)?todos:[];return list.filter(t=>typeof t._key==='string'&&list.filter(r=>r._key===t._key).length===1).map(t=>({id:'source-'+createHash('sha256').update(JSON.stringify(['todo',t._key,0])).digest('hex').slice(0,32),title:typeof t.title==='string'?t.title:'',startDate:date(t.startDate),endDate:date(t.endDate),quantity:typeof t.quantity==='number'&&Number.isFinite(t.quantity)?t.quantity:null,tag:'hotel'}));}
 
-export function hotelMatches(dossier,hotels,components={}){
+export function hotelRateChoice(component,hotels){
+ if(!component||component.kind!=='hotel'||Object.hasOwn(component,'provider')&&Object.hasOwn(component,'board'))return component;
+ const room=hotels.find(h=>h.id===component.hotel)?.rooms.find(r=>r.key===component.room),ref=room?.apoRoom,rate=hotels.find(h=>h.id===ref?.docId)?.apoRooms?.find(r=>'apoRooms.'+r.key===ref?.path),choices=[...new Map((rate?.prices||[]).map(p=>[JSON.stringify([p.source||'',p.boardType||'']),{provider:p.source||'',board:p.boardType||''}])).values()].filter(choice=>(!Object.hasOwn(component,'provider')||component.provider===choice.provider)&&(!Object.hasOwn(component,'board')||component.board===choice.board));
+ return choices.length===1?{...component,...choices[0]}:component;
+}
+
+export function hotelMatches(dossier,hotels,components={},original){
  const resolve=hotelResolver(hotels),results={},todos=dossier.todos.filter(t=>!t.review&&!t.archived&&!t.sourceRemoved),claims=new Map();for(const [id,c] of Object.entries(components))if(c.line)claims.set(c.line,[...(claims.get(c.line)||[]),id]);
  for(const t of todos){
   if(t.component){if(!(claims.get(t.component.line)||[]).includes(t.id))claims.set(t.component.line,[...(claims.get(t.component.line)||[]),t.id]);continue;}
   if(t.tag!=='hotel')continue;
-  const found=resolve(t.title);if(found.length!==1){results[t.id]={reason:found.length?'Meerdere hotels passen bij deze naam.':'Hotelnaam niet eenduidig herkend.'};continue;}
-  const h=found[0],room=roomForTitle(t.title,h),start=date(t.startDate),end=date(t.endDate),result={hotel:h.id,room:room?.key||'',reason:'Geen eenduidige financiële regel met dezelfde hotelnaam en datum.'};results[t.id]=result;
+  const originalTodo=original?.todos.find(r=>r.id===t.id&&r.tag==='hotel'&&name(r.title)===name(t.title)),anchor=originalTodo||t;
+  const found=resolve(anchor.title);if(found.length!==1){results[t.id]={reason:found.length?'Meerdere hotels passen bij deze naam.':'Hotelnaam niet eenduidig herkend.'};continue;}
+  const h=found[0],room=roomForTitle(t.title,h),start=date(anchor.startDate),end=date(anchor.endDate),result={hotel:h.id,room:room?.key||'',reason:'Geen eenduidige financiële regel met dezelfde hotelnaam en datum.'};results[t.id]=result;
   if(!start||!end||end<=start)continue;
   let lines=dossier.lines.filter(l=>!l.sourceRemoved&&l.type==='product'&&resolve(l.title).length===1&&resolve(l.title)[0].id===h.id).filter(l=>{
-   const explicit=date(l.date),from=date(l.startDate),to=date(l.endDate),prefix=prefixDay(titleParts(l.title).prefix,start),known=[explicit,from,prefix].filter(Boolean);
-   return known.length>0&&known.every(d=>d===start)&&(!to||to===end);
+   const parts=titleParts(l.title),explicit=date(l.date),from=date(l.startDate),to=date(l.endDate),prefix=prefixDay(parts.prefix,start),until=prefixDay(parts.endPrefix,end),known=[explicit,from,prefix].filter(Boolean),ends=[to,until].filter(Boolean);
+   return (!parts.prefix||!!prefix)&&(!parts.endPrefix||!!until)&&known.length>0&&known.every(d=>d===start)&&ends.every(d=>d===end);
   });
   if(room){const exact=lines.filter(l=>roomForTitle(l.title,h)?.key===room.key);if(exact.length)lines=exact;else lines=lines.filter(l=>!roomForTitle(l.title,h));}
   if(lines.length!==1)continue;
-  const l=lines[0];result.component={kind:'hotel',line:l.id,hotel:h.id,room:room?.key||'',checkin:start,checkout:end,rooms:Number.isInteger(t.quantity)&&t.quantity>0?t.quantity:null};
+  const l=lines[0];result.component=hotelRateChoice({kind:'hotel',line:l.id,hotel:h.id,room:room?.key||'',checkin:date(t.startDate)||start,checkout:date(t.endDate)||end,rooms:Number.isInteger(t.quantity)&&t.quantity>0?t.quantity:null},hotels);
   claims.set(l.id,[...(claims.get(l.id)||[]),t.id]);
  }
  for(const result of Object.values(results))if(result.component){if(claims.get(result.component.line)?.length!==1){delete result.component;result.reason='Deze financiële regel past bij meerdere taken; controleer de koppeling.';}else result.reason='Automatisch herkend op hotelnaam en datum.';}
