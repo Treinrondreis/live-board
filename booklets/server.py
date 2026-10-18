@@ -487,6 +487,7 @@ class Handler(BaseHTTPRequestHandler):
     def get(self):
         path=urlparse(self.path).path
         if path=='/':return self.send(200,(ROOT/'index.html').read_bytes(),'text/html; charset=utf-8')
+        if path=='/batch-builder.js':return self.send(200,(ROOT/'batch-builder.js').read_bytes(),'application/javascript; charset=utf-8',{'Cache-Control':'no-store'})
         if path=='/api/session':
             with db() as c:setup=c.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0
             s=self.auth();return self.send(200,{'setup':setup,'user':s['user'] if s else None,'version':APP_VERSION})
@@ -510,7 +511,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/state':
             with db() as c:
                 rows=book_activity.catalogue(c)
-                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at','driveStored')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at,COALESCE(g.verified,0) AS driveStored FROM exports e LEFT JOIN export_details d ON d.id=e.id LEFT JOIN export_drive g ON g.id=e.id ORDER BY e.rowid DESC")]
+                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at','driveStored','bookRevision')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at,COALESCE(g.verified,0) AS driveStored,json_extract(e.snapshot,'$.revision') AS bookRevision FROM exports e LEFT JOIN export_details d ON d.id=e.id LEFT JOIN export_drive g ON g.id=e.id ORDER BY e.rowid DESC")]
             for o in rows:
                 if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
             for r in exports:r['report']=json.loads(r['report'])
