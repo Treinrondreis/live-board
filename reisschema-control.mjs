@@ -48,9 +48,10 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
    const data=await register.summary();if(!data.available)throw Error('register');
    const today=dayAt(clock()),selected=data.legs.filter(r=>dueLeg(r,today,true));
    const selectionKey=fingerprint(selected.map(r=>r.leg_id).sort());
-   if(checkpoint.lastRun&&dayAt(Date.parse(checkpoint.lastRun))===today&&checkpoint.lastSelection===selectionKey&&!checkpoint.queue?.length)return;
+   if(!manual&&checkpoint.lastRun&&dayAt(Date.parse(checkpoint.lastRun))===today&&checkpoint.lastSelection===selectionKey&&!checkpoint.queue?.length)return;
    if(!selected.length){checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.queue=[];return;}
-   if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey){
+   if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey||manual&&!checkpoint.queue?.length){
+    checkpoint.queueRun=randomUUID();
     const prepared=await sources.prepare(selected,async()=>{checkpoint.leaseUntil=clock()+300000;await save();}),checked=[];
     for(const row of selected){
      checkpoint.leaseUntil=clock()+300000;await save();
@@ -60,14 +61,16 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
      const due=result.observation||row.control?.outcome==='checked'||days<=8&&!row.control;
      if(due)checked.push({...row,result,observation:result.observation||null,controlAt:new Date(clock()).toISOString()});
     }
-    checkpoint.queue=connections(checked);checkpoint.queueDay=today;checkpoint.queueSelection=selectionKey;await save();
+    checkpoint.queue=connections(checked);checkpoint.queueDay=today;checkpoint.queueSelection=selectionKey;
+    checkpoint.lastSummary={selected:selected.length,checked:checked.filter(r=>r.observation).length,manual:checked.filter(r=>!r.observation).length,pending:checked.length,sources:prepared.statuses||[]};await save();
    }
    for(const row of checkpoint.queue||[]){
-    if(checkpoint.done?.[row.leg_id]===today)continue;
+    const runKey=checkpoint.queueRun||today;
+    if(checkpoint.done?.[row.leg_id]===runKey)continue;
     const current=await register.summary();
     if(!current.available)throw Error('register');
     if(!current.legs.some(r=>r.leg_id===row.leg_id&&r.version_id===row.version_id&&r.status==='active'))continue;
-    const requestId='auto-'+fingerprint([row.version_id,row.leg_id,today]);
+    const requestId='auto-'+fingerprint(checkpoint.queueRun?[row.version_id,row.leg_id,today,checkpoint.queueRun]:[row.version_id,row.leg_id,today]);
     const {result}=row,at=row.controlAt;
     const assessment=row.observation?{...assess(row,row.observation),tightConnectionReview:!!row.tightConnectionReview}:null;
     if(row.observation){
@@ -78,12 +81,13 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
      checked_at:at,day:today,outcome:row.observation?'checked':'manual',reason:result.reason||'',
      sources:result.sources||[],assessment,observation_request_id:row.observation?requestId+'-obs':null,
      manual_url:row.observation?null:'https://int.bahn.de/nl'});
-    checkpoint.done={...(checkpoint.done||{}),[row.leg_id]:today};await save();
+    checkpoint.done={...(checkpoint.done||{}),[row.leg_id]:runKey};
+    if(checkpoint.lastSummary)checkpoint.lastSummary.pending=Math.max(0,checkpoint.lastSummary.pending-1);await save();
    }
    const active=new Set(data.legs.map(r=>r.leg_id));checkpoint.done=Object.fromEntries(Object.entries(checkpoint.done||{}).filter(([id])=>active.has(id)));
    checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.lastSelection=selectionKey;checkpoint.queue=[];
   }catch{if(checkpoint?.owner===owner)checkpoint.error='Controle niet voltooid. Niet-afgeronde ritten worden opnieuw geprobeerd; ontbrekende bronnen blijven handmatig te controleren.';}
   finally{try{if(checkpoint?.owner===owner){checkpoint.leaseUntil=0;await save();}}catch{}running=false;}
  }
- return {tick,async status(){const {value}=await read('reisschema-control');return {enabled:value.enabled===true,lastRun:value.lastRun||null,error:value.error||null,running:value.leaseUntil>clock()};},async enable(enabled){if(typeof enabled!=='boolean')throw Error('Ongeldige instelling');const {value,revision}=await read('reisschema-control');await write('reisschema-control',{...value,enabled},revision);}};
+ return {tick,async status(){const {value}=await read('reisschema-control');return {enabled:value.enabled===true,lastRun:value.lastRun||null,summary:value.lastSummary||null,error:value.error||null,running:value.leaseUntil>clock()};},async enable(enabled){if(typeof enabled!=='boolean')throw Error('Ongeldige instelling');const {value,revision}=await read('reisschema-control');await write('reisschema-control',{...value,enabled},revision);}};
 }

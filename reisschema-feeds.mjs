@@ -134,7 +134,7 @@ export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.
  const enabled=()=>env.REISSCHEMA_PATRICK_ENABLED==='1';
  return {
   async prepare(legs,heartbeat=async()=>{}){
-   const outputs=[];
+   const outputs=[],statuses=[];
    const feeds=[{kind:'iff',name:'NDOV IFF',url:'https://data.ndovloket.nl/ns/ns-latest.zip'},
     ...(enabled()?[{kind:'gtfs',name:'GTFS.de',url:'https://download.gtfs.de/treinrondreis/latest.zip',headers:{Authorization:'Basic '+Buffer.from((env.REISSCHEMA_PATRICK_USER||'')+':'+(env.REISSCHEMA_PATRICK_PASSWORD||'')).toString('base64')}}]:[]),
     ...(env.REISSCHEMA_SNCF_ENABLED==='1'?[{kind:'gtfs',name:'SNCF GTFS',url:'https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip'}]:[]),
@@ -143,9 +143,10 @@ export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.
     await heartbeat();
     try{const {bytes,modified}=await download(source.url,source.headers||{},fetcher,clock()),meta={name:source.name,hash:createHash('sha256').update(bytes).digest('hex'),loadedAt:new Date(clock()).toISOString(),modified};
      const rows=await new Promise((resolve,reject)=>{const worker=new Worker(new URL(import.meta.url),{workerData:{kind:source.kind,bytes,legs,meta},transferList:[bytes.buffer],resourceLimits:{maxOldGenerationSizeMb:256}});const timer=setTimeout(()=>{void worker.terminate();reject(Error('Verwerking verlopen'));},120000);worker.once('message',resolve);worker.once('error',()=>reject(Error('Verwerking mislukt')));worker.once('exit',code=>{clearTimeout(timer);if(code)reject(Error('Verwerking gestopt'));});});outputs.push(rows);
-    }catch{outputs.push(Object.fromEntries(legs.map(l=>[l.leg_id,{reason:source.name+' niet bereikbaar',sources:[]}])));}
+     statuses.push({name:source.name,status:'ready',modified,matched:Object.values(rows).filter(r=>r.observation).length});
+    }catch{statuses.push({name:source.name,status:'unavailable',matched:0});outputs.push(Object.fromEntries(legs.map(l=>[l.leg_id,{reason:source.name+' niet bereikbaar of niet bruikbaar',sources:[]}])));}
    }
-   return {async lookup(leg){
+   return {statuses,async lookup(leg){
     const matches=outputs.map(o=>o[leg.leg_id]).filter(r=>r?.observation);
     // Conflicting sources are never silently prioritized.
     if(matches.length>1&&new Set(matches.map(r=>JSON.stringify(fields({departure:{date:r.observation.departure_date,time:r.observation.departure_time},arrival:{date:r.observation.arrival_date,time:r.observation.arrival_time}})))).size>1)return {reason:'Bronnen spreken elkaar tegen; controleer DB',sources:matches.flatMap(m=>m.sources)};

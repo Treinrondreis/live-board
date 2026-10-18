@@ -121,3 +121,24 @@ cannot be rewritten through this exception.
 
 Code and fixture checks do not establish live provider availability, Google consent,
 successful production deployment or complete privacy coverage.
+
+## Manual reruns and source activation
+
+An explicit manual start creates a new durable round, including when a round already
+completed today. A retry of an unfinished round resumes its saved evidence and IDs.
+Scheduled ticks still deduplicate the completed daily selection. Source availability,
+source modification times, full matching counts and pending writes are stored in the
+checkpoint and shown to the owner. Availability is not a claim of full route coverage.
+
+The initial production round on 18 October checked six leg rows through IFF and created
+two manual tasks. It did not check all registered future journeys.
+
+Entur investigation (18 October): the official per-operator GTFS exports for SJ Nord,
+Go-Ahead and Flytoget were downloaded outside Git. Their trips header does not contain
+trip_short_name; internal ServiceJourney IDs must not be guessed as public train numbers.
+The Vy export exceeds the current 30 MiB compressed bound. The official Journey Planner
+supports date/privateCode filters and is a possible separate adapter, but complete
+number/date/endpoint matching has not been verified. Entur remains a manual fallback;
+its existing near-term departure boards are not used as proof of a full future journey.
+Official references: https://developer.entur.no/open-data/timetable and
+https://developer.entur.no/docs/open-services/journey-planner.
