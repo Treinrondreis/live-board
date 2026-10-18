@@ -292,3 +292,7 @@ are preserved, and no actual or zero-delay proof is invented from old temporary 
 Already purged history cannot be reconstructed. Live collection continues independently;
 a backfill error remains visible rather than falsely reporting completion. Existing database
 backups remain the recovery mechanism; this feature does not configure or verify backups.
+
+
+### Handmatige selectie
+In Ritten zoeken en de dagoverzichten van een boeking kunnen maximaal 100 actieve ritregels worden aangevinkt. Geselecteerde ritten controleren vraagt een aparte ronde aan met uitsluitend die regels, ook buiten het automatische 15-dagenvenster. Ontbrekende brondekking blijft neutraal. Dezelfde bronnen, bewijsregistratie en afwijkingsregels blijven gelden. Bij een lopende ronde of een nog te verwerken wachtrij wordt een nieuwe selectie geweigerd; de selectie blijft dan staan. Een onderbroken selectieronde bewaart haar selectie voor hervatting. Deze actie wijzigt geen Sanity-gegevens en verstuurt geen klantmail.

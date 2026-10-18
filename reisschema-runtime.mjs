@@ -29,7 +29,7 @@ export function createControlRoutes({cycle=reisschemaCycle,mail=changeMail,googl
    let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>8192)return reply(413,{error:'Aanvraag te groot'});}
    const data=JSON.parse(raw);if(!data||typeof data!=='object'||Array.isArray(data))throw Error();
    if(path==='/api/controls'){if(Object.keys(data).join()!=='enabled'||typeof data.enabled!=='boolean')throw Error();await cycle.enable(data.enabled);return reply(200,{ok:true});}
-   if(path==='/api/run-controls'){if(Object.keys(data).length)throw Error();void cycle.tick({manual:true}).catch(()=>{});return reply(202,{ok:true});}
+   if(path==='/api/run-controls'){if(Object.keys(data).join()==='legIds'){const result=await cycle.requestSelected(data.legIds);return reply(result.accepted?202:409,result);}if(Object.keys(data).length)throw Error();void cycle.tick({manual:true}).catch(()=>{});return reply(202,{ok:true});}
    if(path==='/api/google-start'){if(Object.keys(data).length)throw Error();return reply(200,{url:await google.start(session(req))});}
    const keys=['legId','changeKey','observationRevision','to','destination','advice'];
    if(Object.keys(data).length!==keys.length||keys.some(k=>typeof data[k]!=='string')||Object.keys(data).some(k=>!keys.includes(k)))throw Error();

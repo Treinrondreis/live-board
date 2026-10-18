@@ -103,3 +103,22 @@ test('queue freshness uses the source fetch time, not only the later control tim
  await createControlCycle(h.deps).tick();now=Date.parse('2031-06-02T15:55:00Z');
  await createControlCycle(h.deps).tick();assert.equal(prepares,2);
 });
+
+const settle=async cycle=>{for(let i=0;i<100;i++){await new Promise(resolve=>setImmediate(resolve));if(!(await cycle.status()).running)return;}assert.fail('cycle did not settle');};
+test('selected manual check only fetches requested active legs, including outside automatic window',async()=>{
+ const h=harness(),other={...leg,leg_id:'leg-b',travel_date:'2031-07-10',arrival_date:'2031-07-10'};h.rows=[leg,other];let prepared;
+ h.deps.sources.prepare=async rows=>{prepared=rows;return {lookup:async()=>({reason:'No coverage',sources:[]})};};
+ const cycle=createControlCycle(h.deps);assert.deepEqual(await cycle.requestSelected(['leg-b']),{accepted:true,count:1});await settle(cycle);
+ assert.deepEqual(prepared.map(r=>r.leg_id),['leg-b']);assert.deepEqual(h.events.map(r=>r.e.leg_id),['leg-b']);assert.equal((await cycle.status()).summary.selected,1);
+});
+test('selected check rejects empty, duplicate, unknown, inactive and busy selections',async()=>{
+ const h=harness(),cycle=createControlCycle(h.deps);for(const ids of [[],['leg-a','leg-a'],['unknown'],Array(101).fill('leg-a')])assert.equal((await cycle.requestSelected(ids)).accepted,false);
+ h.rows=[{...leg,status:'withdrawn'}];assert.equal((await cycle.requestSelected(['leg-a'])).accepted,false);h.rows=[leg];
+ const state=h.kv.get('reisschema-control');state.value.leaseUntil=h.deps.clock()+10000;assert.equal((await cycle.requestSelected(['leg-a'])).accepted,false);assert.equal(h.events.length,0);
+});
+test('interrupted selection resumes only selected evidence before a later scheduled round',async()=>{
+ const h=harness({failControl:true});h.rows=[leg,{...leg,leg_id:'leg-b'}];let cycle=createControlCycle(h.deps);
+ await cycle.requestSelected(['leg-a']);await settle(cycle);assert.equal((await cycle.requestSelected(['leg-b'])).accepted,false);
+ cycle=createControlCycle(h.deps);await cycle.tick();assert.deepEqual(h.events.filter(r=>r.k==='control').map(r=>r.e.leg_id),['leg-a']);assert.equal(h.prepares,1);
+ await cycle.tick();assert.equal((await cycle.status()).summary.selected,2);
+});

@@ -56,7 +56,7 @@ test('journey columns follow departure route arrival and only backups carry a la
  input('booking-number','demo');const html=get('booking-days').innerHTML;
  assert.ok(html.indexOf('>Vertrek</th>')<html.indexOf('>Traject</th>'));
  assert.ok(html.indexOf('>Traject</th>')<html.indexOf('>Aankomst</th>'));
- assert.match(html,/<td class="time-cell"><strong>10:00<\/strong>/);
+ assert.match(html,/<td class="time-cell"><span class="punctuality-times"><span><strong>10:00<\/strong>/);
  assert.match(html,/arrival-date/);assert.match(html,/Back-up/);assert.doesNotMatch(html,/Hoofdrit|Vertrek \/ aankomst/);
  assert.ok(html.indexOf('10:00')<html.indexOf('Voorbeeld Noord'));assert.ok(html.indexOf('Voorbeeld Zuid')<html.indexOf('12:00'));
 });
