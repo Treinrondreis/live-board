@@ -29,7 +29,11 @@ export function createFloraRegister({env=process.env,fetcher=fetch,clock=Date.no
     cached=null;expires=0;
     return {ok:true};
   }
-  return Object.freeze({summary,recordCheck});
+  async function recordLegEvent(versionId,kind,event){
+    const result=await configuredClient().recordLegEvent(versionId,kind,event);
+    cached=null;expires=0;return result;
+  }
+  async function notificationContexts(){return configuredClient().notificationContexts();}
+  return Object.freeze({summary,recordCheck,recordLegEvent,notificationContexts});
 }
 export const floraRegister=createFloraRegister();
-

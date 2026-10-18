@@ -1,0 +1,46 @@
+# Reishuis layouts en hotelinformatie
+
+Weergave links wisselt tussen dashboardpanelen en de boekingenwerkplek. De voorkeur is alleen een niet-persoonlijke browserinstelling, geen klantgegevensopslag. De werkplek laat het dossier naast de lijst zien; bij wisselen van dossier wordt sluiten bevestigd. Op smalle schermen vult het dossier het scherm.
+
+Todo’s tonen compacte regels, voortgang en een filter voor open taken. Statuswijzigingen blijven uitsluitend in de bestaande Reishuis-opslag.
+
+Hotels worden via de bestaande Sanity Viewer-verbinding uitsluitend met GET gelezen, met vaste project/dataset en veldprojectie. Geen boekingen, geheime instellingen of APO-jobhistorie in deze projectie. De productiecatalogus wordt lokaal in Postgres bewaard en gedeeld tussen gebruikers, ook na herstart. Om 08:15, 12:15 en 15:15 (Europe/Amsterdam) worden gewijzigde brondocumenten gecontroleerd. De vijfminutencache is uitsluitend een fixture/testadapter. Tijdens verversen blijft de vorige volledige snapshot beschikbaar. Dit start de Automatische Prijs Ophaler niet en boekt niets.
+
+Hotelgegevens, kamers, omschrijvingen, foto’s en bestaande APO-dagtarieven zijn achter dezelfde expliciete Reishuis-rol beschermd. Foto’s gaan via de beschermde proxy met CDN-host/padcontrole en bestaande groottelimieten. Alle routes gebruiken private/no-store, same-origin en de bestaande privacyheaders. APO-koppelingen worden op document-ID en kamerkey gevolgd; ontbrekende koppelingen worden zichtbaar gemeld. Prijzen tonen bron, maaltijdtype en laatste ophaaldatum; ontbrekende datums/prijzen worden niet ingevuld of als nul voorgesteld.
+
+Er is geen Sanity-schrijfroute toegevoegd. Geen nieuwe externe diensten, secrets of rollen. Layouts bieden bestaande functies; fictieve statistieken uit ontwerpvoorbeelden zijn niet overgenomen.
+
+Verificatie: synthetische unit- en browsertests voor GET-paginering/conceptvoorrang, foto-validatie, rolweigering, beperkte lijstprojectie, APO-koppelingen, layoutvoorkeur na herladen, werkplek-dossier, compacte taken, mobiele kalender en wissen bij ingetrokken toegang. Bestaande dossier- en Rinkel-browsercontroles blijven onderdeel van de suite.
+
+## Contracttarieven en effectieve prijskalender
+De hotelpagina heeft per opgeslagen kamer een prijskalender met maandkeuze en vorige/volgende maand. Deze gebruikt exact dezelfde serverfunctie als de todo-herberekening, per kamer per nacht. De ingestelde boekingsprijsbron bepaalt contract (cms) of APO; de kalender gebruikt bewust de boekingsbron zodat bedragen aansluiten op Herberekenen. Een eventueel andere Sanity-calendarPriceSource wordt bewaard, maar hier niet gebruikt. Ruwe APO-brongegevens blijven apart uitklapbaar.
+
+Contractregels blijven in hun oorspronkelijke Sanity-volgorde. Per nacht wordt de eerste regel gekozen waarvan minstens één periode past; begin- en einddatum zijn inclusief. Ontbrekende grenzen zijn open; ontbrekende/lege periodes of weekdagen betekenen alle datums/dagen. Weekdag 0 is zondag, 6 zaterdag. Er wordt niet op bedrag gesorteerd en niet gemiddeld. De kalender toont het regelnummer. De eerste passende regel met nul/ongeldig bedrag blokkeert automatisch prijzen; er wordt niet verder gezocht naar een lagere regel. Zonder passend contracttarief is handmatige invoer nodig, ook als APO een bedrag heeft. Check-out telt niet als nacht.
+
+Catalogusformaat 3 haalt eenmalig de volledige periode- en weekdagregels en prijsbron opnieuw op, ook bij ongewijzigde _updatedAt. Bij mislukte migratie blijven hotelgegevens leesbaar, maar automatische prijzen geblokkeerd totdat de volledige regels beschikbaar zijn. Daarna geldt de bestaande incrementele planning. Lezen van de kalender start geen APO-ophaalactie en schrijft niets aan boekingen of Sanity.
+
+GET /api/hotel-calendar (id, room, month en alleen voor APO provider/board) valt onder de bestaande expliciete rol, same-origin en private/no-store headers. Geen boekings- of persoonsinformatie in het antwoord. De gedeelde reishuis-hotel-pricing.mjs is een servermodule, geen publiek bestand. Tests gebruiken uitsluitend fictieve hotels/prijzen en controleren regelvolgorde, weekdagen, grenzen, schrikkeljaar, blokkades, kalender/herberekening-gelijkheid, migratie, mobiele bediening en ingetrokken toegang.
+
+## Hotelwerkplek en financiële vergelijking
+De hotelknop opent een brede werkplek met een blijvende, doorzoekbare hotellijst links. Rechts staan Basis, Tarieven, Content en Boekingen. De tarieven hebben een aparte kamerkeuze en de bestaande beveiligde kalender; boekingen staan per check-inmaand met paginering. De lijst toont aanvankelijk 40 hotels en laadt meer op verzoek; afbeeldingen worden alleen via de bestaande beschermde proxy en lazy loading weergegeven. Op mobiel staat de compacte hotellijst boven het detailpaneel; brede boekingstabellen scrollen binnen hun paneel.
+
+Calc. = quantity × price van de gekoppelde financiële regel. Werkelijk = quantity × costs (de bestaande werkelijke prijs per stuk), inclusief lokale overschrijvingen. Actueel = som van de huidige kalenderprijzen per verblijfsnacht × kamers, via dezelfde contract/APO-engine als Herberekenen. Dit zijn verblijfstotalen in euro, geen nachttarieven. Werkelijk is niet afgeleid van betalingen of kalenderprijzen. Een expliciete werkelijke nul blijft nul; een leeg bedrag blijft onbekend. Actueel verandert de opgeslagen financiële regel niet. Bij ontbrekende/ambigue koppeling, kamer, variant of een ontbrekend/onbeschikbaar nachtbedrag blijft actueel onbekend met reden.
+
+Statistieken gelden voor de volledige geselecteerde periode, niet alleen de pagina: unieke boekingen, kamers en gemiddelde werkelijke prijs per kamernacht. Het gemiddelde deelt uitsluitend bekende werkelijke totalen door de bijbehorende bekende kamernachten; het aantal ontbrekende bedragen wordt vermeld. Maandgroepen volgen check-in. Pijlen vergelijken werkelijk met calc., en actueel met werkelijk (of calc. als werkelijk ontbreekt).
+
+De bestaande gedeelde, private Postgres-boekingssnapshot bevat nu een minimale financiële index: unieke bronregelkey, titel/datum, hoeveelheid, berekende en werkelijke stukprijs, type; hotel-todo's bevatten ook de leveranciersreferentie voor Ext. nr. Geen factuurtoelichting, contactgegevens of notities worden aan deze index toegevoegd. Deze velden worden expliciet verwijderd uit de dashboard-/zoek-/rijenrespons en uitsluitend gebruikt in de rolbeschermde hotelverblijven-API. Oude snapshots worden bij de normale boekingsverversing aangevuld; de hotelpagina meldt ontbrekende brongegevens totdat dit klaar is. Er worden geen duizenden volledige persoonsdossiers extra gelezen. Dubbele/keyloze bronregels worden niet gekoppeld; lokale wijzigingen, gearchiveerde taken en bestaande ambiguititeitscontroles blijven gelden.
+
+Deze wijziging voegt geen Sanity-schrijfroute, leverancierboeking of lokale schrijfactie toe. De voorbeeldknoppen voor importeren, tariefgenerator, reviews en hotel toevoegen uit het ontwerp worden niet als niet-werkende bediening nagemaakt. Alleen beschikbare gegevens en functies worden getoond. Alle privacyheaders, expliciete Reishuis-rol en same-origin-controles blijven actief. Tests en schermvoorbeelden gebruiken fictieve hotels en boekingen.
+
+## Zelfstandige hotelpagina en mobiele zoeklijst
+Hotels opent nu /seinhuis/reishuis/hotels/ als een normale beveiligde pagina; er wordt geen hotel-dialog of backdrop meer geopend. De hotelknop en todo-link navigeren erheen. Een veilige returnBooking-parameter keert terug naar het dossier. Hotel-ID en tabblad staan in de URL, werken na F5 en browser-terug; zoektekst blijft alleen in de eigen browsergeschiedenisstaat zodat teruggaan de lijst behoudt. Geen nieuwe lokale opslag of klantgegevensexport.
+
+Op mobiel gebruikt de lijst de beschikbare pagina tot een hotel is gekozen. Het lege detailpaneel is verborgen. De zoekbalk blijft boven de afzonderlijk scrollende resultaten staan; toetsenbord-viewport, zoeken in meerdere woorden/onafhankelijk van accenten, lege resultaten en scroll-reset zijn getest. Hotelkeuze sluit het toetsenbord. Hotels zoeken toont dezelfde filterlijst opnieuw. Op desktop staan lijst en detail naast elkaar.
+
+HTML en alle modules vallen onder de bestaande server-side Reishuis-rol, same-origin en private/no-store/privacyheaders. De zelfstandige pagina controleert toegang ook bij terugkeer naar het tabblad en iedere 30 seconden wanneer zichtbaar; bfcache-herstel herlaadt via de server. Bij ingetrokken toegang wordt private hotelinhoud gewist. De pagina voegt geen Sanity- of financiële schrijfactie toe.
+
+### Hotelboekingen: periode en annulering
+
+De standaardselectie **Aankomend en lopend** toont actieve verblijven waarvan de uitcheckdatum nog niet verstreken is. De uitcheckdag zelf valt onder **Eerdere boekingen**. Met **Geannuleerde boekingen** zijn annuleringen apart opvraagbaar: de gegevens zijn doorgestreept en krijgen het label Geannuleerd; de boekingslink blijft bruikbaar. Annuleringen tellen niet mee in de actieve standaardselectie. Dit is alleen een leesweergave, zonder wijzigingen in Sanity of financiële bedragen.
+
+Regressie: synthetische tests controleren toekomstige/lopende verblijven, de uitcheckgrens, eerdere boekingen, annuleringsstatussen en de zichtbare doorhaling met dossierlink.

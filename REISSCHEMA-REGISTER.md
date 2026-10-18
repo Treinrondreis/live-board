@@ -1,27 +1,34 @@
-# Tijdelijk onderdeel Reisschema’s
+# Reisschema’s: zoeken en wijzigingen
 
-Het centrale register staat los van FloRA onder `/seinhuis/reisschemas/`,
-met een eigen tegel in Seinhuis. De pagina zoekt op dossier, trein, station en
-reisdatum en toont links naar actuele reisschema’s. Alleen bestaande
-Seinhuis-beheerders (owner/admin) hebben toegang. Er worden geen accountrechten
-toegevoegd of uitgebreid. Gewone FloRA-toegang geeft geen toegang tot dit onderdeel.
+Het zelfstandige Seinhuis-onderdeel vereist bestaande eigenaarstoegang.
+Een reisperiode selecteert overlappende ritten, inclusief een nachtrit die de
+volgende dag aankomt. Vandaag/morgen/overmorgen gebruiken Europe/Amsterdam.
+Meerdere treinnummers worden als OF gecombineerd; periode, traject en boeking
+beperken die gezamenlijke selectie. De trajectwoorden moeten in reisvolgorde
+voorkomen, zonder exacte stationsnamen te vereisen.
 
-Dit tijdelijke onderdeel is alleen-lezen. De oude FloRA-registerroutes zijn
-verwijderd; ook controles kunnen niet via deze pagina worden toegevoegd.
-Een actieve versie betekent niet dat de dienstregeling recent gecontroleerd is.
-Geen Sanity-wijzigingen, automatische controles of berichten.
+De oorspronkelijke tijden blijven uit het centrale register komen. De nieuwe
+planning is een afzonderlijke broncontrole, met bron en controletijd. Automatisch
+vergelijken gebruikt uitsluitend eenduidige, volledige planning uit het bestaande
+ritarchief, met beide stations in de juiste volgorde en een bron later dan de
+registratie van het schema. Er worden geen realtimemetingen als nieuwe geplande
+tijden gepresenteerd. Zonder bewijs staat er geen bevestiging.
 
-De bestaande serverinstellingen blijven behouden, zodat geen sleutels hoeven
-te worden verplaatst: `REISSCHEMA_REGISTER_URL` en `REGISTER_FLORA_TOKEN`.
-De historische modulenaam `flora-register.mjs` verwijst alleen naar de interne
-adapter en plaatst het onderdeel niet in FloRA. De sleutel blijft uitsluitend
-server-side. Het gebruikte serviceprofiel kan lezen en controles toevoegen;
-deze webpagina biedt uitsluitend lezen aan. Gebruik hier nooit een builder-
-of databasebeheersleutel.
+Een uitroepteken verschijnt bij minstens vier minuten eerder vertrek, uitval of
+een bewezen onhaalbare aansluiting zonder gecommuniceerde passende back-up.
+Wijzigingen in tijden worden doorgestreept met de nieuwe tijd eronder. Het
+groene vinkje vereist expliciete registratie van communicatie voor precies die
+wijziging. Nieuwe tijden of aansluitstatus maken de oude registratie niet
+opnieuw toepasselijk. Een geschikte back-up moet afzonderlijk als gecommuniceerd
+worden vastgelegd; alleen het bestaan van een andere trein is onvoldoende.
 
-De client leest alle pagina’s, gebruikt de private Railway-hostnaam en weigert
-redirects. De cache verloopt na dertig seconden; fouten verwijderen de oude
-cache. De browser wist de vorige lijst bij vernieuwen of een fout.
+De POST-routes vereisen eigenaarstoegang, eigen Origin, JSON en X-Reisschemas.
+De bestaande private Flora-servicecredential mag alleen broncontrole en
+communicatie toevoegen. Geen schema’s, originele tijden of Sanity worden
+aangepast. De server verstuurt geen e-mail en laat geen geheime sleutel aan de
+browser zien. Het centrale register moet de leg-events-uitbreiding hebben
+voordat de schrijfknoppen live gaan.
 
-Uitrol: passende tests, review en daarna een handmatige productie-uitrol.
-Deze wijziging migreert geen database en verandert geen bestaande ritten.
+Controles: node --test flora-register-ui.test.mjs reisschema-changes.test.mjs
+reisschemas.test.mjs reisschemas-write.test.mjs flora-register.test.mjs.
+Gebruik uitsluitend fictieve gegevens in test- en previewbestanden.

@@ -1,3 +1,4 @@
+import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
 import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
 import {embedPayload} from './embed-payload.mjs';
@@ -7,6 +8,9 @@ import {handleAdminHub} from './admin-hub.mjs';
 import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
 import {handleReisschemas} from './reisschemas.mjs';
+import {configurePunctuality,backfillPunctuality} from './punctuality.mjs';
+import {floraRegister} from './flora-register.mjs';
+import {startReisschemaControls,handleReisschemaReceipt} from './reisschema-runtime.mjs';
 import {handleReishuis} from './reishuis.mjs';
 import {handleExpedia} from './expedia.mjs';
 import {startFlora} from './flora-schedule.mjs';
@@ -16,7 +20,7 @@ import {stationschefPage} from './stationschef-layout.mjs';
 import {handleTreinhuisAccess} from './treinhuis-access.mjs';
 import {nightRule,runDay,observedDay} from './night-routes.mjs';
 import {attachBoardBookings} from './board-bookings.mjs';
-import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey} from './screen-settings.mjs';
+import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey,screenPunctualityMatches} from './screen-settings.mjs';
 import {handleConnectionAdmin} from './connections-admin.mjs';
 import {handleAppCms} from './app-cms.mjs';
 import {startDayReports,handleDayReports} from './day-reports.mjs';
@@ -1091,6 +1095,7 @@ const server=http.createServer(async(req,res)=>{
     if(await rinkelIncoming.receive(req,res,url))return;
     if(await handleReishuis(req,res,url))return;
     if(await handleExpedia(req,res,url))return;
+    if(await handleReisschemaReceipt(req,res,url))return;
     if(await handleReisschemas(req,res,url))return;
     if(await handleFlora(req,res,url))return;
     if(await handleBooklets(req,res,url))return;
@@ -1242,6 +1247,7 @@ const server=http.createServer(async(req,res)=>{
 
 await initStorage();
 await initScreenSettings(config,{OJP:Object.values(swissStations).map(s=>s.name),NMBS:Object.values(belgianStations).map(s=>s.name)},settings=>screenBoardTrains(Date.now(),settings));
+configurePunctuality({getLegs:()=>floraRegister.summary(),screenMatch:screenPunctualityMatches});
 startConnectionMonitor(getStationPlatformLayout);
 startAnalyticsBackfill();
 startDayReports(()=>{
@@ -1255,7 +1261,10 @@ await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfi
 await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreOebb(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
 for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>Date.now()-86400000)ndovRows.set(row.id,row);
 server.listen(PORT,async()=>{
+  startReishuisCatalogSync();
   startFlora();
+  startReisschemaControls();
+  void backfillPunctuality();
   void checkNdovAccess();
   void startNdov();
   startBelgium();

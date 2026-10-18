@@ -49,6 +49,10 @@ export function createRegisterClient({baseUrl, token, fetcher=fetch}={}) {
     if(legIds!==undefined)body.leg_ids=legIds;
     return request('/v1/versions/'+versionId+'/checks',{body});
   }
-  return Object.freeze({findLegs,recordCheck});
+  async function recordLegEvent(versionId,kind,event){
+    if(!/^[a-f0-9-]{36}$/.test(versionId)||!['observation','communication','control','draft','receipt'].includes(kind)||!event||typeof event!=='object')throw Error('Ongeldige ritmelding.');
+    return request('/v1/versions/'+versionId+'/leg-events',{body:{kind,event}});
+  }
+  async function notificationContexts(){const data=await request('/v1/notification-contexts');if(!Array.isArray(data.notifications))throw Error('Ongeldig registerantwoord.');return data.notifications;}
+  return Object.freeze({findLegs,recordCheck,recordLegEvent,notificationContexts});
 }
-

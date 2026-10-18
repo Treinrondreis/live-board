@@ -18,6 +18,10 @@ export async function initScreenSettings(config,sourceStations={},provider=()=>[
  for(const row of await readBoardSettings())if(row.page.startsWith(prefix))saved.set(row.page.slice(prefix.length),row);
 }
 export function screenSettings(id='0'){return saved.get(id)?.settings||(id==='0'?defaults:null);}
+export function screenPunctualityMatches(row){
+ const source=row.source==='NDOV_RIT'?'NDOV':row.source;
+ return [...new Set(['0',...saved.keys()])].map(id=>screenSettings(id)).filter(Boolean).some(settings=>source==='ViaggiaTreno'?settings.italy:screenTrainMatches({...row,source},settings));
+}
 export function screenTrainNumbers(){return [...new Set([defaults,...[...saved.values()].map(r=>r.settings)].filter(Boolean).flatMap(s=>s.trains.filter(t=>t.source==='DB').map(t=>t.number)))];}
 export function screenTrainMatches(row,settings){
  const source=screenSource(row),station=row.observedAt||row.station,number=String(row.number);

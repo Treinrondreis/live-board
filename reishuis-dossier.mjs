@@ -1,3 +1,4 @@
+import {normalizePhone} from './reishuis-rinkel.mjs';
 import {createHash,randomUUID} from 'node:crypto';
 import {sanityConfig} from './flora-sanity.mjs';
 
@@ -13,13 +14,13 @@ const rows=(list,fields,type)=>(Array.isArray(list)?list:[]).map((v,i,all)=>{
  const identity=uniqueKey?v._key:JSON.stringify(v),occurrence=uniqueKey?0:all.slice(0,i).filter(r=>JSON.stringify(r)===identity).length;
  const row={id:'source-'+digest([type,identity,occurrence]).slice(0,32),...pick(v,fields)};
  for(const k of ['quantity','price','costs','vatRate'])if(fields.includes(k))row[k]=number(k==='quantity'?v.quantity??v.amount??1:v[k]);
- if(type==='todo')row.status=['pending','planned','doing','done','caution'].includes(v.status)?v.status:v.done===true?'done':'pending';
+ if(type==='todo'){row.status=v.done===true?'done':['pending','planned','doing','done','caution'].includes(v.status)?v.status:v.status?'unknown':'pending';row.sourceStatus=row.status;}
  if(type==='line'){row.visible=v.visible!==false;row.type=['product','discount','margin','option'].includes(v.type)?v.type:'product';}
  return row;
 });
 export function normalizeDossier(b){
  if(!b||typeof b._id!=='string')throw Error('Invalid dossier');
- return {personal:pick(b,personalFields),comment:str(b.comment),notes:str(b.notes),initialPrice:number(b.initialPrice),invoiceTitle:str(b.title),invoiceSubtitle:str(b.subtitle),vendorName:str(b.vendorName),
+ return {formatVersion:2,personal:pick(b,personalFields),comment:str(b.comment),notes:str(b.notes),initialPrice:number(b.initialPrice),invoiceTitle:str(b.title),invoiceSubtitle:str(b.subtitle),vendorName:str(b.vendorName),
  passengers:(Array.isArray(b.passengers)?b.passengers:[]).map(p=>pick(p,['firstName','lastName','name','dateOfBirth','type','gender','nationality','countryOfResidence','station'])),
  payments:(Array.isArray(b.payments)?b.payments:[]).map(p=>({status:str(p.status),type:str(p.type),price:number(p.price),dateCreated:str(p.dateCreated),dateDue:str(p.dateDue),fulfillments:(Array.isArray(p.fulfillments)?p.fulfillments:[]).map(f=>({amount:number(f.amount),date:str(f.date),type:str(f.type)}))})),
  todos:rows(b.todos,todoFields,'todo'),lines:rows(b.lines,lineFields,'line')};
@@ -36,9 +37,9 @@ export async function fetchReishuisDossier(id,{fetcher=fetch,config=sanityConfig
  return normalizeDossier(result.find(b=>b._id==='drafts.'+id)||result[0]);
 }
 export function mergeDossier(source,local={}){
- const merge=(rows,overrides={})=>[...rows.map(r=>({...r,...overrides[r.id],localChanged:!!overrides[r.id]})),...Object.entries(overrides).filter(([id])=>!rows.some(r=>r.id===id)).map(([id,r])=>({...r,id,localChanged:true,sourceRemoved:!r.local}))];
- return {...source,personal:{...source.personal,...local.personal},comment:local.notes?.comment??source.comment,notes:local.notes?.notes??source.notes,
- todos:merge(source.todos,local.todos),lines:merge(source.lines,local.lines),localChanged:Object.keys(local).length>0};
+ const merge=(rows,overrides={})=>[...rows.map(r=>({...r,...(overrides[r.id]?._edited?Object.fromEntries(overrides[r.id]._edited.map(k=>[k,overrides[r.id][k]])):overrides[r.id]),localChanged:!!overrides[r.id],localStatus:!!overrides[r.id]&&(!overrides[r.id]._edited||overrides[r.id]._edited.includes('status'))})),...Object.entries(overrides).filter(([id])=>!rows.some(r=>r.id===id)).map(([id,r])=>({...r,id,localChanged:true,sourceRemoved:!r.local}))];
+ return {...source,contacts:local.contacts||{phones:[],emails:[]},personal:{...source.personal,...local.personal},comment:local.notes?.comment??source.comment,notes:local.notes?.notes??source.notes,
+ todos:[...merge(source.todos,local.todos).map(t=>({...t,component:local.components?.[t.id]||null})),...(local.reviews||[]).filter(t=>!t.archived),...(local.reviews||[]).filter(t=>t.archived)],changeHistory:local.changes||[],lines:merge(source.lines,local.lines),localChanged:Object.keys(local).length>0};
 }
 function bad(){const e=Error('Invalid dossier input');e.status=400;throw e;}
 function clean(values,fields){
@@ -51,20 +52,34 @@ function clean(values,fields){
   if(k==='visible'){if(typeof v!=='boolean')bad();return [k,v];}
   if(typeof v!=='string'||v.includes('\u0000')||v.length>(['notes','comment','description'].includes(k)?10000:500))bad();
   if(['startDate','endDate','bookableFrom','deadline','date'].includes(k)&&v&&(!/^\d{4}-\d{2}-\d{2}$/.test(v)||Number.isNaN(Date.parse(v))||new Date(v).toISOString().slice(0,10)!==v))bad();
-  if(k==='status'&&!['pending','planned','doing','done','caution'].includes(v)||k==='type'&&!['product','discount','margin','option'].includes(v))bad();
+  if(k==='status'&&!['pending','planned','doing','done','caution','unknown'].includes(v)||k==='type'&&!['product','discount','margin','option'].includes(v))bad();
   return [k,v.trim()];
  }));
 }
 export function changeDossier(state,input,source){
  const id=input.booking;if(typeof id!=='string'||!/^[-a-zA-Z0-9_.]{1,160}$/.test(id)||['__proto__','constructor','prototype'].includes(id))bad();
  const section=input.section,local=structuredClone(state.dossiers?.[id]||{});
- if(section==='personal'||section==='notes')local[section]={...local[section],...clean(input.values,section==='personal'?personalFields:['notes','comment'])};
+ if(section==='review'){const review=local.reviews?.find(t=>t.id===input.item);if(!review||review.archived||input.confirm!==true)bad();review.archived=true;review.status='done';review.reviewedAt=new Date().toISOString();
+ }else if(section==='contacts'){
+  const v=input.values;if(!v||Object.keys(v).some(k=>!['phones','emails'].includes(k)))bad();
+  const country=mergeDossier(source,local).personal.country;
+  local.contacts=Object.fromEntries(['phones','emails'].map(kind=>{
+   if(!Array.isArray(v[kind])||v[kind].length>10)bad();const seen=new Set();
+   return [kind,v[kind].map(r=>{if(!r||Object.keys(r).some(k=>!['value','label'].includes(k))||typeof r.value!=='string'||r.value.includes('\0')||typeof r.label!=='string'||r.label.length>80||r.label.includes('\0'))bad();const value=kind==='phones'?normalizePhone(r.value,country):r.value.trim();if(!value||kind==='emails'&&(value.length>254||!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value)))bad();const key=value.toLowerCase();if(seen.has(key))bad();seen.add(key);return {value,label:r.label.trim()};})];
+  }));
+ }else if(section==='todo'&&input.resetStatus===true){
+  if(!source.todos.some(r=>r.id===input.item))bad();const row=local.todos?.[input.item];if(row){delete row.status;row._edited=(row._edited||Object.keys(row).filter(k=>todoFields.includes(k))).filter(k=>k!=='status');}
+ }else if(section==='personal'||section==='notes')local[section]={...local[section],...clean(input.values,section==='personal'?personalFields:['notes','comment'])};
  else if(section==='todo'||section==='line'){
   const collection=section==='todo'?'todos':'lines',fields=section==='todo'?todoFields:lineFields;
   const values=clean(input.values,fields);let item=input.item;
   const current=mergeDossier(source,local)[collection].find(r=>r.id===item);
+  if(current?.review||current?.archived)bad();
+  if(section==='todo'&&(local.components?.[item]||current?.tag==='hotel'||/interrail/i.test(current?.title||''))&&Object.keys(values).some(k=>['title','startDate','endDate','quantity'].includes(k)&&values[k]!==current?.[k])){const e=Error('Gebruik Onderdeel wijzigen en herberekenen voor gekoppelde taken.');e.status=400;e.reishuisSafe=true;throw e;}
+  if(section==='line'&&Object.values(local.components||{}).some(c=>c.line===item)&&Object.keys(values).some(k=>['title','quantity','price'].includes(k)&&values[k]!==current?.[k])){const e=Error('Wijzig deze gekoppelde regel via de bijbehorende todo.');e.status=400;e.reishuisSafe=true;throw e;}
+  if(section==='todo'&&current?.status==='done'&&Object.keys(values).some(k=>['title','startDate','endDate','quantity'].includes(k)&&values[k]!==current[k])){local.reviews??=[];local.reviews.push({...current,id:'review-'+randomUUID(),idOfOriginal:current.id,status:'caution',review:true,archived:false,changedAt:new Date().toISOString()});values.status='pending';}
   if(input.add===true){if(item)bad();item='local-'+randomUUID();const defaults=section==='todo'?{status:'pending',quantity:1}:{quantity:1,price:0,costs:null,type:'product',visible:true};local[collection]={...local[collection],[item]:{...defaults,...values,local:true}};}
-  else {if(!current)bad();local[collection]={...local[collection],[item]:{...current,...values}};delete local[collection][item].localChanged;delete local[collection][item].sourceRemoved;}
+  else {if(!current)bad();local[collection]={...local[collection],[item]:{...current,...values,_edited:[...new Set([...(local[collection]?.[item]?._edited||Object.keys(local[collection]?.[item]||{}).filter(k=>fields.includes(k))),...Object.keys(values).filter(k=>values[k]!==current[k])])]}};delete local[collection][item].localChanged;delete local[collection][item].sourceRemoved;}
  }else bad();
  state.dossiers??={};state.dossiers[id]=local;return state;
 }
@@ -74,5 +89,5 @@ export function createDossierCache({readSnapshot,writeSnapshot,fetchDossier,cloc
   if(pending.has(id))return pending.get(id);
   const startedAt=clock(),task=(async()=>{const data=await fetchDossier(id);const value={data,syncedAt:startedAt,version:digest(data)};await writeSnapshot(id,value);retry.delete(id);return value;})().catch(()=>{retry.set(id,clock()+30000);throw Error('Dossier refresh unavailable');}).finally(()=>pending.delete(id));pending.set(id,task);return task;
  }
- return {async get(id){let saved=await readSnapshot(id);if(!saved){if((retry.get(id)||0)>clock())throw Error('Dossier unavailable');saved=await refresh(id);}else if(clock()-saved.syncedAt>=60000&&(retry.get(id)||0)<=clock())void refresh(id).catch(()=>{});return {...saved,refreshing:pending.has(id),stale:clock()-saved.syncedAt>=60000,syncFailed:(retry.get(id)||0)>clock()};}};
+ return {async get(id){let saved=await readSnapshot(id);if(!saved||saved.data?.formatVersion!==2){if((retry.get(id)||0)>clock())throw Error('Dossier unavailable');saved=await refresh(id);}else if(clock()-saved.syncedAt>=60000&&(retry.get(id)||0)<=clock())void refresh(id).catch(()=>{});return {...saved,refreshing:pending.has(id),stale:clock()-saved.syncedAt>=60000,syncFailed:(retry.get(id)||0)>clock()};}};
 }

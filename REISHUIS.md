@@ -197,3 +197,23 @@ preserved when only a status changes.
 Zie `docs/REISHUIS-RINKEL.md` voor de voorbereide, standaard uitgeschakelde koppeling,
 gegevensstroom, authenticatie, activeringsgrens, tests en beperkingen. Geen Rinkel
 API-key, webhook, nieuwe rol of Sanity-wijziging wordt automatisch aangemaakt.
+
+
+## Extra contacten en todo-status
+
+Bij Persoonsgegevens staan aparte groepen voor klant, adres, hoofdcontact en
+noodcontact. Extra contactgegevens kunnen rechtstreeks worden toegevoegd en
+verwijderd (maximaal tien extra telefoonnummers en tien extra e-mailadressen).
+Opslag gebeurt uitsluitend in de bestaande private Postgres-dossierstaat, met
+CSRF-, rol-, bronversie- en revisiecontrole. De primaire Sanity-velden blijven
+ongewijzigd. Extra telefoons worden internationaal genormaliseerd met alleen een
+bekende landcontext; ze worden ook gebruikt voor Rinkel-herkenning, inclusief
+expliciet gekoppelde klantboekingen. Ambigue matches blijven een keuze.
+
+Het Sanity-vinkje done=true geldt als Gedaan, ook bij een oude pending-status.
+Onbekende statussen worden expliciet als Status controleren getoond. Een lokale
+status is herkenbaar aan Eigen status met daarnaast de bronstatus. Via Status uit
+Sanity gebruiken kan die lokale status worden losgelaten. Alleen werkelijk
+gewijzigde velden worden vastgezet; een lokale aantekening bevriest de bronstatus
+niet. Bestaande oudere volledige lokale overrides blijven behouden en herkenbaar.
+Dossierbronformaat 2 ververst oude snapshots voor de gecorrigeerde statusweergave.

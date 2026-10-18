@@ -1,5 +1,5 @@
-let db,ready;
-export function initReishuis(database){db=database;ready=null;}
+let db,ready,catalogReady;
+export function initReishuis(database){db=database;ready=null;catalogReady=null;}
 export const emptyReishuis=()=>({customers:[],links:{},notes:{},preferences:{},history:[]});
 async function ensure(){
  if(!db)throw Error('Reishuis storage unavailable');
@@ -29,3 +29,6 @@ export async function writeReishuis(state,revision){
  const r=db.pool?(await db.pool.query(sql,args)).rows[0]:db.sqlite.prepare(sql.replace(/\$\d/g,'?')).get(...args);
  if(!r){const e=Error('Concurrent edit');e.status=409;throw e;}return Number(r.revision);
 }
+async function ensureCatalog(){await ensure();if(!catalogReady)catalogReady=(async()=>{const sql='CREATE TABLE IF NOT EXISTS reishuis_catalog (kind TEXT PRIMARY KEY, payload TEXT NOT NULL)';if(db.pool)await db.pool.query(sql);else db.sqlite.exec(sql);})().catch(e=>{catalogReady=null;throw e;});await catalogReady;}
+export async function readCatalog(kind){await ensureCatalog();const sql='SELECT payload FROM reishuis_catalog WHERE kind=$1';const r=db.pool?(await db.pool.query(sql,[kind])).rows[0]:db.sqlite.prepare(sql.replace('$1','?')).get(kind);return r?JSON.parse(r.payload):null;}
+export async function writeCatalog(kind,value){await ensureCatalog();const sql='INSERT INTO reishuis_catalog(kind,payload) VALUES($1,$2) ON CONFLICT(kind) DO UPDATE SET payload=excluded.payload',args=[kind,JSON.stringify(value)];if(db.pool)await db.pool.query(sql,args);else db.sqlite.prepare(sql.replace(/\$\d/g,'?')).run(...args);}

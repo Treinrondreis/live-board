@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {recordPunctuality,snapshotPunctualityRows} from './punctuality.mjs';
 
 let backend,pool,sqlite;
 let writes=Promise.resolve();
@@ -90,7 +91,7 @@ export async function recordJourneyMeasurements(trains,source,at){
 
 export function recordJourneySnapshot(snapshot){
  // Serialise all writers, including IFF and streaming RitInfo, within this service.
- const job=writes.then(()=>saveSnapshot(snapshot));writes=job.catch(()=>{});return job;
+ const job=writes.then(async()=>{const result=await saveSnapshot(snapshot);await recordPunctuality(snapshotPunctualityRows(snapshot),snapshot.source,snapshot.sourceTimestamp);return result;});writes=job.catch(()=>{});return job;
 }
 function journeyValues(value){
  if(Array.isArray(value))return value.map(journeyValues);
@@ -143,6 +144,14 @@ export async function getJourney(train,date,journeyId){
  for(const r of history)await recordJourneyMeasurements([{number:train,hasRealtime:true,observedAt:r.station,eventMode:r.event_mode,plannedTimestamp:Number(r.planned_timestamp),expectedTimestamp:Number(r.expected_timestamp)||null,currentTrack:r.current_track,cancelled:Boolean(r.cancelled)}],'DB',Number(r.observed_at));
  if(history.length){const fresh=backend==='postgresql'?(await pool.query(sql,[id])).rows[0]:sqlite.prepare(sql.replace('$1','?')).get(id);state=JSON.parse(fresh.state_json);}
  return state;
+}
+// Pure read for itinerary comparisons; never recovers or writes measurements.
+export async function journeyPlansForDate(train,date){
+ if(!backend)return [];
+ const previous=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10);
+ const sql='SELECT state_json FROM journey_archive WHERE train_number=$1 AND service_date >= $2 AND service_date <= $3';
+ const rows=backend==='postgresql'?(await pool.query(sql,[train,previous,date])).rows:sqlite.prepare(sql.replace(/\$\d+/g,'?')).all(train,previous,date);
+ return rows.map(r=>JSON.parse(r.state_json)).filter(Boolean);
 }
 export async function listJourneys(train){
  const sql='SELECT journey_id,train_number,service_date,first_seen_at,last_seen_at FROM journey_archive WHERE train_number=$1 ORDER BY service_date';

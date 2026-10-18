@@ -93,7 +93,7 @@ behandeld. Er wordt geen claim gedaan dat Rinkel een payloadsignature levert.
 Uitgeschakeld/verkeerd geheim geeft 404 vóór gegevensverwerking. Browser-Origin en
 Fetch-Metadata worden geweigerd. Gekozen bestemmingsnummer, tijdvenster, formaat,
 4 KB requestlimiet, deduplicatie en geheugengrenzen worden gecontroleerd. Call notices
-bestaan alleen in process memory, maximaal 100 actief, zichtbaar voor 2 minuten.
+bestaan alleen in process memory, maximaal 100 actief, zichtbaar voor 30 minuten.
 De tijdelijke deduplicatieset is maximaal 1000 IDs en wordt na 10 minuten bij een
 volgende verwerking opgeschoond. Geen call history, audio, samenvattingen of rauwe
 bellertelefoonnummers worden opgeslagen. Herstart wist meldingen. Huidige productie
@@ -123,3 +123,52 @@ Automatische tests gebruiken uitsluitend fictieve nummers, records en events. De
 live Rinkel URL-test gebruikt oud voorbeeldmateriaal; de ontvanger bevestigt de
 transporttest maar negeert zo'n verouderd event. Een echte nieuwe oproep moet daarom
 apart met de gebruiker worden gecontroleerd voor een volledige praktijkverificatie.
+
+## Openen na het opnemen
+
+Bij openen of F5 krijgt een geautoriseerde sessie ook de nog aanwezige oproepen
+van de laatste dertig minuten. Deze staan als recente oproep met dossierkeuze;
+ze openen nooit automatisch een dossier. Indexopbouw bewaart deze eerste selectie
+tot de herkenning klaar is. Volgende polls tonen alleen nieuwe oproepen. Dezelfde
+rolcontrole, maximale bewaartermijn en geheugenopslag blijven van toepassing;
+herstart wist meldingen.
+
+## Handmatig koppelen en extra herkenning
+
+De recente meldingen blijven maximaal dertig minuten in begrensd procesgeheugen.
+De payload blijft alleen maximaal twee minuten oud geaccepteerd. Een medewerker
+kiest expliciet een dossier en bevestigt de koppeling. Alleen gespreks-ID, datum,
+boeking en koppeldatum worden dan in de bestaande private Postgres-state bewaard.
+Een optioneel extra herkenningsnummer wordt als HMAC en laatste vier cijfers
+opgeslagen, zonder het bestaande bronnummer te vervangen. Het wordt ook gebruikt
+voor boekingen die expliciet aan dezelfde eigen klant gekoppeld zijn. Een
+herkenningsconflict of bestaand gesprek bij een ander dossier wordt geweigerd.
+Extra herkenning kan apart verwijderd worden; de gesprekskoppeling blijft staan.
+Rotatie van het webhookgeheim maakt bestaande herkenningshashes ongeldig.
+Alle nieuwe routes gebruiken de bestaande rol, same-origin, CSRF en revisiecontrole.
+Geen ruwe nummers, digests of webhookgeheim in de dashboardrespons of logs.
+
+Opnames/samenvattingen vereisen een apart goedgekeurde API-key. De API biedt gespreksdetails, bestaande insights
+en een tijdelijke opname-URL. Nieuwe opname- of betaalde AI-instellingen worden
+niet ingeschakeld. De huidige koppeling bewaart geen audio of transcripties.
+
+De opnamevoorbereiding gebruikt uitsluitend GET naar api.rinkel.com. Pas met
+RINKEL_READ_API_KEY wordt deze actief. De browser kan alleen een reeds gekoppeld
+gesprek opvragen; gespreks-ID en bedrijfsnummer worden nogmaals bij Rinkel
+geverifieerd. Alleen de bestaande samenvatting en een opname-indicatie gaan terug.
+De audio loopt via de rolbeveiligde Reishuis-route met private/no-store; geen
+API-key of tijdelijke provider-URL in de browser. Afspelen vraagt de opname op
+bij api.rinkel.com/audio/call-recording/, weigert redirects/andere hosts en heeft
+een limiet van 40 MB. Samenvattingen en audio worden niet opgeslagen of naar een
+andere AI-dienst gestuurd. Dit is getest met fictieve providerantwoorden; echte
+providerverificatie wacht op goedgekeurde API-toegang. Historische gesprekken kunnen per exact internationaal nummer worden opgezocht,
+met 25 per pagina. Alleen de twee toegestane lijnen worden doorgelaten. De
+medewerker bevestigt elke dossierkoppeling; er is geen bulkimport op basis van naam.
+Tijdelijke historische herkenningshashes blijven maximaal dertig minuten in geheugen.
+
+Exact één herkend dossier wordt via een geautoriseerde CSRF-beveiligde POST automatisch gekoppeld,
+zonder een extra herkenningsnummer op te slaan. Bij ambiguïteit wordt niets gekozen.
+Bij een opslagconflict blijft handmatig koppelen beschikbaar; bestaande koppelingen worden niet verplaatst.
+De gebruiker heeft de aparte accountbrede Rinkel-sleutel expliciet goedgekeurd nadat
+bleek dat het aanmaakvenster geen beperkte rechten ondersteunt. De applicatiegrens
+is GET-only en twee lijnen; de sleutel zelf biedt technisch bredere accounttoegang.
