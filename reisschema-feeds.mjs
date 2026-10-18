@@ -1,7 +1,8 @@
-import {unzipSync,strFromU8} from 'fflate';
+import {unzipSync,strFromU8,Unzip,UnzipInflate} from 'fflate';
 import {createHash} from 'node:crypto';
 import {Worker,isMainThread,parentPort,workerData} from 'node:worker_threads';
 import {norm} from './reisschema-control.mjs';
+import {createIrailSource} from './reisschema-irail.mjs';
 
 export function* csv(text){
  let values=[],value='',quoted=false,header;
@@ -11,6 +12,24 @@ export function* csv(text){
   else if(!quoted&&(c===','||c==='\n')){values.push(value.replace(/\r$/,''));value='';if(c==='\n'){if(!header)header=values.map(x=>x.replace(/^\uFEFF/,''));else if(values.length===header.length)yield Object.fromEntries(header.map((h,j)=>[h,values[j]]));values=[];}}
   else value+=c;
  }
+}
+// Large calendars and stop times are consumed incrementally, never retained in full.
+export function visitZipCsv(bytes,name,consume,{limit=512*1024*1024,chunkSize=65536}={}){
+ let found=false,finished=false,size=0,record='',quoted=false,pendingQuote=false;
+ let header;const decoder=new TextDecoder();
+ const emit=()=>{if(record.length){const rows=[...csv((header?header+'\n':'')+record+'\n')];if(!header)header=record.replace(/^\uFEFF/,'');else if(rows.length===1)consume(rows[0]);else throw Error('Ongeldige CSV-regel');}record='';};
+ const push=text=>{for(const ch of text){
+  if(pendingQuote){pendingQuote=false;if(ch==='"'){record+=ch;continue;}quoted=false;}
+  if(ch==='"'){record+=ch;if(quoted)pendingQuote=true;else quoted=true;}
+  else if(ch==='\n'&&!quoted)emit();else record+=ch;
+  if(record.length>65536)throw Error('CSV-regel te groot');
+ }};
+ const zip=new Unzip(file=>{if(file.name!==name)return;if(found)throw Error('Dubbel GTFS-bestand');found=true;
+  if(file.originalSize>limit)throw Error('GTFS-bestand te groot');
+  file.ondata=(error,data,final)=>{if(error)throw error;size+=data.length;if(size>limit)throw Error('GTFS-bestand te groot');push(decoder.decode(data,{stream:!final}));if(final){if(quoted&&!pendingQuote)throw Error('Onvolledige CSV');emit();finished=true;}};file.start();
+ });zip.register(UnzipInflate);
+ for(let i=0;i<bytes.length;i+=chunkSize)zip.push(bytes.subarray(i,i+chunkSize),i+chunkSize>=bytes.length);
+ if(!found||!finished)throw Error('GTFS-bestand ontbreekt');
 }
 export function gtfsClock(day,value){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!/^\d{1,3}:[0-5]\d:[0-5]\d$/.test(value||''))return null;
@@ -22,22 +41,30 @@ const railKind=s=>label(s).replace(/\d+[a-z]?$/i,'').replace(/^TGVINOUI$/,'TGV')
 const frenchKind=id=>{const kind=String(id).match(/^StopPoint:OCE(.+)-\d+$/)?.[1]||'';return kind.startsWith('TGV')?'TGV':kind.startsWith('INTERCITES')?'IC':kind==='Train TER'?'TER':kind==='Lyria'?'TGVLYRIA':label(kind);};
 const fields=o=>({departure_date:o.departure.date,departure_time:o.departure.time,arrival_date:o.arrival.date,arrival_time:o.arrival.time,cancelled:false,connection_broken:false,backup_communicated:false});
 function matchStops(stops,leg,serviceDate){
- const starts=stops.filter(s=>norm(s.name)===norm(leg.from_station)&&s.pickup!=='1'),ends=stops.filter(s=>norm(s.name)===norm(leg.to_station)&&s.dropoff!=='1');
+ const named=(s,name)=>[s.name,...(s.aliases||[])].some(n=>norm(n)===norm(name));
+ const starts=stops.filter(s=>named(s,leg.from_station)&&s.pickup!=='1'),ends=stops.filter(s=>named(s,leg.to_station)&&s.dropoff!=='1');
  if(starts.length!==1||ends.length!==1||starts[0].sequence>=ends[0].sequence)return null;
  const departure=gtfsClock(serviceDate,starts[0].departure),arrival=gtfsClock(serviceDate,ends[0].arrival);
  return departure&&arrival&&departure.date===leg.travel_date?{...fields({departure,arrival}),from_country:starts[0].country,to_country:ends[0].country}:null;
 }
 export function parseGtfs(bytes,legs,meta){
- const files=unzipSync(bytes,{filter:f=>['feed_info.txt','stops.txt','routes.txt','trips.txt','calendar.txt','calendar_dates.txt','stop_times.txt'].includes(f.name)&&f.originalSize<100*1024*1024});
- if(['stops.txt','routes.txt','trips.txt','stop_times.txt'].some(f=>!files[f]))throw Error('Onvolledige of te grote GTFS');
+ const files=unzipSync(bytes,{filter:f=>['feed_info.txt','stops.txt','routes.txt','trips.txt','calendar.txt','translations.txt'].includes(f.name)&&f.originalSize<100*1024*1024});
+ if(['stops.txt','routes.txt','trips.txt'].some(f=>!files[f]))throw Error('Onvolledige of te grote GTFS');
  const read=f=>csv(files[f]?strFromU8(files[f]):'');
  const info=[...read('feed_info.txt')][0]||{},version=info.feed_version||meta.hash;
  const stops=new Map([...read('stops.txt')].map(s=>[s.stop_id,s]));
+ const translations=new Map();
+ if(meta.name==='NMBS GTFS')for(const t of read('translations.txt'))if(t.table_name==='stops'&&t.field_name==='stop_name'&&t.translation){const key=t.record_id||t.field_value;translations.set(key,[...(translations.get(key)||[]),t.translation]);}
+ const aliases=stop=>meta.name==='NMBS GTFS'?[stop.stop_name,...(translations.get(stop.stop_id)||[]),...(translations.get(stop.stop_name)||[])].flatMap(n=>[n,n.replace(/ \([A-Z]{2}\)$/,'')]):[];
  const routes=new Map([...read('routes.txt')].map(s=>[s.route_id,s]));
  const calendar=new Map([...read('calendar.txt')].map(s=>[s.service_id,s]));
- const exceptions=new Map([...read('calendar_dates.txt')].map(s=>[s.service_id+'|'+s.date,s.exception_type]));
  const numbers=new Set(legs.map(l=>label(l.train_number))),numericNumbers=new Set(legs.map(l=>l.train_number.match(/\d+$/)?.[0])),dates=new Set();
  for(const leg of legs)for(let offset=-2;offset<=0;offset++)dates.add(new Date(Date.parse(leg.travel_date)+offset*86400000).toISOString().slice(0,10));
+ const exceptions=new Map(),wantedDates=new Set([...dates].map(d=>d.replaceAll('-','')));
+ // calendar_dates is optional when calendar supplies the service calendar.
+ let hasExceptions=false;unzipSync(bytes,{filter:f=>{if(f.name==='calendar_dates.txt')hasExceptions=true;return false;}});
+ if(hasExceptions)visitZipCsv(bytes,'calendar_dates.txt',s=>{if(wantedDates.has(s.date))exceptions.set(s.service_id+'|'+s.date,s.exception_type);});
+ else if(!files['calendar.txt'])throw Error('GTFS-rijdagen ontbreken');
  const weekdays=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
  const trips=new Map();
  for(const trip of read('trips.txt')){
@@ -47,7 +74,7 @@ export function parseGtfs(bytes,legs,meta){
   const days=[...dates].filter(day=>{const d=day.replaceAll('-',''),exception=exceptions.get(trip.service_id+'|'+d),c=calendar.get(trip.service_id);return exception?exception==='1':c&&d>=c.start_date&&d<=c.end_date&&c[weekdays[new Date(day).getUTCDay()]]==='1';});
   if(days.length)trips.set(trip.trip_id,{...trip,name,category,days,stops:[]});
  }
- for(const s of read('stop_times.txt')){const t=trips.get(s.trip_id),stop=stops.get(s.stop_id);if(t&&stop)t.stops.push({name:stop.stop_name,sequence:+s.stop_sequence,departure:s.departure_time,arrival:s.arrival_time,pickup:s.pickup_type,dropoff:s.drop_off_type,category:meta.name==='SNCF GTFS'?frenchKind(s.stop_id):t.category});}
+ visitZipCsv(bytes,'stop_times.txt',s=>{const t=trips.get(s.trip_id),stop=stops.get(s.stop_id);if(t&&stop)t.stops.push({name:stop.stop_name,aliases:aliases(stop),sequence:+s.stop_sequence,departure:s.departure_time,arrival:s.arrival_time,pickup:s.pickup_type,dropoff:s.drop_off_type,category:meta.name==='SNCF GTFS'?frenchKind(s.stop_id):t.category});});
  for(const t of trips.values())t.stops.sort((a,b)=>a.sequence-b.sequence);
  return Object.fromEntries(legs.map(leg=>{
   const candidates=[];let overflow=false;
@@ -151,18 +178,29 @@ export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.
  return {
   async prepare(legs,heartbeat=async()=>{}){
    const outputs=[],statuses=[],refreshed=new Set();
+   const irail=createIrailSource({fetcher,clock});
    const feeds=[{kind:'iff',name:'NDOV IFF',url:'https://data.ndovloket.nl/ns/ns-latest.zip'},
     ...(enabled()?[{kind:'gtfs',name:'GTFS.de',url:'https://download.gtfs.de/treinrondreis/latest.zip',headers:{Authorization:'Basic '+Buffer.from((env.REISSCHEMA_PATRICK_USER||'')+':'+(env.REISSCHEMA_PATRICK_PASSWORD||'')).toString('base64')}}]:[]),
     ...(env.REISSCHEMA_SNCF_ENABLED==='1'?[{kind:'gtfs',name:'SNCF GTFS',url:'https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip'}]:[]),
-    ...(env.REISSCHEMA_NMBS_ENABLED==='1'&&env.BMC_PARTNER_KEY?[{kind:'gtfs',name:'NMBS GTFS',url:'https://api-management-opendata-production.azure-api.net/api/gtfs/feed/nmbssncb/static',headers:{'bmc-partner-key':env.BMC_PARTNER_KEY}}]:[])];
+    ...(env.REISSCHEMA_IRAIL_ENABLED==='1'?[{kind:'irail',name:'iRail'}]:[]),
+    ...(env.REISSCHEMA_NMBS_ENABLED==='1'&&env.BMC_PARTNER_KEY?[{kind:'gtfs',name:'NMBS GTFS',fallback:true,url:'https://api-management-opendata-production.azure-api.net/api/gtfs/feed/nmbssncb/static',headers:{'bmc-partner-key':env.BMC_PARTNER_KEY}}]:[])];
    const load=async(source,rowsToCheck)=>{
     await heartbeat();
+    if(source.kind==='irail'){
+     const rows={};for(const leg of rowsToCheck)rows[leg.leg_id]=await irail.lookup(leg,heartbeat);
+     return {rows,status:{name:source.name,status:Object.values(rows).some(r=>r.observation)?'ready':'unavailable',matched:Object.values(rows).filter(r=>r.observation).length}};
+    }
     try{const {bytes,modified}=await download(source.url,source.headers||{},fetcher,clock()),meta={name:source.name,hash:createHash('sha256').update(bytes).digest('hex'),loadedAt:new Date(clock()).toISOString(),modified};
      const rows=await new Promise((resolve,reject)=>{const worker=new Worker(new URL(import.meta.url),{workerData:{kind:source.kind,bytes,legs:rowsToCheck,meta},transferList:[bytes.buffer],resourceLimits:{maxOldGenerationSizeMb:256}});const timer=setTimeout(()=>{void worker.terminate();reject(Error('Verwerking verlopen'));},120000);worker.once('message',resolve);worker.once('error',()=>reject(Error('Verwerking mislukt')));worker.once('exit',code=>{clearTimeout(timer);if(code)reject(Error('Verwerking gestopt'));});});
      return {rows,status:{name:source.name,status:'ready',modified,matched:Object.values(rows).filter(r=>r.observation).length}};
     }catch{return {rows:Object.fromEntries(rowsToCheck.map(l=>[l.leg_id,{reason:source.name+' niet bereikbaar of niet bruikbaar',sources:[]}])),status:{name:source.name,status:'unavailable',matched:0}};}
    };
-   for(const source of feeds){const loaded=await load(source,legs);outputs.push(loaded.rows);statuses.push(loaded.status);}
+   for(const source of feeds){
+    const irailIndex=feeds.findIndex(f=>f.kind==='irail');
+    const selected=source.fallback&&irailIndex>=0?legs.filter(l=>!outputs[irailIndex]?.[l.leg_id]?.observation):legs;
+    const loaded=selected.length?await load(source,selected):{rows:{},status:{name:source.name,status:'not_needed',matched:0}};
+    outputs.push(loaded.rows);statuses.push(loaded.status);
+   }
    return {statuses,async lookup(leg){
     let matches=outputs.map(o=>o[leg.leg_id]).filter(r=>r?.observation);
     // Fresh means fetched/checked within four hours, not that the weekly timetable was published today.

@@ -1,12 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {zipSync,strToU8} from 'fflate';
-import {parseGtfs,parseIff,gtfsClock,reconcilePlanningSources,sourceCheckFresh,createPlanningSources} from './reisschema-feeds.mjs';
+import {parseGtfs,parseIff,gtfsClock,reconcilePlanningSources,sourceCheckFresh,createPlanningSources,visitZipCsv} from './reisschema-feeds.mjs';
 const pack=files=>zipSync(Object.fromEntries(Object.entries(files).map(([k,v])=>[k,strToU8(v)])));
 const meta={name:'Fictional feed',hash:'fictional-hash',loadedAt:'2031-06-02T12:00:00.000Z'};
 const leg={leg_id:'example',travel_date:'2031-06-11',train_number:'RJ 700',departure_time:'01:12',arrival_time:'03:00',from_station:'Example North',to_station:'Example South'};
 const checkedAt=Date.parse('2031-06-02T12:00:00Z');
 const sourceResult=(source,dep='10:00',arr='12:00',age=0)=>({observation:{departure_date:'2031-06-10',departure_time:dep,arrival_date:'2031-06-10',arrival_time:arr,source,cancelled:false},sources:[JSON.stringify({source,downloaded_at:new Date(checkedAt-age).toISOString(),source_modified:'2031-05-27T12:00:00Z'})]});
+test('streamed CSV keeps UTF-8 and multiline quotes across tiny chunks, rejects oversize input',()=>{
+ const bytes=pack({'stop_times.txt':'id,name\na,"Example é\nNorth"\nb,"Example ""South"""\n'}),rows=[];
+ visitZipCsv(bytes,'stop_times.txt',r=>rows.push(r),{chunkSize:1});
+ assert.deepEqual(rows,[{id:'a',name:'Example é\nNorth'},{id:'b',name:'Example "South"'}]);
+ assert.throws(()=>visitZipCsv(bytes,'stop_times.txt',()=>{},{limit:5}));
+});
+
+test('iRail success skips the NMBS ZIP; unresolved legs alone use one shared NMBS download',async()=>{
+ const a={...leg,travel_date:'2031-06-11',train_number:'IC 700'},b={...a,leg_id:'second',train_number:'IC 701'};
+ const nmbs=gtfs({'routes.txt':'route_id,route_short_name,route_type\nr,IC,2\n','trips.txt':'route_id,service_id,trip_id,trip_short_name,trip_headsign\nr,s,t,701,Example South\n'});
+ const iff=pack({'delivery.dat':'@100,10062031,12062031,1,Fictional','footnote.dat':'#00001\n111','stations.dat':'1,a,05,05,NL,0,,,Other North\n1,b,05,05,NL,0,,,Other South','timetbls.dat':'#1\n%202,00999,,001,002\n-00001,000,999\n&IC,001,002\n>a,2512\n<b,2700'});
+ for(const legs of [[a],[a,b]]){
+  let downloads=0;
+  const prepared=await createPlanningSources({env:{REISSCHEMA_IRAIL_ENABLED:'1',REISSCHEMA_NMBS_ENABLED:'1',BMC_PARTNER_KEY:'fictional'},clock:()=>checkedAt,fetcher:async url=>{
+   if(url.includes('api.irail.be')){
+    const pathname=new URL(url).pathname;
+    const data=pathname.endsWith('stations')?{station:[{id:'fictional',name:'Example North'}]}:pathname.endsWith('liveboard')?{departures:{departure:[{vehicle:'BE.NMBS.IC700'}]}}:{vehicle:'BE.NMBS.IC700',stops:{stop:[{station:'Example North',scheduledDepartureTime:String(Date.parse('2031-06-10T23:12:00Z')/1000),departureCanceled:'0'},{station:'Example South',scheduledArrivalTime:String(Date.parse('2031-06-11T01:00:00Z')/1000),arrivalCanceled:'0'}]}};
+    return new Response(JSON.stringify({timestamp:checkedAt/1000,...data}));
+   }
+   if(url.includes('nmbssncb'))downloads++;
+   return new Response(url.includes('ndovloket')?iff:nmbs,{headers:{'Last-Modified':new Date(checkedAt).toUTCString()}});
+  }}).prepare(legs);
+  assert.equal((await prepared.lookup(a)).observation.source,'iRail');
+  assert.equal(downloads,legs.length===1?0:1);
+  if(legs.length===2)assert.equal((await prepared.lookup(b)).observation.source,'NMBS GTFS');
+ }
+});
 test('two-minute differences are accepted with both sources retained and no averaging',()=>{
  const r=reconcilePlanningSources([sourceResult('First'),sourceResult('Second','10:02','12:02')],checkedAt);
  assert.equal(r.observation.departure_time,'10:00');assert.equal(r.sources.length,2);assert.match(r.reason,/2 minuten/);
@@ -28,6 +55,11 @@ test('GTFS over-24 clocks and original service date are preserved with feed vers
 });
 test('calendar exception removes service, never reports cancelled',()=>{
  const r=parseGtfs(gtfs({'calendar_dates.txt':'service_id,date,exception_type\ns,20310610,2\n'}),[leg],meta).example;assert.equal(r.observation,undefined);assert.match(r.reason,/Geen volledig/);
+});
+test('NMBS resolves official stop translations and country suffixes, not guessed similar names',()=>{
+ const bytes=gtfs({'stops.txt':'stop_id,stop_name\na,Example Nord\nb,Example Sud (FR)\n','translations.txt':'table_name,field_name,field_value,language,translation\nstops,stop_name,Example Nord,nl,Example North\nstops,stop_name,Example Sud (FR),nl,Example South (FR)\n'});
+ assert.ok(parseGtfs(bytes,[leg],{...meta,name:'NMBS GTFS'}).example.observation);
+ assert.equal(parseGtfs(bytes,[leg],meta).example.observation,undefined);
 });
 test('unnumbered RJ requires complete endpoints and destination, not similar time alone',()=>{
  const r=parseGtfs(gtfs({'trips.txt':'route_id,service_id,trip_id,trip_short_name,trip_headsign\nr,s,t,,Example South\n'}),[leg],meta).example;assert.equal(r.evidence.number_missing,true);
