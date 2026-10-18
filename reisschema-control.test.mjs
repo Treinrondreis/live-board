@@ -42,3 +42,20 @@ test('missing train becomes manual DB task, never a cancellation or green check'
 test('withdrawal between lookup and commit prevents any evidence writes',async()=>{
  const h=harness();let reads=0;h.deps.register.summary=async()=>({available:true,legs:reads++?[{...leg,status:'withdrawn'}]:[leg]});await createControlCycle(h.deps).tick();assert.equal(h.events.length,0);
 });
+
+test('manual rerun on the same day records a new round; scheduled repetition remains deduplicated',async()=>{
+ const h=harness(),cycle=createControlCycle(h.deps);
+ await cycle.tick();const first=h.events.find(e=>e.k==='control').e.request_id;
+ await cycle.tick();assert.equal(h.prepares,1);
+ await cycle.tick({manual:true});assert.equal(h.prepares,2);
+ assert.equal(h.events.filter(e=>e.k==='control').length,2);
+ assert.notEqual(h.events.filter(e=>e.k==='control')[1].e.request_id,first);
+ const status=await cycle.status();assert.equal(status.summary.checked,1);assert.equal(status.summary.pending,0);
+});
+
+test('manual retry after partial failure resumes the same round instead of creating duplicate evidence',async()=>{
+ const h=harness({failControl:true});await createControlCycle(h.deps).tick({manual:true});
+ await createControlCycle(h.deps).tick({manual:true});
+ assert.equal(h.prepares,1);assert.equal(h.events.filter(e=>e.k==='observation').length,1);
+ assert.equal(h.events.filter(e=>e.k==='control').length,1);
+});
