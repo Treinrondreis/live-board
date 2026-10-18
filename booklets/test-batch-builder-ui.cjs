@@ -11,7 +11,7 @@ function fixture(options={}){
  let saves=0,exportCalls=0,inspections=0;
  ctx.api=async(path,body)=>{calls.push({path,body:structuredClone(body)});const route=path.replace('/seinhuis/boekjesmaker','');
   if(route==='/api/save'){saves++;if(options.failSave===saves)throw Error('Opslaan mislukt');const old=objects.get(body.id);if(old&&old.revision!==body.revision)throw Error('Een collega heeft dit boekje gewijzigd.');const row={...structuredClone(body),revision:(old?.revision||0)+1};objects.set(row.id,row);return {id:row.id,revision:row.revision};}
-  if(route==='/api/export'){exportCalls++;if(options.failExport===body.id)throw Error('PDF mislukt');const item={id:require('node:crypto').randomUUID().replaceAll('-',''),book_id:body.id,report:{pages:4}};exports.push(item);if(options.timeoutAfterExport)throw Error('Antwoord onderbroken');return {id:item.id,report:item.report,storage:'drive'};}
+  if(route==='/api/export'){exportCalls++;if(options.failExport===body.id)throw Error('PDF mislukt');const item={id:require('node:crypto').randomUUID().replaceAll('-',''),book_id:body.id,bookRevision:body.revision,report:{pages:4}};exports.unshift(item);if(options.timeoutAfterExport)throw Error('Antwoord onderbroken');return {id:item.id,report:item.report,storage:'drive'};}
   if(route==='/api/booking-data/search')return {items:options.lookup?options.lookup(body.number):bookings.filter(b=>b.number===body.number)};
   if(route==='/api/google/prepare')return {errors:[{title:'Route',message:'Google-bron niet bereikbaar'}]};
   throw Error('Unexpected '+route);
@@ -73,4 +73,8 @@ test('print filling is checked, screen PDFs never get filler and failed saves re
 test('manual corrections survive returning to the group and a double start cannot create extra books',async()=>{
  const f=fixture();await f.refresh();await Promise.all([f.ctx.runBatchQueue('prepare'),f.ctx.runBatchQueue('prepare')]);assert.equal([...f.objects.values()].filter(o=>o.kind==='book').length,2);
  await f.ctx.openBatchBook(0);f.exec("draft.body.sections[1].selected.asset='manually-chosen';draft.body.values.extra='Eigen tekst';dirty=true");await f.ctx.returnToBookBatch();await f.ctx.runBatchQueue('prepare');const book=f.objects.get(f.rows()[0].bookId);assert.equal(book.body.sections[1].selected.asset,'manually-chosen');assert.equal(book.body.values.extra,'Eigen tekst');
+});
+
+test('editing a generated book queues a new PDF while keeping the earlier PDF and other finished bookings',async()=>{
+ const f=fixture();await f.start();await f.ctx.runBatchQueue('generate');const group=f.exec('batchSession.id'),book=f.objects.get(f.rows()[0].bookId),old=f.rows()[0].exportId;book.revision++;book.body.values.extra='Gewijzigde reis';await f.ctx.openBatchGroup(group);assert.equal(f.rows()[0].status,'queued');assert.equal(f.rows()[1].status,'done');await f.ctx.runBatchQueue('prepare');await f.ctx.runBatchQueue('generate');assert.equal(f.exports.length,3);assert(f.exports.some(e=>e.id===old));assert.notEqual(f.rows()[0].exportId,old);
 });

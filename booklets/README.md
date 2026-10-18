@@ -21,7 +21,10 @@ onbevestigde voorstellen en onbereikbare bronnen blijven voor individuele
 controle staan. Een opgeslagen boekje kan worden geopend, aangepast en via
 **Opslaan en terug naar groep** opnieuw worden gecontroleerd. De controles
 worden vóór elke PDF opnieuw uitgevoerd. Wijzigingen van collega’s worden niet
-overschreven; reeds gemaakte PDF’s worden bij hervatten overgenomen. Sanity
+overschreven; reeds gemaakte PDF’s van dezelfde boekversie worden bij hervatten
+overgenomen. Een later gewijzigd boekje vraagt opnieuw controle en kan een nieuwe
+PDF krijgen; de vorige PDF blijft bewaard. De exportlijst bevat hiervoor alleen
+het revisienummer van het boekje, geen extra kopie van klantgegevens. Sanity
 wordt in deze werkwijze uitsluitend gelezen.
 
 Independent Python service, private Railway networking only. Public entry point:
