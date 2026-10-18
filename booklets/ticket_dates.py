@@ -97,9 +97,10 @@ def inspect(s,payload):
 
 def is_gate_pass(text):
     """Require the explicit non-ticket notice and independent gate-pass wording."""
-    normalized=' '.join(text.casefold().split())
-    return ('dit is geen vervoerbewijs' in normalized
-            and ('het station betreden of verlaten' in normalized or 'passageticket' in normalized)
+    # Embedded PDF fonts can insert whitespace inside words such as vervoerbew ijs.
+    normalized=''.join(text.casefold().split())
+    return ('ditisgeenvervoerbewijs' in normalized
+            and ('hetstationbetredenofverlaten' in normalized or 'passageticket' in normalized)
             and journey_details(text)['documentRole']=='unknown')
 
 def journey_details(text):
