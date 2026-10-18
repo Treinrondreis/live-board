@@ -19,6 +19,14 @@ test('Nightjet recognizes EUN and train 420 or 421, never an amount or part of a
  assert.deepEqual(gatePassOmissionReferences({todos}),['ABCDEF','GHIJKL','MNOPQR']);
 });
 
+test('a separate CORA2 Retour label shares the Nightjet reference without disqualifying it',()=>{
+ const todos=[{title:'40421 (EUN)(RIT) | RITAD',description:'ABCDEF'},{title:'CORA2 Retour',description:'ABCDEF'},{title:'NJ (EUN)(RIT)(40490) | RITAD',description:'ABCDEF'}];
+ assert.deepEqual(gatePassOmissionReferences({todos}),['ABCDEF']);
+ assert.deepEqual(gatePassOmissionReferences({todos:[{title:'CORA2 Retour',description:'ABCDEF'}]}),[]);
+ assert.deepEqual(gatePassOmissionReferences({todos:[...todos,{title:'NS trein onbekend',description:'ABCDEF'}]}),[]);
+ assert.deepEqual(gatePassOmissionReferences({todos:[...todos,{title:'ICE CORA',description:'ABCDEF'}]}),[]);
+});
+
 test('the NS search response includes only CORA-linked references for page omission',async()=>{
  const booking={_id:'fixture-cora',index:1234,todos:[{title:'Nightjet CORA',supplierBookingNumber:'ABCDEF'},{title:'NS trein',supplierBookingNumber:'GHIJKL'}]};
  const control=createBookletsMail({bookings:async()=>[booking],google:{status:async()=>({connected:true}),reader:async()=>async()=>({messages:[]})}});
