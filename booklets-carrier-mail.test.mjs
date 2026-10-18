@@ -14,6 +14,11 @@ test('other or unknown trains and mixed train references keep their gate pages',
  assert.deepEqual(gatePassOmissionReferences({todos}),['STUVWX']);
 });
 
+test('Nightjet recognizes EUN and train 420 or 421, never an amount or part of a longer number',()=>{
+ const todos=[{title:'40421 (EUN) | CORA',supplierBookingNumber:'ABCDEF'},{title:'Trein 420 CORA',supplierBookingNumber:'GHIJKL'},{title:'CORA2 (421)',supplierBookingNumber:'MNOPQR'},{title:'ICE CORA',description:'Prijs 420 euro',supplierBookingNumber:'STUVWX'},{title:'CORA 1420',supplierBookingNumber:'YZABCD'}];
+ assert.deepEqual(gatePassOmissionReferences({todos}),['ABCDEF','GHIJKL','MNOPQR']);
+});
+
 test('the NS search response includes only CORA-linked references for page omission',async()=>{
  const booking={_id:'fixture-cora',index:1234,todos:[{title:'Nightjet CORA',supplierBookingNumber:'ABCDEF'},{title:'NS trein',supplierBookingNumber:'GHIJKL'}]};
  const control=createBookletsMail({bookings:async()=>[booking],google:{status:async()=>({connected:true}),reader:async()=>async()=>({messages:[]})}});

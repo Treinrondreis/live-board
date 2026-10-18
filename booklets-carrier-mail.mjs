@@ -12,7 +12,7 @@ export function carrierReferences(booking,provider){providerKey(provider);const 
 export function bookingJourneyDates(booking){return [...new Set((booking.todos||[]).filter(t=>String(t.title||'').trim()&&(trainTitle(t.title)&&Object.keys(ticketProviders).some(p=>todoReferences(t,p).length)||/\b(?:CORA\d*|RITAD|RITAM)\b/i.test(t.title))).map(t=>isoDate(t.startDate)).filter(Boolean))].sort();}
 export function referenceDates(booking,refs,provider='ns'){providerKey(provider);return refs.map(reference=>({reference,dates:[...new Set((booking.todos||[]).filter(t=>trainTitle(t.title)&&todoReferences(t,provider).includes(reference)).map(t=>isoDate(t.startDate)).filter(Boolean))]}));}
 export function gatePassOmissionReferences(booking){
- const todos=booking.todos||[],text=t=>(t.title||'')+' '+(t.description||''),cora=t=>/\bCORA\d*\b/i.test(text(t)),eligible=t=>/\b(?:night\s*jet|eurostar)\b/i.test(text(t));
+ const todos=booking.todos||[],text=t=>(t.title||'')+' '+(t.description||''),cora=t=>/\bCORA\d*\b/i.test(text(t)),eligible=t=>/\b(?:night\s*jet|eurostar)\b/i.test(text(t))||/\(\s*EUN\s*\)|\b(?:420|421)\b/i.test(t.title||'');
  const refs=[...new Set(todos.filter(cora).flatMap(t=>todoReferences(t,'ns')))];
  return refs.filter(ref=>todos.filter(t=>todoReferences(t,'ns').includes(ref)&&trainTitle(t.title)).every(eligible));
 }
