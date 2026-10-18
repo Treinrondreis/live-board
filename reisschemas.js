@@ -81,7 +81,7 @@ import {numberAssessment,controlPolicy} from './reisschema-number-policy.mjs';
  function renderDays(){
   el('booking-days').innerHTML='';el('day-summary').textContent='';if(!ready()||!selected)return;
   const all=legs().filter(r=>bookingId(r)===selected);
-  const rows=all.filter(r=>inPeriod(r,el('booking-date').value,el('booking-until').value)&&trainMatches(r.train_number,el('booking-train').value)&&routeMatches(r,el('booking-route').value));
+  const rows=all.filter(r=>inPeriod(r,el('booking-date').value,el('booking-until').value)&&(trainMatches(r.train_number,el('booking-train').value)||!!r.observation?.train_number&&trainMatches(r.observation.train_number,el('booking-train').value))&&routeMatches(r,el('booking-route').value));
   const groups=new Map();for(const r of sortLegs(rows)){const day=r.travel_date||'';if(!groups.has(day))groups.set(day,[]);groups.get(day).push(r);}
   el('day-summary').textContent=count(rows.length,'rit','ritten')+' op '+count(groups.size,'reisdag','reisdagen');
   el('booking-days').innerHTML=rows.length?[...groups].map(([day,dayLegs])=>'<section class="day"><h3>'+escape(date(day)||'Datum onbekend')+'</h3><div class="scroll">'+table(dayLegs)+'</div></section>').join(''):'<p>Geen ritten gevonden binnen deze boeking. Kies “Alle reisdagen tonen” om de filters te wissen.</p>';
