@@ -6,7 +6,7 @@ import {normalizeDossier} from './reishuis-dossier.mjs';
 import {hotelTodoIndex} from './reishuis-hotel-links.mjs';
 import {emptyReishuis} from './reishuis-store.mjs';
 const todo={_key:'stay',title:'Voorbeeld AMS | Double',tag:'hotel',startDate:'2027-02-01',endDate:'2027-02-03',quantity:2,done:true};
-const source=normalizeDossier({_id:'fixture-booking',firstName:'Fictieve',lastName:'Reiziger',todos:[todo],lines:[{_key:'invoice',title:'01 feb.: Hotel Voorbeeld Amsterdam - Tweepersoonskamer',quantity:1,price:400,costs:300}]});
+const source=normalizeDossier({_id:'fixture-booking',firstName:'Fictieve',lastName:'Reiziger',todos:[todo],lines:[{_key:'invoice',title:'01 feb. - 03 feb.: Hotel Voorbeeld Amsterdam - 1x Tweepersoonskamer (incl. ontbijt)',quantity:1,price:400,costs:300}]});
 const hotel={id:'fixture-hotel',title:'Hotel Voorbeeld Amsterdam',titleShort:'Voorbeeld AMS',description:'Fictief hotel voor de schermcontrole',photos:[],breakfast:null,rooms:[{key:'double',title:'Tweepersoonskamer',titleShort:'Double',description:'Fictieve kamer',apoRoom:{docId:'fixture-hotel',path:'apoRooms.rate'},prices:[]}],apoRooms:[{key:'rate',title:'Fictief tarief',prices:[{date:'2027-02-01',price:100,source:'fixture',boardType:'RO'},{date:'2027-02-02',price:100,source:'fixture',boardType:'RO'}]}]};
 const bookings=Array.from({length:27},(_,i)=>({id:i?'fixture-booking-'+i:'fixture-booking',index:String(9901+i),name:'Fictieve Reiziger '+(i+1),status:'te verwerken',departure:'2027-02-01',return:'2027-02-03',created:'2026-10-17',hotelTodos:hotelTodoIndex([todo]),payments:[]}));
 bookings.push({...bookings[0],id:'fixture-past',index:'9800',hotelTodos:hotelTodoIndex([{...todo,startDate:'2026-01-01',endDate:'2026-01-02'}])});
