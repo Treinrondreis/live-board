@@ -31,3 +31,10 @@ test('server quote requires role, CSRF, same origin, revision, source, catalog a
  allowed=false;assert.equal((await req('/api/change','POST',input,headers)).status,403);assert.equal((await req('/api/interrail')).status,403);allowed=true;assert.equal((await req('/api/change','POST',input)).status,403);assert.equal((await req('/api/change','POST',input,{...headers,origin:'https://evil.test'})).status,403);
  const preview=await req('/api/change','POST',input,headers);assert.equal(preview.status,200);assert.equal(revision,0);const commit={...input,action:'reprice-commit',quote:preview.data.quote};assert.equal((await req('/api/change','POST',{...commit,edit:{...commit.edit,amount:1}},headers)).status,409);version='two';assert.equal((await req('/api/change','POST',commit,headers)).status,409);version='one';now=601001;assert.equal((await req('/api/change','POST',commit,headers)).status,409);now=1000;assert.equal((await req('/api/change','POST',commit,headers)).status,200);assert.equal(revision,1);assert.equal((await req('/api/change','POST',commit,headers)).status,409);assert.equal(state.dossiers.fixture.reviews.length,1);
 });
+
+
+test('empty or malformed pricing selections identify the exact field without changing source or local state',()=>{
+ const d=source(),before=structuredClone(d),local={},input=edit(d);
+ for(const [patch,pattern] of [[{line:''},/Kies de financiële regel/],[{hotel:''},/Kies een hotel/],[{room:''},/Kies een kamer/],[{room:'invalid/room'},/Kies een kamer/],[{kind:'interrail',pass:''},/Kies een Interrail-pas/]])assert.throws(()=>quoteChange(d,local,{...input,...patch},catalogs),e=>e.status===400&&e.reishuisSafe===true&&pattern.test(e.message));
+ assert.deepEqual(d,before);assert.deepEqual(local,{});
+});
