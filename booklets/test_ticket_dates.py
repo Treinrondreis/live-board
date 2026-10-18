@@ -18,6 +18,7 @@ class TicketDateTests(unittest.TestCase):
 
     def test_gate_detection_requires_both_markers_and_never_drops_a_ticket_or_reservation_heading(self):
         self.assertTrue(ticket_dates.is_gate_pass('Het station betreden of verlaten\nDit is geen\nvervoerbewijs.'))
+        self.assertTrue(ticket_dates.is_gate_pass('Het station betre den of verlaten\nDit  is geen vervoerbew ijs.'))
         self.assertFalse(ticket_dates.is_gate_pass('Dit is geen vervoerbewijs.'))
         self.assertFalse(ticket_dates.is_gate_pass('Het station betreden of verlaten'))
         for heading in ('Ticket','Seat reservation'):

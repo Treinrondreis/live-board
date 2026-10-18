@@ -10,7 +10,7 @@ test('CORA gate-page omission is bound to the matching NS reference, including C
 });
 
 test('other or unknown trains and mixed train references keep their gate pages',()=>{
- const todos=[{title:'ICE CORA',supplierBookingNumber:'ABCDEF'},{title:'CORA',supplierBookingNumber:'GHIJKL'},{title:'Nightjet CORA',supplierBookingNumber:'MNOPQR'},{title:'ICE CORA2',supplierBookingNumber:'MNOPQR'},{title:'Eurostar CORA',supplierBookingNumber:'STUVWX'}];
+ const todos=[{title:'ICE CORA',supplierBookingNumber:'ABCDEF'},{title:'CORA',supplierBookingNumber:'GHIJKL'},{title:'Nightjet CORA',supplierBookingNumber:'MNOPQR'},{title:'ICE CORA',supplierBookingNumber:'MNOPQR'},{title:'Eurostar CORA',supplierBookingNumber:'STUVWX'}];
  assert.deepEqual(gatePassOmissionReferences({todos}),['STUVWX']);
 });
 
@@ -22,9 +22,15 @@ test('Nightjet recognizes EUN and train 420 or 421, never an amount or part of a
 test('a separate CORA2 Retour label shares the Nightjet reference without disqualifying it',()=>{
  const todos=[{title:'40421 (EUN)(RIT) | RITAD',description:'ABCDEF'},{title:'CORA2 Retour',description:'ABCDEF'},{title:'NJ (EUN)(RIT)(40490) | RITAD',description:'ABCDEF'}];
  assert.deepEqual(gatePassOmissionReferences({todos}),['ABCDEF']);
- assert.deepEqual(gatePassOmissionReferences({todos:[{title:'CORA2 Retour',description:'ABCDEF'}]}),[]);
- assert.deepEqual(gatePassOmissionReferences({todos:[...todos,{title:'NS trein onbekend',description:'ABCDEF'}]}),[]);
- assert.deepEqual(gatePassOmissionReferences({todos:[...todos,{title:'ICE CORA',description:'ABCDEF'}]}),[]);
+ assert.deepEqual(gatePassOmissionReferences({todos:[{title:'CORA2 Retour',description:'ABCDEF'}]}),['ABCDEF']);
+ assert.deepEqual(gatePassOmissionReferences({todos:[{title:'Nightjet CORA',description:'ABCDEF'},{title:'NS trein onbekend',description:'ABCDEF'}]}),[]);
+ assert.deepEqual(gatePassOmissionReferences({todos:[{title:'Nightjet CORA',description:'ABCDEF'},{title:'ICE CORA',description:'ABCDEF'}]}),[]);
+});
+
+test('CORA2 establishes its own Nightjet connection, never a separately booked return reference',()=>{
+ const todos=[{title:'CORA2 Retour',description:'ABCDEF'},{title:'ICE terugreis | CORA',description:'GHIJKL'}];
+ assert.deepEqual(gatePassOmissionReferences({todos}),['ABCDEF']);
+ assert.deepEqual(gatePassOmissionReferences({todos:[{title:'CORA20',description:'ABCDEF'}]}),[]);
 });
 
 test('the NS search response includes only CORA-linked references for page omission',async()=>{

@@ -16,7 +16,7 @@ export function gatePassOmissionReferences(booking){
  const refs=[...new Set(todos.filter(cora).flatMap(t=>todoReferences(t,'ns')))];
  // A separate administrative CORA row does not describe another train type.
  const coraLabel=t=>/^\s*CORA\d*(?:\s+(?:heen(?:reis)?|retour|terug(?:reis)?))?\s*$/i.test(t.title||'');
- return refs.filter(ref=>{const linked=todos.filter(t=>todoReferences(t,'ns').includes(ref)&&trainTitle(t.title));return linked.some(eligible)&&linked.every(t=>eligible(t)||coraLabel(t));});
+ return refs.filter(ref=>{const linked=todos.filter(t=>todoReferences(t,'ns').includes(ref)&&trainTitle(t.title));return linked.some(t=>/\bCORA2\b/i.test(t.title||''))||(linked.some(eligible)&&linked.every(t=>eligible(t)||coraLabel(t)));});
 }
 
 export function referenceContinuationDates(booking,refs){return refs.map(reference=>({reference,dates:[...new Set((booking.todos||[]).filter(t=>trainTitle(t.title)&&todoReferences(t,'ns').includes(reference)&&Date.parse(isoDate(t.endDate))-Date.parse(isoDate(t.startDate))===86400000).map(t=>isoDate(t.endDate)))]}));}
