@@ -6,6 +6,10 @@ import google_layout
 
 PREPARED={}
 
+
+class PreparationRequired(ValueError):
+    """A source check expired, was interrupted, or no longer matches the book."""
+
 def settings(source):
     if not isinstance(source,dict):raise ValueError('Ongeldige Google-bron.')
     i=connection.document_id(source.get('url',''))
@@ -110,5 +114,5 @@ def prepare(s,body,allow_cached=False):
 def verify(body):
     if not any(x.get('googleDoc') for x in selected(body)):return []
     p=PREPARED.get(body.get('_googlePreparation'))
-    if not p or p['expires']<time.time() or p['signature']!=signature(body):raise ValueError('Controleer de Google-bronnen opnieuw voordat u de PDF maakt.')
+    if not p or p['expires']<time.time() or p['signature']!=signature(body):raise PreparationRequired('De Google-bronnencontrole is verlopen of onderbroken. Controleer de bronnen opnieuw voordat u de PDF maakt.')
     return p['warnings']

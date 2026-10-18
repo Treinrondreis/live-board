@@ -3,6 +3,7 @@ import io
 from features import document_condition,omitted_document_warnings
 import document_duplicates
 import export_checks
+from google_sources import PreparationRequired
 
 def check(s,body,objects,fill=False):
     b=s.refresh_blocks(body,objects);errors=[];missing=[]
@@ -54,5 +55,8 @@ def check(s,body,objects,fill=False):
         try:
             report=s.make_export({'id':'preview','title':'Controle','body':b},{'skipChoices':True,'allowUneven':True,'fill':fill and result['canFill'],'dryRun':True,'libraryStamp':result['libraryStamp']})
             result['checkedPages']=report['report']['pages']
+        except PreparationRequired as e:
+            result['googlePreparationRequired']=True
+            error(None,'PDF-controle',e)
         except (ValueError,KeyError,TypeError) as e:error(None,'PDF-controle',e)
     return result

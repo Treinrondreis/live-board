@@ -35,3 +35,12 @@ test('a failed PDF check leaves generation enabled and can be run again on the s
  f.ctx.api=async path=>{if(path==='/api/state')return {objects:[],exports:[]};if(path==='/api/export-plan'){if(failed)throw Error('Processing');return {pages:3,needed:0,missing:[],fillers:[],errors:[]}}return {ok:true}};
  f.ctx.button={disabled:false};await assert.rejects(f.exec('exportBook(button)'),/Processing/);assert.equal(f.ctx.button.disabled,false);failed=false;await f.exec('exportBook(button)');assert.equal(f.ctx.button.disabled,false);assert.match(f.node('#modal').innerHTML,/PDF maken/);
 });
+
+test('expired Google checks offer a fresh source check and keep the version note',async()=>{
+ const f=fixture();f.exec(`draft={kind:'book',title:'Synthetic',body:{sections:[],values:{},outputMode:'screen'}};exportNote='Tickets aangepast'`);
+ f.ctx.renderExportCheck({pages:3,needed:0,missing:[],fillers:[],googlePreparationRequired:true,errors:[{title:'PDF-controle',message:'Controle verlopen'}]});
+ assert.match(f.node('#modal').innerHTML,/Google-bronnen opnieuw controleren/);assert.match(f.node('#modal').innerHTML,/disabled onclick="finishExport/);
+ let prepared=0;f.ctx.prepareGoogleBook=async()=>{prepared++;return true};f.ctx.refreshDraftBlocks=()=>{};
+ f.ctx.api=async path=>path==='/api/export-plan'?{pages:3,needed:0,missing:[],fillers:[],errors:[]}:{objects:[],exports:[]};
+ f.ctx.button={disabled:false};await f.exec('exportBook(button,false,true)');assert.equal(prepared,1);assert.equal(f.exec('exportNote'),'Tickets aangepast');assert.doesNotMatch(f.node('#modal').innerHTML,/disabled onclick="finishExport/);
+});

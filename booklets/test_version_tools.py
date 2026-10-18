@@ -24,9 +24,13 @@ class VersionToolsTests(unittest.TestCase):
 
     def action(self,book,ident,action,**extra):return test_cloud.request('/api/export-status','POST',json.dumps(dict(bookId=book,id=ident,action=action,**extra)).encode())
 
-    def test_previous_export_notes_trash_restore_purge_and_latest_protection(self):
+    def test_export_notes_trash_restore_purge_including_latest(self):
         book,(old,new)=self.exports()
-        self.assertEqual(self.action(book,new,'trash')[0],400)
+        self.assertEqual(self.action(book,new,'trash')[0],200)
+        self.assertEqual(test_cloud.request('/files/export/'+new)[0],404)
+        self.assertEqual(test_cloud.request('/digital/'+new)[0],404)
+        self.assertTrue((s.DATA/'exports'/(new+'.pdf')).exists())
+        self.assertEqual(self.action(book,new,'restore')[0],200)
         self.assertEqual(self.action(book,old,'note',note='Tickets gewijzigd')[0],200)
         self.assertEqual(self.action(book,old,'trash')[0],200)
         self.assertEqual(test_cloud.request('/files/export/'+old)[0],404)
@@ -39,6 +43,14 @@ class VersionToolsTests(unittest.TestCase):
         self.assertEqual(self.action(book,old,'purge')[0],200);self.assertFalse(preview.exists());self.assertFalse((s.DATA/'exports'/(old+'.pdf')).exists())
         self.assertEqual(test_cloud.request('/files/export/'+new)[0],200)
         self.assertEqual(self.action('other-book',new,'note',note='Wrong')[0],400)
+
+    def test_all_exports_can_be_trashed_and_restored_without_regenerating(self):
+        book,ids=self.exports()
+        for ident in ids:self.assertEqual(self.action(book,ident,'trash')[0],200)
+        with s.db() as c:
+            self.assertEqual(c.execute('SELECT count(*) FROM exports WHERE book_id=?',(book,)).fetchone()[0],2)
+        self.assertEqual(self.action(book,ids[-1],'restore')[0],200)
+        self.assertEqual(test_cloud.request('/files/export/'+ids[-1])[0],200)
 
     def test_cleanup_still_works_when_application_quota_is_full(self):
         import os
