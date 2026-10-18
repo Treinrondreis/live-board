@@ -13,3 +13,5 @@ h1{display:flex;align-items:center;gap:12px}.section-icon{display:inline-flex;al
 [id^="filter-"][aria-pressed="true"]{background:#135564;color:#fff;border-color:#135564}
 
 .time-cell .delay-minutes{display:inline-block}.delay-minutes{color:#c52026;font-size:1.05rem;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}#punctuality-history[hidden]{display:none}
+
+.punctuality-times{display:inline-flex;align-items:flex-start;gap:16px}.punctuality-current{white-space:nowrap}.punctuality-times .source-note{margin:0 0 4px}.punctuality-times .delay-minutes{margin:0}
