@@ -6,7 +6,13 @@ export function isoDate(value){const s=String(value||'').trim(),m=s.match(/^(20\
 const compact=s=>String(s||'').normalize('NFKC').toUpperCase().replace(/[\s-]/g,'');
 const trainTitle=s=>!s||/trein|train|ticket|nightjet|railjet|bahn|\bm[aá]v\b|\b[oö]bb\b|\b[čc]d\b|\bns\b|\bcora\d*\b|\brit(?:ad|am)?\b/i.test(s);
 const refValid=(r,p)=>p==='mav'?/^\d{10}$/.test(r):p==='db'?/^(?:\d{12}|[A-Z0-9]{6})$/.test(r):p==='obb'?/^(?:\d{16}|[A-Z0-9]{6,8})$/.test(r):p==='cd'?/^(?:\d{9,11}|[A-Z0-9]{6})$/.test(r):/^[A-Z0-9]{6,8}$/.test(r)&&/[A-Z]/.test(r);
-function todoReferences(todo,provider){const field=String(todo.supplierBookingNumber||'').trim(),raw=field.split(/[,;|/]/);if(provider==='ns'&&!field){const description=String(todo.description||'').trim();if(/^[A-Z0-9]{6,8}$/.test(description))raw.push(description);}return raw.map(value=>{
+function todoReferences(todo,provider){const field=String(todo.supplierBookingNumber||'').trim(),raw=field.split(/[,;|/]/);if(provider==='ns'&&!field){const description=String(todo.description||'').trim();if(/^[A-Z0-9]{6,8}$/.test(description))raw.push(description);}
+ if(provider==='obb'&&!field){
+  // Only an explicitly labelled ÖBB booking code, never an unlabelled amount or date.
+  const description=String(todo.description||'').normalize('NFKC'),references=[...new Set([...description.matchAll(/^\s*(?:ÖBB|OEBB)\s+(?:booking(?: code)?|buchung(?:scode)?)\s*[:–—-]?\s*((?:\d[ \t-]*){16})\s*$/gim)].map(m=>compact(m[1])))];
+  if(references.length===1)raw.push(references[0]);
+ }
+ return raw.map(value=>{
  const reference=compact(value);if(refValid(reference,provider))return reference;
  // A station note after an NS code is not part of its booking reference.
  // Two reference-shaped tokens remain ambiguous and are not silently truncated.
