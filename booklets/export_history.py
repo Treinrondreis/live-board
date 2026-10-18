@@ -1,4 +1,4 @@
-"""Notes and recoverable removal of prior exports; PDF contents stay immutable."""
+"""Notes and recoverable removal of exports; PDF contents stay immutable."""
 import json,re
 from collections import Counter
 
@@ -48,8 +48,6 @@ def action(s,b):
             c.execute('UPDATE export_details SET note=? WHERE id=?',(note.strip(),ident))
         elif operation=='restore':c.execute('UPDATE export_details SET deleted_at=NULL WHERE id=?',(ident,))
         elif operation in ('trash','purge'):
-            latest=c.execute('SELECT e.id FROM exports e LEFT JOIN export_details d ON d.id=e.id WHERE e.book_id=? AND d.deleted_at IS NULL ORDER BY e.rowid DESC LIMIT 1',(book,)).fetchone()
-            if latest and latest['id']==ident:raise ValueError('De nieuwste drukversie blijft behouden. Maak eerst een nieuwe versie.')
             if operation=='trash':c.execute('UPDATE export_details SET deleted_at=? WHERE id=?',(s.now(),ident))
             else:
                 if not deleted(c,ident):raise ValueError('Verplaats deze drukversie eerst naar de prullenbak.')

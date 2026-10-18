@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -41,6 +42,32 @@ class GoogleSelectionTests(unittest.TestCase):
         self.assertEqual(google_sources.select_pages(self.app,full,[0,1,2])['asset'],full['asset'])
         self.cache['a'*32][0]['digest']='v2'
         self.assertEqual(self.load(full['googleDoc'])['pages'],3)
+
+    def test_interrupted_or_expired_preparation_can_be_rechecked_without_exporting(self):
+        full=self.load()
+        body={'format':'A5','outputMode':'screen','sections':[{**full,'oneOff':True,'fields':[],'numberingConfigured':True}]}
+        def prepare(body):
+            with patch.object(google_sources,'load',return_value=full):
+                return google_sources.prepare(self.app,body)['body']
+        def check(body):
+            status,_,raw=test_cloud.request('/api/export-plan','POST',json.dumps({'body':body}).encode())
+            self.assertEqual(status,200,raw)
+            return json.loads(raw)
+        with self.app.db() as c:before=c.execute('SELECT count(*) FROM exports').fetchone()[0]
+        prepared=prepare(body)
+        self.assertFalse(check(prepared)['errors'])
+        deadline=google_sources.PREPARED[prepared['_googlePreparation']]['expires']
+        with patch.object(google_sources.time,'time',return_value=deadline+1):
+            expired=check(prepared)
+        self.assertTrue(expired['googlePreparationRequired'])
+        self.assertTrue(expired['errors'])
+        google_sources.PREPARED.pop(prepared['_googlePreparation'])
+        self.assertTrue(check(prepared)['googlePreparationRequired'])
+        recovered=prepare(prepared)
+        self.assertFalse(check(recovered)['errors'])
+        recovered['sections'][0]['googleDoc']['digest']='changed-after-check'
+        self.assertTrue(check(recovered)['googlePreparationRequired'])
+        with self.app.db() as c:self.assertEqual(c.execute('SELECT count(*) FROM exports').fetchone()[0],before)
 
     def test_a4_layout_update_invalidates_cached_pdf_and_protects_selection(self):
         self.source['format']='A4'
