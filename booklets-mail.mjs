@@ -57,7 +57,7 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
     for(let hop=0;hop<=3;hop++){response=await fetcher(u,{redirect:'manual',signal,headers:{Accept:'application/pdf'}});if(![301,302,303,307,308].includes(response.status))break;const location=response.headers.get('location');await response.body?.cancel();u=location&&safe(new URL(location,u).href);if(!u||hop===3)throw Error('Niet ondersteunde ticketverwijzing.');}
     if(!response.ok)throw Error('Ticket niet beschikbaar (HTTP '+response.status+').');const chunks=[];let size=0;
     for await(const chunk of response.body){size+=chunk.length;if(size>10*1024*1024){await response.body.cancel().catch(()=>{});throw Error('Ticket-PDF is groter dan 10 MB.');}chunks.push(chunk);}
-    const bytes=Buffer.concat(chunks);if(bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Deze ticketknop levert geen PDF. Mogelijk is het ticket geannuleerd of verlopen.');return bytes;
+    const bytes=Buffer.concat(chunks);if(bytes.subarray(0,5).toString()!=='%PDF-'){const e=Error('Deze ticketknop levert geen PDF. Mogelijk is het ticket geannuleerd of verlopen.');e.code='TICKET_NOT_PDF';throw e;}return bytes;
    }finally{busy=false;}
   }
  };

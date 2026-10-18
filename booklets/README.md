@@ -283,3 +283,21 @@ From booklets: python test_cloud.py and python test_migration.py.
 Validate private access, owner vs KM member, cross-origin rejection, upload,
 generation, previews and PDF downloads online after deployment. Do not claim live
 verification based only on local tests.
+
+
+### Niet-beschikbare ticketlinks
+
+Een ticketknop die HTML in plaats van een PDF levert, krijgt de expliciete foutcode
+`TICKET_NOT_PDF`. De automatische en handmatige import slaan alleen die knop over;
+andere actuele ticket-PDF's blijven beschikbaar. De melding noemt de referentie en
+PDF-knop. Een automatische onvolledige import vraagt paginacontrole voor export.
+Een expliciet geannuleerde referentie gebruikt nooit een oudere bevestigingsmail
+of een Drive-terugval. Andere referenties kunnen wel worden opgehaald. Netwerk-,
+rechten-, inspectie- en opslagfouten worden niet als annulering behandeld.
+
+Bij een actuele ÖBB-mail met alleen een ticketportallink verschijnt direct een
+knop naar de ticketpagina, met uitleg dat de PDF eerst moet worden gedownload en
+geüpload. Alleen de gecontroleerde HTTPS-host en het bekende postcheckout-pad
+worden toegelaten. Er wordt geen ticket uitgegeven of automatisch gedownload bij
+ÖBB. Portallinks blijven uitsluitend tijdelijk in het browsergeheugen en worden
+niet in het boekje opgeslagen. Na herladen zoekt de knop de actuele mail opnieuw.

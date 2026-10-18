@@ -34,3 +34,8 @@ test('an NS desk option or unrelated sender cannot replace a confirmed ticket ma
  option.payload.headers[0].value='ns@treinrondreis.nl';foreign.payload.headers[0].value='ns@evil.example';f.messages.push(option,foreign);
  const result=await f.control.search({query:'ABCDEFG'});assert.equal(result.messages[0].id,'new');assert(!result.messages.some(m=>m.id==='desk-option'||m.id==='foreign'));
 });
+
+test('non-PDF ticket links have a distinct code; network errors are not called cancellations',async()=>{
+ const f=fixture({fetcher:async()=>new Response('<html>Unavailable</html>')});const result=await f.control.search({query:'ABCDEFG'});await assert.rejects(f.control.download({ticket:result.messages[0].tickets[0].id}),e=>e.code==='TICKET_NOT_PDF');
+ const g=fixture({fetcher:async()=>{throw Error('Network');}});const other=await g.control.search({query:'ABCDEFG'});await assert.rejects(g.control.download({ticket:other.messages[0].tickets[0].id}),e=>e.message==='Network'&&!e.code);
+});
