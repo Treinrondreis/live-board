@@ -6,7 +6,13 @@ export function isoDate(value){const s=String(value||'').trim(),m=s.match(/^(20\
 const compact=s=>String(s||'').normalize('NFKC').toUpperCase().replace(/[\s-]/g,'');
 const trainTitle=s=>!s||/trein|train|ticket|nightjet|railjet|bahn|\bm[aá]v\b|\b[oö]bb\b|\b[čc]d\b|\bns\b|\bcora\d*\b|\brit(?:ad|am)?\b/i.test(s);
 const refValid=(r,p)=>p==='mav'?/^\d{10}$/.test(r):p==='db'?/^(?:\d{12}|[A-Z0-9]{6})$/.test(r):p==='obb'?/^(?:\d{16}|[A-Z0-9]{6,8})$/.test(r):p==='cd'?/^(?:\d{9,11}|[A-Z0-9]{6})$/.test(r):/^[A-Z0-9]{6,8}$/.test(r)&&/[A-Z]/.test(r);
-function todoReferences(todo,provider){const field=String(todo.supplierBookingNumber||'').trim(),raw=field.split(/[,;|/]/);if(provider==='ns'&&!field){const description=String(todo.description||'').trim();if(/^[A-Z0-9]{6,8}$/.test(description))raw.push(description);}return raw.map(compact).filter(r=>refValid(r,provider));}
+function todoReferences(todo,provider){const field=String(todo.supplierBookingNumber||'').trim(),raw=field.split(/[,;|/]/);if(provider==='ns'&&!field){const description=String(todo.description||'').trim();if(/^[A-Z0-9]{6,8}$/.test(description))raw.push(description);}return raw.map(value=>{
+ const reference=compact(value);if(refValid(reference,provider))return reference;
+ // A station note after an NS code is not part of its booking reference.
+ // Two reference-shaped tokens remain ambiguous and are not silently truncated.
+ const annotated=provider==='ns'&&String(value).trim().match(/^([A-Z0-9]{6,8})\s+(.+)$/i);
+ return annotated&&refValid(compact(annotated[1]),provider)&&!refValid(compact(annotated[2]),provider)?compact(annotated[1]):'';
+ }).filter(Boolean);}
 export function carrierReferences(booking,provider){providerKey(provider);const refs=new Set();for(const todo of booking.todos||[]){if(!trainTitle(todo.title))continue;for(const r of todoReferences(todo,provider))refs.add(r);}return [...refs];}
 // One shared chronology for different carriers. Hotel stays never establish a train departure.
 export function bookingJourneyDates(booking){return [...new Set((booking.todos||[]).filter(t=>String(t.title||'').trim()&&(trainTitle(t.title)&&Object.keys(ticketProviders).some(p=>todoReferences(t,p).length)||/\b(?:CORA\d*|RITAD|RITAM)\b/i.test(t.title))).map(t=>isoDate(t.startDate)).filter(Boolean))].sort();}
