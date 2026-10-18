@@ -1,5 +1,32 @@
 # Boekjesmaker in Seinhuis
 
+## Meerdere boekjes met één sjabloon
+
+Via **Meerdere boekjes maken** kunnen één tot vijf boekingsnummers met één
+sjabloon worden voorbereid. Bij een dubbel boekingsnummer kiest de gebruiker
+eerst de juiste boeking. Voorbereiden maakt nieuwe, afzonderlijk opgeslagen
+boekjes; bestaande boekjes blijven behouden. Klantwaarden, documentselecties en
+persoonlijke overlays uit het sjabloon worden voor de nieuwe boeking geleegd.
+
+De browser verwerkt de groep na elkaar via de bestaande beveiligde API’s.
+Laat het scherm open tijdens het ophalen en genereren. Stoppen kan na het
+huidige boekje; opgeslagen groepen zijn daarna hervatbaar via hetzelfde scherm.
+Er is geen zelfstandige achtergrondwerker die doorgaat na het sluiten van de
+browser. De groepsverwijzing staat bij ieder boekje op de server; klantgegevens
+of sleutels worden hiervoor niet in browseropslag gezet.
+
+Alleen gecontroleerde regels kunnen samen worden gegenereerd, met een aparte
+PDF en de bestaande opslaginstelling per boeking. Ontbrekende documenten,
+onbevestigde voorstellen en onbereikbare bronnen blijven voor individuele
+controle staan. Een opgeslagen boekje kan worden geopend, aangepast en via
+**Opslaan en terug naar groep** opnieuw worden gecontroleerd. De controles
+worden vóór elke PDF opnieuw uitgevoerd. Wijzigingen van collega’s worden niet
+overschreven; reeds gemaakte PDF’s van dezelfde boekversie worden bij hervatten
+overgenomen. Een later gewijzigd boekje vraagt opnieuw controle en kan een nieuwe
+PDF krijgen; de vorige PDF blijft bewaard. De exportlijst bevat hiervoor alleen
+het revisienummer van het boekje, geen extra kopie van klantgegevens. Sanity
+wordt in deze werkwijze uitsluitend gelezen.
+
 Independent Python service, private Railway networking only. Public entry point:
 `https://treinbord.up.railway.app/seinhuis/boekjesmaker/`.
 The Node gateway checks the existing **owner** session on every request. KM-only

@@ -22,7 +22,7 @@ BUSY=threading.BoundedSemaphore(1)
 def page(raw):
     text=raw.decode('utf-8')
     text=re.sub(r'(?<=[\x22\x27`])/(api|files|digital)/',lambda m:PREFIX+m.group(),text)
-    return text.replace('/seinhuis-logout-placeholder','/api/admin-security/logout').replace('href="/"','href="'+PREFIX+'/"').encode()
+    return text.replace('/seinhuis-logout-placeholder','/api/admin-security/logout').replace('href="/"','href="'+PREFIX+'/"').replace('src="/batch-builder.js','src="'+PREFIX+'/batch-builder.js').encode()
 
 class Handler(server.Handler):
     def auth(self):
