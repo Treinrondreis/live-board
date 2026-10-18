@@ -142,3 +142,19 @@ number/date/endpoint matching has not been verified. Entur remains a manual fall
 its existing near-term departure boards are not used as proof of a full future journey.
 Official references: https://developer.entur.no/open-data/timetable and
 https://developer.entur.no/docs/open-services/journey-planner.
+
+
+## NMBS streaming validation (pending activation)
+
+The production NMBS response was HTTP 200 with a current Last-Modified header and a
+29,940,935-byte ZIP. Its calendar_dates entry is 150,161,281 bytes and stop_times is
+261,941,062 bytes, exceeding the former per-entry 100 MiB limit. The new reader streams
+these two entries, retains exceptions only for requested days and calls only for selected
+trips, and keeps the 256 MiB worker heap. Each streamed entry is bounded at 512 MiB,
+individual CSV records at 64 KiB, compressed downloads at 30 MiB and workers at 120 seconds.
+This change has not yet been validated against the actual NMBS payload or deployed.
+Testing the real source locally awaits explicit permission to reuse the existing access.
+
+A local, fictional ZIP with approximately 400 MiB of calendar and stop-time text
+completed in 35.5 seconds inside a worker capped at 256 MiB heap, with the expected
+full match. The generated ZIP is outside Git; this does not prove the actual NMBS format.

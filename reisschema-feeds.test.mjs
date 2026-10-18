@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {zipSync,strToU8} from 'fflate';
-import {parseGtfs,parseIff,gtfsClock} from './reisschema-feeds.mjs';
+import {parseGtfs,parseIff,gtfsClock,visitZipCsv} from './reisschema-feeds.mjs';
 const pack=files=>zipSync(Object.fromEntries(Object.entries(files).map(([k,v])=>[k,strToU8(v)])));
 const meta={name:'Fictional feed',hash:'fictional-hash',loadedAt:'2031-06-02T12:00:00.000Z'};
 const leg={leg_id:'example',travel_date:'2031-06-11',train_number:'RJ 700',from_station:'Example North',to_station:'Example South'};
+test('streamed ZIP CSV handles split quotes, UTF-8 and multiline fields with explicit size bounds',()=>{
+ const bytes=pack({'example.txt':'id,name\r\na,"Noord, zuid"\r\nb,"Caf\u00e9 ""aan\nzee"""\r\n'}),rows=[];
+ visitZipCsv(bytes,'example.txt',r=>rows.push(r),{chunkSize:3});
+ assert.deepEqual(rows,[{id:'a',name:'Noord, zuid'},{id:'b',name:'Caf\u00e9 "aan\nzee"'}]);
+ assert.throws(()=>visitZipCsv(bytes,'example.txt',()=>{},{limit:8}),/te groot/);
+ assert.throws(()=>visitZipCsv(bytes,'absent.txt',()=>{}),/ontbreekt/);
+});
 function gtfs(extra={}){return pack({'feed_info.txt':'feed_version\nv1\n','stops.txt':'stop_id,stop_name\na,Example North\nb,Example South\n','routes.txt':'route_id,route_short_name\nr,RJ\n','trips.txt':'route_id,service_id,trip_id,trip_short_name,trip_headsign\nr,s,t,RJ 700,Example South\n','calendar_dates.txt':'service_id,date,exception_type\ns,20310610,1\n','stop_times.txt':'trip_id,stop_id,stop_sequence,arrival_time,departure_time\nt,a,1,25:10:00,25:12:00\nt,b,2,27:00:00,27:00:00\n',...extra});}
 test('GTFS over-24 clocks and original service date are preserved with feed version/trip id',()=>{
  assert.deepEqual(gtfsClock('2031-06-10','33:13:00'),{date:'2031-06-11',time:'09:13'});
