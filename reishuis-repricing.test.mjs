@@ -38,3 +38,19 @@ test('empty or malformed pricing selections identify the exact field without cha
  for(const [patch,pattern] of [[{line:''},/Kies de financiële regel/],[{hotel:''},/Kies een hotel/],[{room:''},/Kies een kamer/],[{room:'invalid/room'},/Kies een kamer/],[{kind:'interrail',pass:''},/Kies een Interrail-pas/]])assert.throws(()=>quoteChange(d,local,{...input,...patch},catalogs),e=>e.status===400&&e.reishuisSafe===true&&pattern.test(e.message));
  assert.deepEqual(d,before);assert.deepEqual(local,{});
 });
+
+
+test('repair a shifted hotel link and manual total inline in the same atomic proposal',()=>{
+ const d=source(),before=structuredClone(d),id=d.todos[1].id,input={...edit(d),shiftIds:[id,d.todos[2].id]},blocked=quoteChange(d,{},input,catalogs);assert.equal(blocked.newTotal,null);assert.equal(blocked.missing.find(m=>m.todo===id).kind,'hotel-link');
+ const repaired={...input,followupHotels:{[id]:{line:d.lines[1].id,hotel:'fixture-hotel',room:'double',provider:'missing',board:'RO',rooms:2}},manualAmounts:{[id]:275}},plan=quoteChange(d,{},repaired,catalogs);assert.equal(plan.missing.length,0);assert.equal(plan.changes[1].financial.newTotal,275);assert.equal(plan.changes[1].after.startDate,'2027-02-04');assert.equal(plan.changes[1].after.quantity,2);assert.equal(plan.newTotal,925);assert.equal(plan.changes[2].financial,null);
+ const state=emptyReishuis();applyQuote(state,'fixture',d,plan,'fixture-user');assert.equal(state.dossiers.fixture.components[id].line,d.lines[1].id);assert.equal(state.dossiers.fixture.todos[id].startDate,'2027-02-04');assert.equal(state.dossiers.fixture.lines[d.lines[1].id].price,275);assert.deepEqual(d,before);
+ const incomplete=quoteChange(d,{}, {...repaired,manualAmounts:{}},catalogs);assert.ok(incomplete.missing.some(m=>m.todo===id));assert.throws(()=>applyQuote(emptyReishuis(),'fixture',d,incomplete,'fixture-user'),{status:400});
+});
+
+test('inline followup repair rejects wrong scope, forged links, duplicates and replacement of an existing valid link',()=>{
+ const d=source(),id=d.todos[1].id,repair={line:d.lines[1].id,hotel:'fixture-hotel',room:'double',provider:'fixture',board:'RO',rooms:1},input={...edit(d),shiftIds:[id],followupHotels:{[id]:repair}};
+ for(const change of [{shiftIds:[]},{followupHotels:{'not-selected':repair}},{followupHotels:{[id]:{...repair,line:d.lines[0].id}}},{followupHotels:{[id]:{...repair,line:'forged'}}},{followupHotels:{[id]:{...repair,rooms:0}}},{followupHotels:{[id]:{...repair,unexpected:true}}},{shiftIds:[d.todos[2].id],followupHotels:{[d.todos[2].id]:repair}}]){
+  const value={...input,...change};let plan;try{plan=quoteChange(d,{},value,catalogs);}catch(e){assert.equal(e.status,400);continue;}assert.ok(plan.missing.length);assert.throws(()=>applyQuote(emptyReishuis(),'fixture',d,plan,'fixture'),{status:400});
+ }
+ const local={components:{[id]:{...component,line:d.lines[1].id}}};assert.throws(()=>quoteChange(d,local,{...input,followupHotels:{[id]:{...repair,line:d.lines[3].id}}},catalogs),{status:400});
+});
