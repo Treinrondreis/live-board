@@ -149,7 +149,7 @@ https://developer.entur.no/docs/open-services/journey-planner.
 ## Source agreement policy
 
 Every configured feed is fetched and parsed before comparing full matches of the same
-registered leg/date. The fixed source order is NDOV IFF, GTFS.de, SNCF GTFS, NMBS GTFS.
+registered leg/date. The fixed source order is NDOV IFF, GTFS.de, SNCF GTFS, iRail, NMBS GTFS.
 Differences of at most two minutes at BOTH endpoints are accepted; the first matching
 source remains the displayed time, never an average. Evidence from all matches includes
 their actual compared dates/times and fetch timestamps. A spread of three or more minutes
@@ -163,3 +163,31 @@ vanishes the contradiction is NOT silently resolved using the remaining source. 
 participating feeds already meet the recheck requirement; do not download them repeatedly.
 An interrupted queue older than four hours is recomputed instead of publishing stale
 comparison evidence. No automatic customer communication is triggered.
+
+## Belgian train queries and bounded fallback
+
+With REISSCHEMA_IRAIL_ENABLED=1, try iRail for each selected leg. Resolve station and
+vehicle identifiers from provider responses, then validate the explicit train number,
+ordered unique endpoints, local departure date and scheduled endpoint timestamps.
+Never add live delay to planned times. A missing/ambiguous/error response cannot prove
+cancellation. The NMBS feed is downloaded once for the remaining unmatched legs only;
+when all legs have an iRail match, the ZIP is not downloaded. Existing other-source
+agreement checks remain active; iRail and NMBS are not treated as independent evidence.
+
+Only public station identifiers, train identifiers, dates and times leave the server.
+No dossier or customer identifiers are sent. At most 250 HTTP requests per prepared
+round, sequentially spaced by at least 1.1 seconds; 429 stops further requests for that
+round. Responses are bounded to 2 MiB, timeouts to 20 seconds. Duplicate queries share
+the round cache and its original fetch timestamp, honoring Cache-Control up to four hours.
+The NMBS fallback streams calendars and stop times (512 MiB unpacked limit per streamed
+file, 64 KiB CSV record bound) inside the existing 256 MiB-heap / 120-second worker.
+Other files retain the 100 MiB bound. Official NMBS stop-name translations are supported.
+
+One-off local quality check on 18 October 2026: six stations, 72 unique vehicle/date
+requests for 19 and 25 October; 68 usable responses had identical passenger stop order
+and scheduled times compared to the same-day NMBS static delivery. Four requests failed
+(three replacement buses and one Eurostar). All six station boards for 1 November were
+empty: this is missing coverage, not proof of cancellation. This sample does not establish
+complete coverage or independent correctness; both products may use underlying NMBS data.
+Raw public responses and the authenticated ZIP stay outside Git. No customer dataset
+was used in the quality sample. See https://docs.irail.be/ for limits and semantics.
