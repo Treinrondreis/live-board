@@ -1,4 +1,5 @@
 // Only public train/station/date information is sent to iRail. No dossier identifiers.
+import {trainDigits} from './reisschema-number-policy.mjs';
 const normalized=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const number=s=>String(s||'').replace(/^BE\.NMBS\./,'').replace(/\s/g,'').toUpperCase();
 const list=v=>Array.isArray(v)?v:v?[v]:[];
@@ -13,7 +14,7 @@ const names=s=>[s.station,s.name,s.standardname,s.stationinfo?.name,s.stationinf
 export function parseIrailVehicle(data,leg,meta){
  const evidence=JSON.stringify({source:'iRail',downloaded_at:meta.loadedAt,source_modified:meta.loadedAt,vehicle:data.vehicle,query_date:meta.queryDate});
  const fail=reason=>({reason,sources:[evidence]});
- if(number(data.vehicle)!==number(leg.train_number))return fail('iRail: treinnummer niet bevestigd');
+ const exact=trainDigits(data.vehicle)===trainDigits(leg.train_number);
  const stops=list(data.stops?.stop),starts=stops.map((s,i)=>({s,i})).filter(({s})=>names(s).includes(normalized(leg.from_station))),ends=stops.map((s,i)=>({s,i})).filter(({s})=>names(s).includes(normalized(leg.to_station)));
  if(starts.length!==1||ends.length!==1)return fail('iRail: dubbelzinnige stations in de rit');
  const pairs=[];
@@ -25,9 +26,10 @@ export function parseIrailVehicle(data,leg,meta){
  }
  if(pairs.length!==1)return fail('iRail: geen volledige, eenduidige rit op de gevraagde datum');
  const {start,end,departure,arrival}=pairs[0];
+ if(!exact&&(departure.time!==leg.departure_time||arrival.time!==leg.arrival_time||arrival.date!==(leg.arrival_date||leg.travel_date)))return fail('iRail: ander nummer niet eenduidig op oorspronkelijke tijden gekoppeld');
  // A disappearing match is not a cancellation. Explicit endpoint cancellation flags are required.
  if(!['0','1'].includes(String(start.s.departureCanceled))||!['0','1'].includes(String(end.s.arrivalCanceled)))return fail('iRail: uitvalstatus niet bevestigd');
- return {observation:{departure_date:departure.date,departure_time:departure.time,arrival_date:arrival.date,arrival_time:arrival.time,cancelled:String(start.s.departureCanceled)==='1'||String(end.s.arrivalCanceled)==='1',connection_broken:false,backup_communicated:false,source:'iRail',observed_at:meta.loadedAt},sources:[evidence]};
+ return {observation:{departure_date:departure.date,departure_time:departure.time,arrival_date:arrival.date,arrival_time:arrival.time,cancelled:String(start.s.departureCanceled)==='1'||String(end.s.arrivalCanceled)==='1',connection_broken:false,backup_communicated:false,source:'iRail',observed_at:meta.loadedAt,train_number:number(data.vehicle)},sources:[evidence]};
 }
 export function createIrailSource({fetcher=fetch,clock=Date.now,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}){
  const cache=new Map();let lastRequest=-Infinity,blocked=false,requests=0;
@@ -52,10 +54,13 @@ export function createIrailSource({fetcher=fetch,clock=Date.now,pause=ms=>new Pr
    await heartbeat();const catalogue=await request('stations',{}),candidates=list(catalogue.station).filter(s=>names(s).includes(normalized(leg.from_station)));
    if(candidates.length!==1)return {reason:'iRail: vertrekstation niet eenduidig herkend',sources:[]};
    const board=await request('liveboard',{id:candidates[0].id,date:dateParam(leg.travel_date),time:leg.departure_time?.replace(':','')||'0000',arrdep:'departure'});
-   const ids=[...new Set(list(board.departures?.departure).filter(d=>number(d.vehicle)===number(leg.train_number)).map(d=>d.vehicle))];
-   if(ids.length!==1)return {reason:'iRail: trein niet eenduidig gevonden; NMBS nodig',sources:[]};
-   await heartbeat();const data=await request('vehicle',{id:ids[0],date:dateParam(leg.travel_date)});
-   return parseIrailVehicle(data,leg,{loadedAt:data._retrievedAt,queryDate:leg.travel_date});
+   const departures=list(board.departures?.departure).filter(d=>!String(d.vehicle).startsWith('BE.NMBS.BUS'));
+   const numbered=departures.filter(d=>trainDigits(d.vehicle)===trainDigits(leg.train_number));
+   const candidateDepartures=numbered.length?numbered:departures.filter(d=>localClock(d.time)?.date===leg.travel_date&&localClock(d.time)?.time===leg.departure_time);
+   const ids=[...new Set(candidateDepartures.map(d=>d.vehicle))];
+   if(!ids.length||ids.length>4)return {reason:'iRail: trein niet eenduidig gevonden; NMBS nodig',sources:[]};
+   const matches=[];for(const id of ids){await heartbeat();const data=await request('vehicle',{id,date:dateParam(leg.travel_date)}),result=parseIrailVehicle(data,leg,{loadedAt:data._retrievedAt,queryDate:leg.travel_date});if(result.observation)matches.push(result);}
+   return matches.length===1?matches[0]:{reason:'iRail: geen unieke volledige rit; NMBS nodig',sources:[]};
   }catch{return {reason:'iRail niet bereikbaar of niet bruikbaar; NMBS nodig',sources:[]};}
  }};
 }

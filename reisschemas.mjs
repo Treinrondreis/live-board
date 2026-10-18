@@ -3,6 +3,7 @@ import {floraRegister} from './flora-register.mjs';
 import {enrichChanges} from './reisschema-changes.mjs';
 import {controlRoutes} from './reisschema-runtime.mjs';
 import {assess,dayAt} from './reisschema-control.mjs';
+import {applyNumberPolicy} from './reisschema-number-policy.mjs';
 
 const prefix='/seinhuis/reisschemas';
 // Separate owner-only section; original itineraries stay immutable.
@@ -31,9 +32,11 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
     const row=[...state.legs,...state.notifications].find(r=>r.version_id===data.versionId&&r.leg_id===(data.legId||data.event?.leg_id));
     if(!row)return reply(409,{error:'Deze rit is niet meer actueel. Vernieuw de pagina.'});
     if(path==='/api/observation'){
+     const result=applyNumberPolicy(row,{observation:data.event,sources:[JSON.stringify({source:data.event.source,downloaded_at:data.event.observed_at})]});
+     if(!result.observation)return reply(400,{error:result.reason});
      await register.recordLegEvent(row.version_id,'observation',data.event);
      // Manual verification is explicit evidence too, separate from communication.
-     await register.recordLegEvent(row.version_id,'control',{leg_id:row.leg_id,request_id:data.event.request_id+'-control',checked_at:data.event.observed_at,day:dayAt(Date.parse(data.event.observed_at)),outcome:'checked',reason:'Handmatige controle',sources:[data.event.source],assessment:assess(row,data.event),observation_request_id:data.event.request_id,manual_url:null});
+     await register.recordLegEvent(row.version_id,'control',{leg_id:row.leg_id,request_id:data.event.request_id+'-control',checked_at:data.event.observed_at,day:dayAt(Date.parse(data.event.observed_at)),outcome:'checked',reason:['Handmatige controle',result.reason].filter(Boolean).join('. '),sources:result.sources,assessment:assess(row,data.event),observation_request_id:data.event.request_id,manual_url:null});
     }
     else{
      if(typeof data.requestId!=='string'||! /^[a-zA-Z0-9-]{1,64}$/.test(data.requestId)||typeof data.communicatedAt!=='string'||!Number.isFinite(Date.parse(data.communicatedAt))||!['email','phone','post','other'].includes(data.method)||typeof data.reference!=='string'||data.reference.length>500)return reply(400,{error:'Ongeldige communicatiegegevens.'});
@@ -48,10 +51,10 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
   }
   if(req.method!=='GET')return reply(405,{error:'Actie niet beschikbaar.'});
   if(path==='/api/register')return reply(200,await summary());
-  const files={'':'reisschemas.html','/':'reisschemas.html','/reisschemas.js':'reisschemas.js','/reisschemas.css':'reisschemas.css'};
+  const files={'':'reisschemas.html','/':'reisschemas.html','/reisschemas.js':'reisschemas.js','/reisschemas.css':'reisschemas.css','/reisschema-number-policy.mjs':'reisschema-number-policy.mjs'};
   if(!files[path])return reply(404,{error:'Niet gevonden.'});
   const file=files[path],ext=file.split('.').pop();
-  res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});
+  res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});
   res.end(await readFile(new URL('./'+file,import.meta.url)));return true;
  };
 }

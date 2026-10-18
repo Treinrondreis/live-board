@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {Worker,isMainThread,parentPort,workerData} from 'node:worker_threads';
 import {norm} from './reisschema-control.mjs';
 import {createIrailSource} from './reisschema-irail.mjs';
+import {applyNumberPolicy,trainDigits,trainKind,numberAssessment} from './reisschema-number-policy.mjs';
 
 export function* csv(text){
  let values=[],value='',quoted=false,header;
@@ -66,22 +67,23 @@ export function parseGtfs(bytes,legs,meta){
  if(hasExceptions)visitZipCsv(bytes,'calendar_dates.txt',s=>{if(wantedDates.has(s.date))exceptions.set(s.service_id+'|'+s.date,s.exception_type);});
  else if(!files['calendar.txt'])throw Error('GTFS-rijdagen ontbreken');
  const weekdays=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
- const trips=new Map();
+ const trips=new Map(),endpointNames=new Set(legs.flatMap(l=>[norm(l.from_station),norm(l.to_station)]));let alternateCount=0,alternateLimit=false;
  for(const trip of read('trips.txt')){
   const route=routes.get(trip.route_id)||{},sncf=meta.name==='SNCF GTFS',name=label(trip.trip_short_name||(sncf&&/^\d+$/.test(trip.trip_headsign)?trip.trip_headsign:'')),category=label(route.route_short_name).replace(/\d+$/,'');
   if(route.route_type&&Number(route.route_type)!==2&&!(Number(route.route_type)>=100&&Number(route.route_type)<200))continue;
-  if(!numbers.has(name)&&!numbers.has(category+name)&&!(sncf&&numericNumbers.has(name))&&!(name===''&&category==='RJ'))continue;
+  const exactForAny=numericNumbers.has(trainDigits(name));
+  if(!exactForAny&&alternateCount>=20000){alternateLimit=true;continue;}
   const days=[...dates].filter(day=>{const d=day.replaceAll('-',''),exception=exceptions.get(trip.service_id+'|'+d),c=calendar.get(trip.service_id);return exception?exception==='1':c&&d>=c.start_date&&d<=c.end_date&&c[weekdays[new Date(day).getUTCDay()]]==='1';});
-  if(days.length)trips.set(trip.trip_id,{...trip,name,category,days,stops:[]});
+  if(days.length){if(!exactForAny)alternateCount++;trips.set(trip.trip_id,{...trip,name,category,days,alternativeOnly:!exactForAny,stops:[]});}
  }
- visitZipCsv(bytes,'stop_times.txt',s=>{const t=trips.get(s.trip_id),stop=stops.get(s.stop_id);if(t&&stop)t.stops.push({name:stop.stop_name,aliases:aliases(stop),sequence:+s.stop_sequence,departure:s.departure_time,arrival:s.arrival_time,pickup:s.pickup_type,dropoff:s.drop_off_type,category:meta.name==='SNCF GTFS'?frenchKind(s.stop_id):t.category});});
+ visitZipCsv(bytes,'stop_times.txt',s=>{const t=trips.get(s.trip_id),stop=stops.get(s.stop_id);if(t&&stop){const otherNames=aliases(stop);if(t.alternativeOnly&&![stop.stop_name,...otherNames].some(n=>endpointNames.has(norm(n))))return;t.stops.push({name:stop.stop_name,aliases:otherNames,sequence:+s.stop_sequence,departure:s.departure_time,arrival:s.arrival_time,pickup:s.pickup_type,dropoff:s.drop_off_type,category:meta.name==='SNCF GTFS'?frenchKind(s.stop_id):t.category});}});
  for(const t of trips.values())t.stops.sort((a,b)=>a.sequence-b.sequence);
  return Object.fromEntries(legs.map(leg=>{
   const candidates=[];let overflow=false;
   for(const t of trips.values()){
-   const exact=numbers.has(t.name)&&t.name===label(leg.train_number)||t.category+t.name===label(leg.train_number)||meta.name==='SNCF GTFS'&&t.name===leg.train_number.match(/\d+$/)?.[0]&&t.stops.some(s=>norm(s.name)===norm(leg.from_station)&&s.category&&s.category===railKind(leg.train_number));
-   const unnumbered=t.name===''&&t.category==='RJ'&&/^RJ\s*\d/i.test(leg.train_number);
-   if(!exact&&!unnumbered)continue;
+   const exact=!!trainDigits(t.name)&&trainDigits(t.name)===trainDigits(leg.train_number);
+   const unnumbered=t.name===''&&(t.category==='RJ'&&trainKind(leg.train_number)==='RJ'||trainKind(leg.train_number).startsWith('TGV')&&t.stops.some(s=>s.category?.startsWith('TGV')));
+   if(!exact&&!unnumbered&&!t.name)continue;
    for(const serviceDate of t.days){
     const paths=[{stops:t.stops,ids:[t.trip_id]}];
     // Only join equal explicit train numbers at the same shared boundary station.
@@ -99,14 +101,18 @@ export function parseGtfs(bytes,legs,meta){
      }
     }
     for(const path of paths){const o=matchStops(path.stops,leg,serviceDate);if(!o)continue;
+    if(!exact&&(o.departure_time!==leg.departure_time||o.arrival_time!==leg.arrival_time||o.arrival_date!==(leg.arrival_date||leg.travel_date)))continue;
     // An unnumbered RJ needs the exact full registered endpoint pair and a compatible destination.
-    if(unnumbered&&norm(t.trip_headsign)!==norm(leg.to_station))continue;
+    if(unnumbered&&trainKind(leg.train_number)==='RJ'&&norm(t.trip_headsign)!==norm(leg.to_station))continue;
     const {from_country,to_country,...times}=o;
-    candidates.push({observation:{...times,source:meta.name,observed_at:meta.modified||meta.loadedAt},evidence:{feed_version:version,service_date:serviceDate,trip_id:t.trip_id,trip_ids:path.ids,number_missing:unnumbered}});
+    const currentNumber=/[A-Z]/.test(t.name)?t.name:t.name?(t.stops[0]?.category||t.category)+' '+t.name:'';
+    candidates.push({exact,observation:{...times,train_number:currentNumber,source:meta.name,observed_at:meta.modified||meta.loadedAt},evidence:{feed_version:version,service_date:serviceDate,trip_id:t.trip_id,trip_ids:path.ids,number_missing:unnumbered,number_replaced:!exact}});
     }
    }
   }
-  return [leg.leg_id,candidates.length===1&&!overflow?{...candidates[0],sources:[JSON.stringify({source:meta.name,feed_version:version,downloaded_at:meta.loadedAt,source_modified:meta.modified,...candidates[0].evidence})]}:{reason:candidates.length||overflow?'Meerdere passende ritten; controleer DB':'Geen volledig en eenduidig passend ritdeel; niet automatisch opgeheven',sources:[JSON.stringify({source:meta.name,feed_version:version,downloaded_at:meta.loadedAt})]}];
+  const found=candidates.some(c=>c.exact)?candidates.filter(c=>c.exact):candidates;
+  const limited=alternateLimit&&!found.some(c=>c.exact);
+  return [leg.leg_id,found.length===1&&!overflow&&!limited?{...found[0],sources:[JSON.stringify({source:meta.name,feed_version:version,downloaded_at:meta.loadedAt,source_modified:meta.modified,...found[0].evidence})]}:{reason:found.length||overflow||limited?'Meerdere passende ritten of zoekgrens bereikt; controleer DB':'Geen volledig en eenduidig passend ritdeel; niet automatisch opgeheven',sources:[JSON.stringify({source:meta.name,feed_version:version,downloaded_at:meta.loadedAt})]}];
  }));
 }
 export function parseIff(bytes,legs,meta){
@@ -119,7 +125,8 @@ export function parseIff(bytes,legs,meta){
  for(const block of read('timetbls.dat').split('#').slice(1)){
   const lines=block.split(/[\r\n]+/).filter(Boolean),records=p=>lines.filter(l=>l[0]===p).map(l=>l.slice(1).split(',').map(s=>s.trim()));
   const services=records('%'),running=records('-'),categories=records('&'),attributes=records('*');
-  const selected=legs.filter(l=>services.some(s=>String(Number(s[1]))===l.train_number.match(/\d+$/)?.[0]));if(!selected.length)continue;
+  const served=new Set(lines.filter(l=>['>','+','.','<'].includes(l[0])).map(l=>norm(stations.get(l.slice(1).split(',')[0].trim().toUpperCase())?.name)));
+  const selected=legs.filter(l=>services.some(s=>String(Number(s[1]))===trainDigits(l.train_number))||served.has(norm(l.from_station))&&served.has(norm(l.to_station)));if(!selected.length)continue;
   for(const leg of selected)for(let offset=-2;offset<=0;offset++){
    const serviceDate=new Date(Date.parse(leg.travel_date)+offset*86400000).toISOString().slice(0,10);if(serviceDate<start||serviceDate>end)continue;
    const index=Math.round((Date.parse(serviceDate)-Date.parse(start))/86400000),active=n=>notes.get(n)?.[index]==='1';
@@ -137,17 +144,26 @@ export function parseIff(bytes,legs,meta){
    }
    const o=matchStops(stops,leg,serviceDate);if(!o)continue;
    const from=stops.find(s=>norm(s.name)===norm(leg.from_station)),to=stops.find(s=>norm(s.name)===norm(leg.to_station));
-   const cat=label(leg.train_number.match(/^[a-z]+/i)?.[0]);
-   if(!services.some(s=>String(Number(s[1]))===leg.train_number.match(/\d+$/)?.[0]&&from.sequence>=+s[3]&&to.sequence<=+s[4]))continue;
-   if(!categories.some(c=>label(c[0])===cat&&from.sequence>=+c[1]&&to.sequence<=+c[2]))continue;
+   const exact=services.some(s=>String(Number(s[1]))===trainDigits(leg.train_number));
+   // A renumbering inside one explicit IFF journey is a source-proven through service.
+   // An unrelated number needs the original full endpoint/date/time pair and uniqueness.
+   if(!exact&&(o.departure_time!==leg.departure_time||o.arrival_time!==leg.arrival_time||o.arrival_date!==(leg.arrival_date||leg.travel_date)))continue;
+   let covered=from.sequence;const segments=services.filter(s=>+s[4]>from.sequence&&+s[3]<to.sequence).sort((a,b)=>+a[3]-+b[3]);
+   for(const s of segments)if(+s[3]<=covered)covered=Math.max(covered,+s[4]);
+   if(covered<to.sequence)continue;
+   const category=categories.find(c=>from.sequence>=+c[1]&&from.sequence<+c[2]&&!['BUS','FERRY'].includes(label(c[0])));
+   if(!category)continue;
    if(!running.some(r=>active(r[0])&&from.sequence>=+r[1]&&to.sequence<=+r[2]))continue;
-   // ICE/NJ: NDOV is only evidence for endpoints inside the Netherlands.
-   if(['ICE','NJ'].includes(cat)&&[from,to].some(s=>!['NL','1'].includes(s.country)))continue;
+   // International Nightjets are accepted when the complete dated endpoint pair is present.
+   // An additional explicit DB verification remains visible through applyNumberPolicy.
+   if(trainKind(leg.train_number)==='ICE'&&[from,to].some(s=>!['NL','1'].includes(s.country)))continue;
+   const boarding=segments.find(s=>+s[3]<=from.sequence&&+s[4]>from.sequence);
+   const currentNumber=label(category[0])+' '+String(Number(boarding?.[1]||services[0]?.[1]));
    const {from_country,to_country,...observation}=o;
-   results.get(leg.leg_id).push({observation:{...observation,source:'NDOV IFF',observed_at:meta.modified||meta.loadedAt},sources:[JSON.stringify({source:'NDOV IFF',feed_version:meta.hash,service_date:serviceDate,trip_id:lines[0],valid_from:start,valid_until:end,downloaded_at:meta.loadedAt,source_modified:meta.modified})]});
+   results.get(leg.leg_id).push({exact,observation:{...observation,train_number:currentNumber,source:'NDOV IFF',observed_at:meta.modified||meta.loadedAt},sources:[JSON.stringify({source:'NDOV IFF',feed_version:meta.hash,service_date:serviceDate,trip_id:lines[0],route_train_numbers:[...new Set(segments.map(s=>String(Number(s[1]))))],valid_from:start,valid_until:end,downloaded_at:meta.loadedAt,source_modified:meta.modified})]});
   }
  }
- return Object.fromEntries(legs.map(l=>{const found=results.get(l.leg_id);return [l.leg_id,found.length===1?found[0]:{reason:found.length?'Meerdere IFF-ritten; controleer DB':'Geen volledige IFF-dekking voor deze rit en datum',sources:[JSON.stringify({source:'NDOV IFF',feed_version:meta.hash,valid_from:start,valid_until:end,downloaded_at:meta.loadedAt})]}];}));
+ return Object.fromEntries(legs.map(l=>{const all=results.get(l.leg_id),found=all.some(r=>r.exact)?all.filter(r=>r.exact):all;return [l.leg_id,found.length===1?found[0]:{reason:found.length?'Meerdere IFF-ritten; controleer DB':'Geen volledige IFF-dekking voor deze rit en datum',sources:[JSON.stringify({source:'NDOV IFF',feed_version:meta.hash,valid_from:start,valid_until:end,downloaded_at:meta.loadedAt})]}];}));
 }
 async function download(url,headers,fetcher,now){
  const response=await fetcher(url,{headers,redirect:'error',signal:AbortSignal.timeout(60000)});if(!response.ok)throw Error('Bron niet bereikbaar');
@@ -216,9 +232,11 @@ export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.
     if(refreshFailed)return {sourceConflict:true,reason:'Andere bron opnieuw geraadpleegd maar niet bevestigd; handmatig controleren',sources:matches.flatMap(m=>m.sources)};
     const result=reconcilePlanningSources(matches,clock());
     if(result?.sourceConflict)return result;
+    const actualNumbers=[...new Set(matches.map(m=>trainDigits(m.observation.train_number||leg.train_number)).filter(Boolean))];
+    if(actualNumbers.length>1&&matches.some(m=>numberAssessment(leg,m.observation).notify))return {sourceConflict:true,reason:'Bronnen spreken elkaar tegen over het treinnummer: '+actualNumbers.join(' / ')+'. Treinnummer en reservering handmatig controleren; bronnen binnen vier uur geraadpleegd.',sources:result.sources};
     if(result&&Date.parse(result.observation.observed_at)<Date.parse(leg.observation?.observed_at))return {reason:'Bron ouder dan de laatst vastgelegde controle; handmatig beoordelen',sources:result.sources};
     if(result&&(!leg.departure_time||!leg.arrival_time))return {reason:'Oorspronkelijke tijden ontbreken; eerst reisschema controleren',sources:result.sources};
-    return result||{reason:outputs.map(o=>o[leg.leg_id]?.reason).filter(Boolean).join('; ')||'Geen bruikbare bron; controleer DB',sources:outputs.flatMap(o=>o[leg.leg_id]?.sources||[])};
+    return applyNumberPolicy(leg,result,clock())||{reason:outputs.map(o=>o[leg.leg_id]?.reason).filter(Boolean).join('; ')||'Geen bruikbare bron; controleer DB',sources:outputs.flatMap(o=>o[leg.leg_id]?.sources||[])};
    }};
   }};
 }
