@@ -51,3 +51,7 @@ body[data-layout=workspace] .intro{display:none}body[data-layout=workspace] #row
 @media(max-width:850px){.hotel-dialog[open]{width:100%;height:100dvh}.hotel-workspace{display:flex;flex-direction:column;overflow:hidden}.hotel-sidebar{flex:1;min-height:0;padding:14px}.hotel-sidebar .hotel-list img{width:55px;height:53px}.hotel-sidebar .hotel-list button{padding:12px 8px}.hotel-sidebar .hotel-list strong{font-size:15px}.hotel-sidebar .hotel-list small{font-size:12px}.hotel-sidebar>input{font-size:16px;padding:12px;width:100%}.hotel-dialog[data-mode=list] .hotel-main{display:none}.hotel-dialog[data-mode=detail] .hotel-sidebar{display:none}.hotel-dialog[data-mode=detail] .hotel-main{display:block;flex:1;min-height:0;overflow:auto}.hotel-workspace-top{padding:12px;gap:8px;flex-wrap:wrap}.hotel-workspace-top h1{font-size:20px;margin-right:auto}.hotel-workspace-top button{font-size:12px;padding:9px}.hotel-dialog[data-mode=list] .hotel-workspace-top button:nth-child(2){display:none}}
 
 @media(min-width:851px){.hotel-workspace-top button:nth-child(2){display:none}}
+
+/* Keep cancelled stays readable and their dossier links usable. */
+.hotel-stay-cancelled td:not(:nth-child(5)),.hotel-stay-cancelled td:nth-child(5)>strong,.hotel-stay-cancelled td:nth-child(5)>small{text-decoration:line-through}
+.hotel-cancellation-label{display:block;width:max-content;font-weight:700;color:#8c2828;background:#fff0ee;padding:.15rem .4rem;border-radius:.25rem}
