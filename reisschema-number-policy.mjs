@@ -21,6 +21,12 @@ export function controlPolicy(row){
  const items=(row.control?.sources||[]).flatMap(s=>{try{return [JSON.parse(s)];}catch{return [];}});
  return items.findLast(s=>s.kind==='train-number-policy')||{};
 }
+export function manualControlAttention(row){
+ if(row.control?.outcome!=='manual')return false;
+ const evidence=(row.control.sources||[]).flatMap(s=>{try{return [JSON.parse(s)];}catch{return [];}});
+ const explicit=evidence.findLast(s=>s.kind==='planning-control');
+ return explicit?explicit.attention===true:/bronnen spreken elkaar tegen|bronvergelijking|andere bron opnieuw|treinnummer ontbreekt/i.test(row.control.reason||'');
+}
 export function dbVerificationMatches(leg,o,now){
  const v=leg.db_verification;if(!v||now-Date.parse(v.observed_at)>4*3600000)return false;
  return ['departure_date','departure_time','arrival_date','arrival_time','cancelled'].every(k=>v[k]===o[k])&&trainDigits(v.train_number||leg.train_number)===trainDigits(o.train_number||leg.train_number);

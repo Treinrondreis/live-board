@@ -17,9 +17,9 @@ A service restart after a missed scheduled run catches up, and unfinished rounds
 Newly active versions wait for the next daily round or an explicit manual start. Manual start also works while the daily setting is off. A completed daily
 round is not repeated; manually verified observations can be entered independently.
 
-Where no usable full endpoint match exists, create one persistent manual DB task at D-8.
-Late registration creates an overdue task. Previously covered legs that lose coverage
-also become manual. The DB task opens https://int.bahn.de/nl; there is no browser scraper
+Where no usable full endpoint match exists, retain a neutral unchecked status at D-8.
+Late registration and previously covered legs that lose coverage remain neutral.
+Only source contradictions create a manual DB task. There is no browser scraper
 and no automatic declaration that a missing train is cancelled.
 
 Every result records time of checking separately from source observation/publication time.
@@ -222,3 +222,32 @@ The owner UI provides Meldingen, Treinnummer gewijzigd and Handmatige DB-taken f
 shows the current number and full reason, and searches original and current numbers.
 Control reasons, source-policy metadata, reservation overrides and observations are
 append-only in the private register; original customer itineraries remain untouched.
+
+## Swiss dated controls and neutral coverage
+
+The official OJP 2.0 source reuses the existing OJP_API_KEY. It is enabled when that key
+exists, unless REISSCHEMA_SWISS_ENABLED=0. Only public station names/IDs, mode and date
+are sent; no dossier, customer, ticket or mail information is transmitted. Requests use
+a window starting one hour before the booked train time (boats: start of day), with a bounded 200 departures and previous/onward calls. Exact
+numeric journey number and both endpoints must match. Another/missing number requires
+the unique original full endpoint/date/time pair; unnumbered trains remain unchecked.
+This is a bounded search, never proof that a missing journey is cancelled.
+
+Rail and ferry legs are eligible in the 15-day cycle. The existing verified station list
+is shared with the Swiss boards. Exact location lookups handle other endpoints when a
+known Swiss endpoint or explicit Swiss station ID/country identifies a relevant leg.
+Thun (See), Interlaken West (See) and Interlaken Ost (See) use their own quay IDs, never
+the railway station. Boats use mode water. Unknown/ambiguous locations stay unchecked.
+Planned times (not delay predictions) are compared; explicit cancellation and unserved
+endpoint flags are retained. Duplicate results for the same dated journey are deduplicated;
+conflicting variants are not silently chosen. Response timestamp must be within seven minutes.
+
+Each round caches by station/query window/mode, caps requests at 100 with at least 1.1 seconds
+between requests, stops requests on 429, and caps each response at 8 MiB/25 seconds.
+No national 277 MB GTFS download is added. No new secret is stored or access expanded.
+
+Missing coverage does not create an attention item or an inferred cancellation. Existing
+manual coverage records display neutrally, including older records. Structured source
+conflicts still require attention, and the independent Nightjet DB rule is preserved.
+An unchecked onward leg alone no longer triggers a connection warning; an observed
+shortened or broken connection still does. Observations/control history remain append-only.

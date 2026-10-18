@@ -26,7 +26,7 @@ export function assess(leg,o){
   tightConnectionReview:false};
 }
 export function dueLeg(leg,today,usable){
- if(leg.status!=='active'||(leg.transport_type||'train')!=='train')return false;
+ if(leg.status!=='active'||!['train','ferry'].includes(leg.transport_type||'train'))return false;
  const days=(Date.parse(leg.travel_date)-Date.parse(today))/86400000;
  return usable?days>=0&&days<=15:days===8;
 }
@@ -41,7 +41,7 @@ export function connections(rows){
   const gap=dep?minute(dep.departure_date,dep.departure_time)-minute(arr.arrival_date,arr.arrival_time):NaN;
   const observation={...arr,connection_broken:Number.isFinite(gap)&&gap<=0,backup_communicated:false,connection_calculated:true};
   observation.change_key=changeKey(row.leg_id,observation,row);
-  return {...row,observation,tightConnectionReview:!dep||Number.isFinite(gap)&&gap>0&&gap<oldGap};
+  return {...row,observation,tightConnectionReview:Number.isFinite(gap)&&gap>0&&gap<oldGap};
  });
 }
 
@@ -71,12 +71,12 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
      checkpoint.leaseUntil=clock()+300000;await save();
      let result;try{result=await prepared.lookup(row);}catch{result={reason:'Bron niet bereikbaar of verwerking mislukt',sources:[]};}
      const days=(Date.parse(row.travel_date)-Date.parse(today))/86400000;
-     // No usable data: one visible DB task at D-8 (or overdue on late registration).
+     // Missing coverage is neutral; only a demonstrated conflict needs manual attention.
      const due=result.observation||result.sourceConflict||row.control?.outcome==='checked'||days<=8&&!row.control;
      if(due)checked.push({...row,result,observation:result.observation||null,controlAt:new Date(clock()).toISOString()});
     }
     checkpoint.queue=connections(checked);checkpoint.queueDay=today;checkpoint.queueSelection=selectionKey;
-    checkpoint.lastSummary={selected:selected.length,checked:checked.filter(r=>r.observation).length,manual:checked.filter(r=>!r.observation).length,extraDb:checked.filter(r=>controlPolicy({control:{sources:r.result.sources}}).extra_db_required).length,numberNotices:checked.filter(r=>r.observation&&numberAssessment(r,r.observation).notify).length,pending:checked.length,sources:prepared.statuses||[]};await save();
+    checkpoint.lastSummary={selected:selected.length,checked:checked.filter(r=>r.observation).length,manual:checked.filter(r=>r.result.sourceConflict).length,unchecked:selected.length-checked.filter(r=>r.observation||r.result.sourceConflict).length,extraDb:checked.filter(r=>controlPolicy({control:{sources:r.result.sources}}).extra_db_required).length,numberNotices:checked.filter(r=>r.observation&&numberAssessment(r,r.observation).notify).length,pending:checked.length,sources:prepared.statuses||[]};await save();
    }
    for(const row of checkpoint.queue||[]){
     const runKey=checkpoint.queueRun||today;
@@ -93,7 +93,8 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
     }
     await register.recordLegEvent(row.version_id,'control',{leg_id:row.leg_id,request_id:requestId,
      checked_at:at,day:today,outcome:row.observation?'checked':'manual',reason:result.reason||'',
-     sources:result.sources||[],assessment,observation_request_id:row.observation?requestId+'-obs':null,
+     sources:[...(result.sources||[]),JSON.stringify({kind:'planning-control',attention:!!result.sourceConflict})],assessment,observation_request_id:row.observation?requestId+'-obs':null,
+     // Keep the register's legacy manual shape; attention is explicitly separate in source metadata.
      manual_url:row.observation?null:'https://int.bahn.de/nl'});
     checkpoint.done={...(checkpoint.done||{}),[row.leg_id]:runKey};
     if(checkpoint.lastSummary)checkpoint.lastSummary.pending=Math.max(0,checkpoint.lastSummary.pending-1);await save();

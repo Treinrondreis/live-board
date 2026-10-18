@@ -14,13 +14,14 @@ try{
  page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:'+server.address().port+'/seinhuis/reisschemas');
  await page.getByText('Dagelijkse controles uitgeschakeld.',{exact:false}).waitFor();
  await page.locator('#register .journey-table').waitFor({state:'visible'});
- assert.equal(await page.locator('.manual-task').filter({hasText:'Geen volledige dekking <onveilig>'}).count(),1);
+ assert.equal(await page.locator('.manual-task').filter({hasText:'Geen volledige dekking <onveilig>'}).count(),0);
+ assert.equal(await page.getByText('Niet gecontroleerd: Geen volledige dekking <onveilig>',{exact:true}).count(),1);
  await page.getByRole('button',{name:'Treinnummer gewijzigd',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),2);
  assert.equal(await page.getByText('Nu ICE 701',{exact:true}).count(),1);
  await page.locator('[data-edit-leg="number"]').click();assert.equal(await page.locator('#new-train-number').inputValue(),'ICE 701');assert.equal(await page.locator('#reservation-status').inputValue(),'auto');assert.equal(await page.locator('#db-verified').isChecked(),false);
- await page.getByRole('button',{name:'Handmatige DB-taken',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),2);
+ await page.getByRole('button',{name:'Handmatige DB-taken',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),1);
  assert.equal(await page.getByRole('link',{name:'Extra DB-controle openen ↗',exact:true}).count(),1);
- await page.getByRole('button',{name:'Meldingen',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),4);
+ await page.getByRole('button',{name:'Meldingen',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),3);
  await page.getByRole('button',{name:'Alle ritten',exact:true}).click();
  await page.locator('[data-edit-leg="'+leg.leg_id+'"]').click();await page.locator('#draft-form').waitFor({state:'visible'});
  assert.equal(await page.locator('#new-from-station').inputValue(),'Voorbeeld Noord');

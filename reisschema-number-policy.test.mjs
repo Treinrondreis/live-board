@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {numberAssessment,reservationStatus,applyNumberPolicy,controlPolicy} from './reisschema-number-policy.mjs';
+import {numberAssessment,reservationStatus,applyNumberPolicy,controlPolicy,manualControlAttention} from './reisschema-number-policy.mjs';
+
+test('missing coverage is neutral; structured and legacy conflicts remain attention items',()=>{
+ assert.equal(manualControlAttention({control:{outcome:'manual',reason:'Geen volledige dekking'}}),false);
+ assert.equal(manualControlAttention({control:{outcome:'manual',reason:'Bronnen spreken elkaar tegen'}}),true);
+ assert.equal(manualControlAttention({control:{outcome:'manual',sources:[JSON.stringify({kind:'planning-control',attention:true})]}}),true);
+ assert.equal(manualControlAttention({control:{outcome:'manual',reason:'Bronnen spreken elkaar tegen',sources:[JSON.stringify({kind:'planning-control',attention:false})]}}),false);
+});
 import {assess} from './reisschema-control.mjs';
 import {changeKey} from './reisschema-changes.mjs';
 const now=Date.parse('2031-06-02T12:00:00Z');
