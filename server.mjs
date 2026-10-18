@@ -8,6 +8,8 @@ import {handleAdminHub} from './admin-hub.mjs';
 import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
 import {handleReisschemas} from './reisschemas.mjs';
+import {configurePunctuality,backfillPunctuality} from './punctuality.mjs';
+import {floraRegister} from './flora-register.mjs';
 import {startReisschemaControls,handleReisschemaReceipt} from './reisschema-runtime.mjs';
 import {handleReishuis} from './reishuis.mjs';
 import {handleExpedia} from './expedia.mjs';
@@ -18,7 +20,7 @@ import {stationschefPage} from './stationschef-layout.mjs';
 import {handleTreinhuisAccess} from './treinhuis-access.mjs';
 import {nightRule,runDay,observedDay} from './night-routes.mjs';
 import {attachBoardBookings} from './board-bookings.mjs';
-import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey} from './screen-settings.mjs';
+import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey,screenPunctualityMatches} from './screen-settings.mjs';
 import {handleConnectionAdmin} from './connections-admin.mjs';
 import {handleAppCms} from './app-cms.mjs';
 import {startDayReports,handleDayReports} from './day-reports.mjs';
@@ -1245,6 +1247,7 @@ const server=http.createServer(async(req,res)=>{
 
 await initStorage();
 await initScreenSettings(config,{OJP:Object.values(swissStations).map(s=>s.name),NMBS:Object.values(belgianStations).map(s=>s.name)},settings=>screenBoardTrains(Date.now(),settings));
+configurePunctuality({getLegs:()=>floraRegister.summary(),screenMatch:screenPunctualityMatches});
 startConnectionMonitor(getStationPlatformLayout);
 startAnalyticsBackfill();
 startDayReports(()=>{
@@ -1261,6 +1264,7 @@ server.listen(PORT,async()=>{
   startReishuisCatalogSync();
   startFlora();
   startReisschemaControls();
+  void backfillPunctuality();
   void checkNdovAccess();
   void startNdov();
   startBelgium();

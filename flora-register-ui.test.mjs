@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {numberAssessment,controlPolicy,manualControlAttention} from './reisschema-number-policy.mjs';
+import {punctualityView} from './punctuality-view.mjs';
 // The real browser loads the policy as an ES module; inject those same exports into this DOM unit harness.
-const source=(await readFile(new URL('./reisschemas.js',import.meta.url),'utf8')).replace(/^import \{numberAssessment,controlPolicy,manualControlAttention\} from '\.\/reisschema-number-policy\.mjs';\r?\n/,'');
+const source=(await readFile(new URL('./reisschemas.js',import.meta.url),'utf8')).replace(/^import \{numberAssessment,controlPolicy,manualControlAttention\} from '\.\/reisschema-number-policy\.mjs';\r?\n/,'').replace(/^import \{punctualityView\} from '\.\/punctuality-view\.mjs';\r?\n/,'');
 const leg=(extra={})=>({dossier:'DEMO-A',booking_key:'Fictieve reis',sequence:1,travel_date:'2031-06-10',arrival_date:'2031-06-10',train_number:'TEST 210',from_station:'Voorbeeld Noord',to_station:'Voorbeeld Zuid',departure_time:'10:00',arrival_time:'12:00',role:'primary',document_url:'https://docs.google.com/document/d/fictional/edit',...extra});
 async function setup(rows,now='2031-06-10T22:30:00Z'){
  class FixedDate extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return Date.parse(now);}}
  const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,{value:'',innerHTML:'',textContent:'',disabled:false,hidden:false,attributes:{},setAttribute(k,v){this.attributes[k]=v;}});return nodes.get(id);};
  let fail=false;
- runInNewContext(source,{numberAssessment,controlPolicy,manualControlAttention,Date:FixedDate,document:{getElementById:get},URL,fetch:async url=>{assert.equal(url,'/seinhuis/reisschemas/api/register');if(fail)throw Error('private detail');return {ok:true,json:async()=>({configured:true,available:true,legs:rows})};}});
+ runInNewContext(source,{numberAssessment,controlPolicy,manualControlAttention,punctualityView,Date:FixedDate,document:{getElementById:get},URL,fetch:async url=>{assert.equal(url,'/seinhuis/reisschemas/api/register');if(fail)throw Error('private detail');return {ok:true,json:async()=>({configured:true,available:true,legs:rows})};}});
  await get('refresh').onclick();
  return {get,input(id,value){get(id).value=value;get(id).oninput();},fail(){fail=true;},choice(i){get('booking-results').onclick({target:{closest:()=>({dataset:{choice:String(i)}})}});}};
 }

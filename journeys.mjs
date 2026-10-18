@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {recordPunctuality,snapshotPunctualityRows} from './punctuality.mjs';
 
 let backend,pool,sqlite;
 let writes=Promise.resolve();
@@ -90,7 +91,7 @@ export async function recordJourneyMeasurements(trains,source,at){
 
 export function recordJourneySnapshot(snapshot){
  // Serialise all writers, including IFF and streaming RitInfo, within this service.
- const job=writes.then(()=>saveSnapshot(snapshot));writes=job.catch(()=>{});return job;
+ const job=writes.then(async()=>{const result=await saveSnapshot(snapshot);await recordPunctuality(snapshotPunctualityRows(snapshot),snapshot.source,snapshot.sourceTimestamp);return result;});writes=job.catch(()=>{});return job;
 }
 function journeyValues(value){
  if(Array.isArray(value))return value.map(journeyValues);

@@ -1,4 +1,5 @@
 import {numberAssessment,controlPolicy,manualControlAttention} from './reisschema-number-policy.mjs';
+import {punctualityView} from './punctuality-view.mjs';
 (()=>{
  const el=id=>document.getElementById(id);
  const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -48,7 +49,9 @@ import {numberAssessment,controlPolicy,manualControlAttention} from './reisschem
    const next=r.observation?.[mode+'_time'],nextDate=r.observation?.[mode+'_date'];
    const changed=next&&(next!==old||nextDate!==oldDate);
    const showDate=(day)=>day&&day!==r.travel_date?'<span class="arrival-date">'+escape(date(day))+'</span>':'';
-   return '<td class="time-cell">'+(changed?'<del aria-label="Tijd uit reisschema">'+escape(old||'Onbekend')+showDate(oldDate)+'</del><strong class="new-time" aria-label="Nieuwe gecontroleerde tijd">'+escape(next)+showDate(nextDate)+'</strong>':'<strong>'+escape(old||'Onbekend')+'</strong>'+showDate(oldDate))+'</td>';
+   const p=punctualityView(r,mode),displayed=changed?next:old;
+   const measured=p?(p.planned!==displayed?'<span class="source-note">Bronplanning '+escape(p.planned)+'</span>':'')+(p.label?'<span class="delay-minutes" aria-label="Vertraging in minuten">'+escape(p.label)+'</span>':'')+'<span class="source-note">'+escape(p.cancelled?'Uitval gemeld':p.kind+' '+p.time+(p.delay===0?' · op tijd':''))+'</span>':'';
+   return '<td class="time-cell">'+(changed?'<del aria-label="Tijd uit reisschema">'+escape(old||'Onbekend')+showDate(oldDate)+'</del><strong class="new-time" aria-label="Nieuwe gecontroleerde tijd">'+escape(next)+showDate(nextDate)+'</strong>':'<strong>'+escape(old||'Onbekend')+'</strong>'+showDate(oldDate))+measured+'</td>';
   };
   return '<table class="journey-table"><thead><tr>'+heads.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+sortLegs(rows).map(r=>{
    const c=changeState(r),messages=[],policy=controlPolicy(r),number=numberAssessment(r,r.observation);
@@ -67,6 +70,7 @@ import {numberAssessment,controlPolicy,manualControlAttention} from './reisschem
    if(r.last_planning_ok_at)source+='<span class="source-note">Laatst zonder vastgestelde afwijking: '+escape(new Date(r.last_planning_ok_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';
    if(r.observation?.station_changed)source+='<strong class="manual-task">Nieuw traject: '+escape(r.observation.departure_station)+' → '+escape(r.observation.arrival_station)+(/^NJ\s/i.test(r.train_number)&&r.observation.departure_station!==r.from_station?' · Nightjet-instapstation gewijzigd: Newrest informeren ter voorkoming van no-show':'')+'</strong>';
    if(r.receipt)source+='<span class="source-note">Ontvangst bevestigd '+escape(new Date(r.receipt.confirmed_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';
+   if(Object.keys(r.punctuality||{}).length)source+='<button class="small-button" data-punctuality="'+escape(r.leg_id)+'">Stiptheidshistorie</button>';
    return '<tr class="'+(c.alert||number.notify||policy.extra_db_required?'needs-attention':'')+'"><td class="status-cell">'+messages.join(' ')+'</td>'+(withBooking?'<td><button class="text-button" data-booking="'+escape(bookingId(r))+'">'+escape(r.dossier)+'</button>'+(r.booking_key?'<br><span class="muted">'+escape(r.booking_key)+'</span>':'')+'</td><td>'+escape(date(r.travel_date))+'</td>':'')+'<td class="train-cell"><strong>'+escape(r.train_number||r.transport_type||'Onbekend')+'</strong>'+(number.changed?'<span class="badge">Nu '+escape(number.after)+'</span>':'')+(r.role==='backup'?'<span class="badge">Back-up</span>':'')+(r.observation?.cancelled?'<span class="badge">Vervalt</span>':'')+'</td>'+timeCell(r,'departure')+'<td class="route-cell"><span class="station">'+escape(r.from_station)+'</span><span class="route-arrow" aria-label="naar">→</span><span class="station">'+escape(r.to_station)+'</span>'+source+(r.observation?.connection_broken?'<span class="connection-note">Aansluiting niet haalbaar'+(r.observation.backup_communicated?' · back-up gecommuniceerd':'')+'</span>':'')+'</td>'+timeCell(r,'arrival')+(withBooking?'<td>'+documentLink(r.document_url)+'</td>':'')+'<td>'+(r.leg_id?'<button class="small-button" data-edit-leg="'+escape(r.leg_id)+'">Controleren / communicatie</button>':'')+'</td></tr>';
   }).join('')+'</tbody></table>';
  }
@@ -113,7 +117,8 @@ import {numberAssessment,controlPolicy,manualControlAttention} from './reisschem
  async function load(){
   const current=++generation;el('refresh').disabled=true;state=null;render();el('status').textContent='Register laden…';
   try{const r=await fetch('/seinhuis/reisschemas/api/register',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(current!==generation)return;if(!Array.isArray(data.legs))throw Error();state=data;
-   el('status').textContent=!data.configured?'De verbinding met het centrale register is nog niet ingesteld.':!data.available?'Reisschemaregister tijdelijk niet bereikbaar. Er worden geen oude gegevens getoond.':'';render();
+   el('status').textContent=!data.configured?'De verbinding met het centrale register is nog niet ingesteld.':!data.available?'Reisschemaregister tijdelijk niet bereikbaar. Er worden geen oude gegevens getoond.':'';
+   const p=data.punctualityStatus;el('punctuality-status').textContent=p?.ready?'Stiptheid: blijvend bewaren ingeschakeld. '+(p.error||p.backfill?.error||'')+(p.backfill?.running?' Bestaande bordmetingen worden overgenomen.':''):'';render();
   }catch{if(current!==generation)return;state=null;render();el('status').textContent='Register niet bereikbaar. Controleer of u bent ingelogd en probeer opnieuw.';}
   finally{if(current===generation)el('refresh').disabled=false;}
  }
@@ -128,8 +133,16 @@ import {numberAssessment,controlPolicy,manualControlAttention} from './reisschem
  el('clear-trains').onclick=()=>{for(const id of ['train-number','train-date','train-until','search'])el(id).value='';renderTrains();};
  el('clear-booking').onclick=()=>{resetBookingFilters();renderDays();};
  el('booking-results').onclick=e=>{const button=e.target.closest('[data-choice]');if(button&&choices[Number(button.dataset.choice)])selectBooking(choices[Number(button.dataset.choice)][0]);};
- el('booking-days').onclick=e=>{const button=e.target.closest('[data-edit-leg]');if(button)openEditor(button.dataset.editLeg);};
- el('register').onclick=e=>{const edit=e.target.closest('[data-edit-leg]');if(edit){openEditor(edit.dataset.editLeg);return;}const button=e.target.closest('[data-booking]');if(!button)return;const row=legs().find(r=>bookingId(r)===button.dataset.booking);if(!row)return;el('booking-number').value=row.dossier;selected=bookingId(row);resetBookingFilters();setMode('bookings');renderBookings();};
+ el('booking-days').onclick=e=>{const history=e.target.closest('[data-punctuality]');if(history){void showPunctuality(history.dataset.punctuality);return;}const button=e.target.closest('[data-edit-leg]');if(button)openEditor(button.dataset.editLeg);};
+ el('register').onclick=e=>{const history=e.target.closest('[data-punctuality]');if(history){void showPunctuality(history.dataset.punctuality);return;}const edit=e.target.closest('[data-edit-leg]');if(edit){openEditor(edit.dataset.editLeg);return;}const button=e.target.closest('[data-booking]');if(!button)return;const row=legs().find(r=>bookingId(r)===button.dataset.booking);if(!row)return;el('booking-number').value=row.dossier;selected=bookingId(row);resetBookingFilters();setMode('bookings');renderBookings();};
+ async function showPunctuality(id){
+  const panel=el('punctuality-history');panel.hidden=false;panel.innerHTML='<h2>Stiptheidshistorie</h2><p>Laden…</p>';
+  try{const response=await fetch('/seinhuis/reisschemas/api/punctuality?legId='+encodeURIComponent(id),{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();
+   const clock=t=>t?new Date(t).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}):'—';
+   panel.innerHTML='<h2>Stiptheidshistorie</h2><p>Blijvend bewaarde gewijzigde metingen. Verwachtingen zijn geen bevestigde werkelijke tijden. Maximaal de laatste 500 metingen worden hier getoond.</p><div class="scroll"><table><thead><tr><th>Vertrek / aankomst</th><th>Gepland</th><th>Verwacht</th><th>Werkelijk</th><th>Vertraging</th><th>Bron / gemeten</th></tr></thead><tbody>'+data.measurements.map(m=>'<tr><td>'+escape(m.event_mode==='arrival'?'Aankomst':'Vertrek')+'<br>'+escape(m.station)+'</td><td>'+escape(clock(m.planned_at))+'</td><td>'+escape(clock(m.expected_at))+'</td><td>'+escape(clock(m.actual_at))+'</td><td class="'+(m.delay_minutes>0?'delay-minutes':'')+'">'+escape(m.cancelled?'Uitval gemeld':m.delay_minutes==null?'Onbekend':(m.delay_minutes>0?'+':'')+m.delay_minutes)+'</td><td>'+escape(m.source)+'<br>'+escape(clock(m.last_seen_at))+'</td></tr>').join('')+'</tbody></table></div>';
+  }catch{panel.innerHTML='<h2>Stiptheidshistorie</h2><p>Metingen niet bereikbaar.</p>';}
+  panel.scrollIntoView?.({behavior:'smooth',block:'start'});
+ }
  let editing=null;
  function openEditor(id){
   editing=[...legs(),...notificationRows()].find(r=>r.leg_id===id);if(!editing)return;
