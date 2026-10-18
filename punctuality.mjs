@@ -110,7 +110,8 @@ export async function backfillPunctuality(now=Date.now()){
  if(!database||!instance||backfill.running)return;backfill.running=true;backfill.error=null;let cursor=0;const cutoff=now-31*86400000;
  const query=async(sql,args)=>database.pool?(await database.pool.query(sql,args)).rows:database.sqlite.prepare(sql.replace(/\$\d+/g,'?')).all(...args);
  try{while(true){const rows=await query('SELECT id,source,train_number,category,station,event_mode,observed_at,planned_timestamp,expected_timestamp,delay_minutes,cancelled FROM train_observations WHERE id>$1 AND observed_at>=$2 AND (delay_minutes<>0 OR cancelled=TRUE) ORDER BY id LIMIT 200',[cursor,cutoff]);if(!rows.length)break;
-   for(const r of rows)await recordPunctuality([{number:r.train_number,category:r.category,observedAt:r.station,eventMode:r.event_mode,plannedTimestamp:Number(r.planned_timestamp),expectedTimestamp:Number(r.expected_timestamp)||null,hasRealtime:Number(r.delay_minutes)!==0,cancelled:!!r.cancelled}],r.source,Number(r.observed_at));
+   const groups=new Map();for(const r of rows){const key=JSON.stringify([r.source,Number(r.observed_at)]);if(!groups.has(key))groups.set(key,{source:r.source,at:Number(r.observed_at),trains:[]});groups.get(key).trains.push({number:r.train_number,category:r.category,observedAt:r.station,eventMode:r.event_mode,plannedTimestamp:Number(r.planned_timestamp),expectedTimestamp:Number(r.expected_timestamp)||(Number(r.planned_timestamp)?Number(r.planned_timestamp)+Number(r.delay_minutes)*60000:null),hasRealtime:Number(r.delay_minutes)!==0,cancelled:!!r.cancelled});}
+   for(const group of groups.values())await recordPunctuality(group.trains,group.source,group.at);
    cursor=Number(rows.at(-1).id);await new Promise(resolve=>setTimeout(resolve,10));
   }backfill.completed=true;}catch{backfill.error='Bestaande bordmetingen nog niet volledig overgenomen.';}finally{backfill.running=false;}
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {createPunctualityArchive,punctualityLegMatches,punctualityRow,snapshotPunctualityRows} from './punctuality.mjs';
+import {createPunctualityArchive,punctualityLegMatches,punctualityRow,snapshotPunctualityRows,initPunctuality,configurePunctuality,backfillPunctuality,punctualityHistory,punctualityStatus} from './punctuality.mjs';
 import {punctualityView} from './punctuality-view.mjs';
 import {initBoardCache,cleanupHistory} from './board-cache.mjs';
 const at=Date.parse('2031-06-10T08:30:00Z'),planned=at-30*60000;
@@ -67,4 +67,14 @@ test('a later registered itinerary reuses the already retained board measurement
  await archive.record([train],'DB',at);assert.equal((await archive.history(leg.leg_id)).length,0);
  archive.configure({getLegs:async()=>({available:true,legs:[leg]})});await archive.record([],'DB',at+1000);
  assert.equal((await archive.history(leg.leg_id)).length,1);sqlite.close();
+});
+test('older unchanged evidence extends first seen without overwriting the newest received time',async()=>{
+ const {sqlite,archive}=await fixture();await archive.record([train],'DB',at);await archive.record([train],'DB',at-600000);
+ const [row]=await archive.history(leg.leg_id);assert.equal(row.first_seen_at,at-600000);assert.equal(row.last_seen_at,at);sqlite.close();
+});
+test('surviving temporary delays are copied with their historical forecast timestamp',async()=>{
+ const sqlite=new DatabaseSync(':memory:');await initPunctuality({sqlite});configurePunctuality({getLegs:async()=>({available:true,legs:[leg]})});
+ sqlite.exec('CREATE TABLE train_observations(id INTEGER,source TEXT,train_number TEXT,category TEXT,station TEXT,event_mode TEXT,observed_at BIGINT,planned_timestamp BIGINT,expected_timestamp BIGINT,delay_minutes INTEGER,cancelled INTEGER)');
+ sqlite.prepare('INSERT INTO train_observations VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(1,'DB','700','ICE','Example North','departure',at,planned,planned+12*60000,12,0);
+ await backfillPunctuality(at);const [row]=await punctualityHistory(leg.leg_id);assert.equal(row.kind,'expected');assert.equal(row.last_seen_at,at);assert.equal(row.delay_minutes,12);assert.equal(punctualityStatus().backfill.completed,true);sqlite.close();
 });

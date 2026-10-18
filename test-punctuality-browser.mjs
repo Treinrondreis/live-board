@@ -18,7 +18,7 @@ try{
  assert.equal(await page.locator('#register .delay-minutes').innerText(),'+12');assert.equal(await page.locator('#register .delay-minutes').evaluate(e=>getComputedStyle(e).color),'rgb(197, 32, 38)');
  assert.equal(await page.locator('#register .time-cell strong').first().innerText(),'10:00');assert.equal(await page.locator('#register del').count(),0);
  assert.equal(await page.getByText('Verwacht 10:12',{exact:true}).count(),1);
- await mkdir(new URL('./outputs/',import.meta.url),{recursive:true});await page.screenshot({path:new URL('./outputs/reisschema-stiptheid-voorbeeld.png',import.meta.url).pathname.replace(/^\/(\w:)/,'$1'),fullPage:true});
+ await mkdir(new URL('./outputs/',import.meta.url),{recursive:true});await page.locator('#register').screenshot({path:new URL('./outputs/reisschema-stiptheid-voorbeeld.png',import.meta.url).pathname.replace(/^\/(\w:)/,'$1')});
  await page.getByRole('button',{name:'Stiptheidshistorie',exact:true}).click();await page.locator('#punctuality-history tbody tr').waitFor();
  assert.match(await page.locator('#punctuality-history').innerText(),/Fictional <source>/);assert.equal(await page.locator('#punctuality-history script').count(),0);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('#register .delay-minutes').innerText(),'+12');assert.deepEqual(errors,[]);
