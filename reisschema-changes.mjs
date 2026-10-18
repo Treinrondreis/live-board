@@ -7,7 +7,7 @@ function localTime(time){
  const p=Object.fromEntries(parts.formatToParts(Number(time)).map(x=>[x.type,x.value]));
  return {date:`${p.year}-${p.month}-${p.day}`,time:`${p.hour}:${p.minute}`};
 }
-export function changeKey(legId,o){return createHash('sha256').update(JSON.stringify([legId,o.departure_date,o.departure_time,o.arrival_date,o.arrival_time,o.cancelled,o.connection_broken,o.backup_communicated])).digest('hex');}
+export function changeKey(legId,o){const values=[legId,o.departure_date,o.departure_time,o.arrival_date,o.arrival_time,o.cancelled,o.connection_broken,o.backup_communicated];if(o.station_changed)values.push(o.departure_station,o.arrival_station);return createHash('sha256').update(JSON.stringify(values)).digest('hex');}
 export function observationFromPlans(leg,plans){
  const candidates=[];
  for(const plan of plans){
