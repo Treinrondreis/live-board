@@ -2,6 +2,16 @@ import {createHash,randomUUID} from 'node:crypto';
 import {changeKey} from './reisschema-changes.mjs';
 
 export const dayAt=now=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+const localMinute=now=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Amsterdam',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);return Number(p.find(x=>x.type==='hour').value)*60+Number(p.find(x=>x.type==='minute').value);};
+export const dailyControlDue=now=>localMinute(now)>=30;
+export function nextDailyControlAt(now){
+ for(let offset=0;offset<3;offset++){
+  const day=new Date(Date.parse(dayAt(now))+offset*86400000).toISOString().slice(0,10),base=Date.parse(day+'T00:30:00Z');
+  const zone=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Amsterdam',timeZoneName:'longOffset'}).formatToParts(base).find(p=>p.type==='timeZoneName').value.replace('GMT','');
+  const at=Date.parse(day+'T00:30:00'+zone);if(at>now)return new Date(at).toISOString();
+ }
+ throw Error('Volgende controledag niet gevonden');
+}
 export const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const minute=(date,time)=>Date.parse(date+'T'+time+':00Z')/60000;
 export const fingerprint=o=>createHash('sha256').update(JSON.stringify(o)).digest('hex');
@@ -44,21 +54,23 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
   try{
    const stored=await read('reisschema-control');checkpoint=stored.value;revision=stored.revision;
    if(checkpoint.enabled!==true&&!manual||checkpoint.leaseUntil>clock())return;
+   const today=dayAt(clock());
+   if(!manual&&(!dailyControlDue(clock())||checkpoint.lastScheduledDay===today&&!checkpoint.queue?.length))return;
    checkpoint={...checkpoint,owner,leaseUntil:clock()+300000,error:null};await save();
    const data=await register.summary();if(!data.available)throw Error('register');
-   const today=dayAt(clock()),selected=data.legs.filter(r=>dueLeg(r,today,true));
+   const selected=data.legs.filter(r=>dueLeg(r,today,true));
    const selectionKey=fingerprint(selected.map(r=>r.leg_id).sort());
-   if(!manual&&checkpoint.lastRun&&dayAt(Date.parse(checkpoint.lastRun))===today&&checkpoint.lastSelection===selectionKey&&!checkpoint.queue?.length)return;
-   if(!selected.length){checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.queue=[];return;}
-   if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey||manual&&!checkpoint.queue?.length){
+   if(!selected.length){checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.queue=[];checkpoint.lastSummary={selected:0,checked:0,manual:0,pending:0,sources:[]};if(!manual)checkpoint.lastScheduledDay=today;return;}
+   if(checkpoint.queueDay!==today||checkpoint.queueSelection!==selectionKey||manual&&!checkpoint.queue?.length||checkpoint.queue?.some(r=>clock()-Date.parse(r.controlAt)>4*3600000)){
     checkpoint.queueRun=randomUUID();
+    checkpoint.queueScheduled=!manual;
     const prepared=await sources.prepare(selected,async()=>{checkpoint.leaseUntil=clock()+300000;await save();}),checked=[];
     for(const row of selected){
      checkpoint.leaseUntil=clock()+300000;await save();
      let result;try{result=await prepared.lookup(row);}catch{result={reason:'Bron niet bereikbaar of verwerking mislukt',sources:[]};}
      const days=(Date.parse(row.travel_date)-Date.parse(today))/86400000;
      // No usable data: one visible DB task at D-8 (or overdue on late registration).
-     const due=result.observation||row.control?.outcome==='checked'||days<=8&&!row.control;
+     const due=result.observation||result.sourceConflict||row.control?.outcome==='checked'||days<=8&&!row.control;
      if(due)checked.push({...row,result,observation:result.observation||null,controlAt:new Date(clock()).toISOString()});
     }
     checkpoint.queue=connections(checked);checkpoint.queueDay=today;checkpoint.queueSelection=selectionKey;
@@ -86,8 +98,9 @@ export function createControlCycle({register,read,write,sources,clock=Date.now})
    }
    const active=new Set(data.legs.map(r=>r.leg_id));checkpoint.done=Object.fromEntries(Object.entries(checkpoint.done||{}).filter(([id])=>active.has(id)));
    checkpoint.lastRun=new Date(clock()).toISOString();checkpoint.lastSelection=selectionKey;checkpoint.queue=[];
+   if(checkpoint.queueScheduled)checkpoint.lastScheduledDay=today;
   }catch{if(checkpoint?.owner===owner)checkpoint.error='Controle niet voltooid. Niet-afgeronde ritten worden opnieuw geprobeerd; ontbrekende bronnen blijven handmatig te controleren.';}
   finally{try{if(checkpoint?.owner===owner){checkpoint.leaseUntil=0;await save();}}catch{}running=false;}
  }
- return {tick,async status(){const {value}=await read('reisschema-control');return {enabled:value.enabled===true,lastRun:value.lastRun||null,summary:value.lastSummary||null,error:value.error||null,running:value.leaseUntil>clock()};},async enable(enabled){if(typeof enabled!=='boolean')throw Error('Ongeldige instelling');const {value,revision}=await read('reisschema-control');await write('reisschema-control',{...value,enabled},revision);}};
+ return {tick,async status(){const {value}=await read('reisschema-control');return {enabled:value.enabled===true,scheduleTime:'00:30',timeZone:'Europe/Amsterdam',nextRunAt:nextDailyControlAt(clock()),lastRun:value.lastRun||null,summary:value.lastSummary||null,error:value.error||null,running:value.leaseUntil>clock()};},async enable(enabled){if(typeof enabled!=='boolean')throw Error('Ongeldige instelling');const {value,revision}=await read('reisschema-control');await write('reisschema-control',{...value,enabled,...(enabled&&!value.enabled&&dailyControlDue(clock())?{lastScheduledDay:dayAt(clock())}:{})},revision);}};
 }

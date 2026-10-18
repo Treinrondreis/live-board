@@ -10,9 +10,11 @@ resumable result queue, hashed receipt-token records and separately encrypted dr
 No extra database/service/subscription is introduced. Nothing writes to Sanity.
 
 Daily checks are initially OFF. Enable explicitly in the owner-only section after deployment.
-A timer wakes every 15 minutes, but each active leg is checked once per Amsterdam calendar
-day within D-15 through D0, not every timer tick. Newly active versions are discovered on
-the next tick. Manual start also works while the daily setting is off. A completed daily
+A timer wakes on each minute. One scheduled round starts at 00:30 Europe/Amsterdam
+(including summer/winter time), within D-15 through D0. When enabled after 00:30,
+the first scheduled round is the next night; manual checks remain available immediately.
+A service restart after a missed scheduled run catches up, and unfinished rounds retry.
+Newly active versions wait for the next daily round or an explicit manual start. Manual start also works while the daily setting is off. A completed daily
 round is not repeated; manually verified observations can be entered independently.
 
 Where no usable full endpoint match exists, create one persistent manual DB task at D-8.
@@ -46,7 +48,7 @@ endpoints, number/category, calendar and times really occur in the same supporte
 GTFS splits with the same explicit train number may join only at a shared boundary station,
 on the same service day, in chronological order; all source IDs are retained. Missing middle
 sections are not invented. Unnumbered RJ matches require a unique full endpoint pair and
-matching destination. Conflicting source times and ambiguous candidates are manual.
+matching destination. Source differences of three or more minutes and ambiguous candidates are manual.
 Name matching strips accents/case/punctuation only; it does not collapse distinct stations
 such as Montpellier Saint-Roch and Montpellier Sud de France.
 
@@ -142,3 +144,22 @@ number/date/endpoint matching has not been verified. Entur remains a manual fall
 its existing near-term departure boards are not used as proof of a full future journey.
 Official references: https://developer.entur.no/open-data/timetable and
 https://developer.entur.no/docs/open-services/journey-planner.
+
+
+## Source agreement policy
+
+Every configured feed is fetched and parsed before comparing full matches of the same
+registered leg/date. The fixed source order is NDOV IFF, GTFS.de, SNCF GTFS, NMBS GTFS.
+Differences of at most two minutes at BOTH endpoints are accepted; the first matching
+source remains the displayed time, never an average. Evidence from all matches includes
+their actual compared dates/times and fetch timestamps. A spread of three or more minutes
+at either endpoint, or conflicting cancellation status, requires manual review immediately,
+also earlier than D-8. The maximum spread across all matching sources is used.
+
+All participating evidence must have been fetched/checked within four hours. The feed's
+publication date remains separately recorded and may be older for weekly sources. A stale
+participating feed is fetched again once per prepared round; if this fails or the match
+vanishes the contradiction is NOT silently resolved using the remaining source. Fresh
+participating feeds already meet the recheck requirement; do not download them repeatedly.
+An interrupted queue older than four hours is recomputed instead of publishing stale
+comparison evidence. No automatic customer communication is triggered.
