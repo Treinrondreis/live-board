@@ -7,7 +7,8 @@ test('per-leg date window includes D-15, D0; fallback D-8; never inactive',()=>{
  assert.equal(dueLeg(leg,'2031-05-26',true),true);assert.equal(dueLeg(leg,'2031-05-25',true),false);
  assert.equal(dueLeg(leg,'2031-06-10',true),true);assert.equal(dueLeg(leg,'2031-06-11',true),false);
  assert.equal(dueLeg(leg,'2031-06-02',false),true);assert.equal(dueLeg({...leg,status:'replaced'},'2031-06-02',true),false);
- assert.equal(dueLeg({...leg,transport_type:'ferry'},'2031-06-02',true),false);
+ assert.equal(dueLeg({...leg,transport_type:'ferry'},'2031-06-02',true),true);
+ assert.equal(dueLeg({...leg,transport_type:'bus'},'2031-06-02',true),false);
 });
 test('earlier and later departures use four-minute threshold; arrival needs consequence assessment',()=>{
  assert.equal(assess(leg,observation).urgent,true);assert.equal(assess(leg,observation).draftRequired,true);
@@ -20,7 +21,7 @@ test('connection loss requires both observed times; tighter and unchecked connec
  const first={...leg,observation};assert.equal(connections([first,next])[0].observation.connection_broken,true);
  assert.equal(connections([first,{...next,observation:{...next.observation,departure_time:'12:14'}}])[0].tightConnectionReview,true);
  assert.equal(connections([first,{...next,observation:null}])[0].observation.connection_broken,false);
- assert.equal(connections([first,{...next,observation:null}])[0].tightConnectionReview,true);
+ assert.equal(connections([first,{...next,observation:null}])[0].tightConnectionReview,false);
 });
 function harness({missing=false,failControl=false}={}){
  const kv=new Map([['reisschema-control',{value:{enabled:true},revision:1}]]),events=[];let failed=false,prepares=0,rows=[structuredClone(leg)];
@@ -36,8 +37,9 @@ test('restart resumes persisted evidence and exact request ids without duplicate
  await createControlCycle(h.deps).tick();assert.equal(h.events.filter(e=>e.k==='observation').length,1);assert.equal(h.events.filter(e=>e.k==='control').length,1);assert.equal(h.prepares,1);
  await createControlCycle(h.deps).tick();assert.equal(h.prepares,1);
 });
-test('missing train becomes manual DB task, never a cancellation or green check',async()=>{
- const h=harness({missing:true});await createControlCycle(h.deps).tick();assert.equal(h.events.length,1);assert.equal(h.events[0].k,'control');assert.equal(h.events[0].e.outcome,'manual');assert.equal(h.events[0].e.manual_url,'https://int.bahn.de/nl');
+test('missing train remains unchecked without attention, cancellation or green check',async()=>{
+ const h=harness({missing:true}),cycle=createControlCycle(h.deps);await cycle.tick();assert.equal(h.events.length,1);assert.equal(h.events[0].k,'control');assert.equal(h.events[0].e.outcome,'manual');assert.equal(h.events[0].e.manual_url,'https://int.bahn.de/nl');
+ assert.equal(JSON.parse(h.events[0].e.sources.at(-1)).attention,false);assert.equal((await cycle.status()).summary.manual,0);assert.equal((await cycle.status()).summary.unchecked,1);
 });
 test('withdrawal between lookup and commit prevents any evidence writes',async()=>{
  const h=harness();let reads=0;h.deps.register.summary=async()=>({available:true,legs:reads++?[{...leg,status:'withdrawn'}]:[leg]});await createControlCycle(h.deps).tick();assert.equal(h.events.length,0);

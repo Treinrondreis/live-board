@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {Worker,isMainThread,parentPort,workerData} from 'node:worker_threads';
 import {norm} from './reisschema-control.mjs';
 import {createIrailSource} from './reisschema-irail.mjs';
+import {createSwissPlanningSource,swissEligible} from './reisschema-swiss.mjs';
 import {applyNumberPolicy,trainDigits,trainKind,numberAssessment} from './reisschema-number-policy.mjs';
 
 export function* csv(text){
@@ -195,15 +196,17 @@ export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.
   async prepare(legs,heartbeat=async()=>{}){
    const outputs=[],statuses=[],refreshed=new Set();
    const irail=createIrailSource({fetcher,clock});
+   const swiss=createSwissPlanningSource({env,fetcher,clock});
    const feeds=[{kind:'iff',name:'NDOV IFF',url:'https://data.ndovloket.nl/ns/ns-latest.zip'},
     ...(enabled()?[{kind:'gtfs',name:'GTFS.de',url:'https://download.gtfs.de/treinrondreis/latest.zip',headers:{Authorization:'Basic '+Buffer.from((env.REISSCHEMA_PATRICK_USER||'')+':'+(env.REISSCHEMA_PATRICK_PASSWORD||'')).toString('base64')}}]:[]),
     ...(env.REISSCHEMA_SNCF_ENABLED==='1'?[{kind:'gtfs',name:'SNCF GTFS',url:'https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip'}]:[]),
     ...(env.REISSCHEMA_IRAIL_ENABLED==='1'?[{kind:'irail',name:'iRail'}]:[]),
+    ...(env.OJP_API_KEY?.trim()&&env.REISSCHEMA_SWISS_ENABLED!=='0'?[{kind:'swiss',name:'Zwitserland OJP'}]:[]),
     ...(env.REISSCHEMA_NMBS_ENABLED==='1'&&env.BMC_PARTNER_KEY?[{kind:'gtfs',name:'NMBS GTFS',fallback:true,url:'https://api-management-opendata-production.azure-api.net/api/gtfs/feed/nmbssncb/static',headers:{'bmc-partner-key':env.BMC_PARTNER_KEY}}]:[])];
    const load=async(source,rowsToCheck)=>{
     await heartbeat();
-    if(source.kind==='irail'){
-     const rows={};for(const leg of rowsToCheck)rows[leg.leg_id]=await irail.lookup(leg,heartbeat);
+    if(['irail','swiss'].includes(source.kind)){
+     const rows={};for(const leg of rowsToCheck)rows[leg.leg_id]=await (source.kind==='swiss'?swiss:irail).lookup(leg,heartbeat);
      return {rows,status:{name:source.name,status:Object.values(rows).some(r=>r.observation)?'ready':'unavailable',matched:Object.values(rows).filter(r=>r.observation).length}};
     }
     try{const {bytes,modified}=await download(source.url,source.headers||{},fetcher,clock()),meta={name:source.name,hash:createHash('sha256').update(bytes).digest('hex'),loadedAt:new Date(clock()).toISOString(),modified};
@@ -213,7 +216,8 @@ export function createPlanningSources({env=process.env,fetcher=fetch,clock=Date.
    };
    for(const source of feeds){
     const irailIndex=feeds.findIndex(f=>f.kind==='irail');
-    const selected=source.fallback&&irailIndex>=0?legs.filter(l=>!outputs[irailIndex]?.[l.leg_id]?.observation):legs;
+    const eligible=legs.filter(l=>source.kind==='swiss'?swissEligible(l):(l.transport_type||'train')==='train');
+    const selected=source.fallback&&irailIndex>=0?eligible.filter(l=>!outputs[irailIndex]?.[l.leg_id]?.observation):eligible;
     const loaded=selected.length?await load(source,selected):{rows:{},status:{name:source.name,status:'not_needed',matched:0}};
     outputs.push(loaded.rows);statuses.push(loaded.status);
    }
