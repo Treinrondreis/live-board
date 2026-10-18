@@ -26,8 +26,8 @@ test('catalog snapshots persist independently from dossiers in SQLite/Postgres-c
 
 
 test('hotel catalog upgrades short-name projection once even when source dates are unchanged; failed upgrades retain the old catalog',async()=>{
- const legacy={entries:[{sourceId:'fixture',id:'fixture',updatedAt:'one',title:'Voorbeeld'}],data:[{id:'fixture',title:'Voorbeeld'}],version:'old',checkedAt:1};let saved=structuredClone(legacy),calls=0;
+ const legacy={formatVersion:2,entries:[{sourceId:'fixture',id:'fixture',updatedAt:'one',title:'Voorbeeld'}],data:[{id:'fixture',title:'Voorbeeld'}],version:'old',checkedAt:1};let saved=structuredClone(legacy),calls=0;
  const service=createCatalogService({read:async()=>saved,write:async(k,v)=>{saved=v;},manifest:async()=>[{_id:'fixture',_updatedAt:'one'}],documents:async()=>{calls++;return [{...legacy.entries[0],titleShort:'Kort voorbeeld'}];}});
- assert.equal((await service.get('hotels')).data[0].titleShort,'Kort voorbeeld');assert.equal(saved.formatVersion,2);await service.get('hotels');assert.equal(calls,1);
+ assert.equal((await service.get('hotels')).data[0].titleShort,'Kort voorbeeld');assert.equal(saved.formatVersion,3);await service.get('hotels');assert.equal(calls,1);
  const failed=createCatalogService({read:async()=>legacy,write:async()=>assert.fail('no incomplete snapshot'),manifest:async()=>{throw Error('fixture outage');}});assert.equal((await failed.get('hotels')).version,'old');
 });
