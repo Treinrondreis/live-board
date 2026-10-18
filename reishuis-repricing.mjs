@@ -18,7 +18,7 @@ export function hotelAmount(c,hotels){
 }
 export function interrailAmount(c,passes){const pass=passes.find(p=>p.id===c.pass),variants=pass?.variants.filter(v=>v.class===c.class&&v.ageGroup===c.ageGroup)||[];count(c.count);if(!pass||variants.length!==1)return {missing:'Geen eenduidig Interrail-tarief. Controleer pas, klasse en doelgroep.'};return {amount:money(variants[0].price*c.count),unitPrice:variants[0].price};}
 export function quoteChange(source,local,input,catalogs){
- if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['todo','kind','line','title','mode','amount','hotel','room','board','provider','checkin','checkout','rooms','pass','class','ageGroup','count','startDate','endDate','shiftIds','manualAmounts','ackWarnings'].includes(k)))fail('Controleer de wijziging.');
+ if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['todo','kind','line','title','mode','amount','hotel','room','board','provider','checkin','checkout','rooms','pass','class','ageGroup','count','startDate','endDate','shiftIds','manualAmounts','followupHotels','ackWarnings'].includes(k)))fail('Controleer de wijziging.');
  const d=mergeDossier(source,local),todo=d.todos.find(t=>t.id===key(input.todo,'Deze todo is niet meer geldig. Heropen het dossier.')&&!t.review&&!t.archived);if(!todo)fail('Taak niet gevonden.');
  if(!['hotel','interrail','rename','option'].includes(input.kind)||!['auto','manual','keep'].includes(input.mode))fail('Kies het soort wijziging en tarief.');
  const line=d.lines.find(l=>l.id===key(input.line,'Kies de financiële regel die bij deze todo hoort.')&&!l.sourceRemoved);if(!line)fail('Kies bewust de financiële regel.');
@@ -47,19 +47,30 @@ export function quoteChange(source,local,input,catalogs){
  add(todo,after,c,line,quoted);
  const shifted=input.shiftIds??[];if(!Array.isArray(shifted)||shifted.length>100||new Set(shifted).size!==shifted.length)fail('Controleer de vervolgonderdelen.');
  const manual=input.manualAmounts??{};if(!manual||typeof manual!=='object'||Array.isArray(manual)||Object.keys(manual).some(id=>!shifted.includes(id)))fail('Controleer de handmatige bedragen.');
+ const repairs=input.followupHotels??{};if(!repairs||typeof repairs!=='object'||Array.isArray(repairs)||Object.keys(repairs).some(id=>!shifted.includes(id)))fail('Controleer de aangevulde vervolghotels.');
  if(shifted.length&&(!delta||input.kind!=='hotel'||!todo.endDate))fail('Er is geen verschuiving om toe te passen.');
  for(const id of shifted){const r=d.todos.find(t=>t.id===key(id,'Een geselecteerd vervolgonderdeel is niet meer geldig. Heropen het dossier.')&&t.id!==todo.id&&!t.review&&!t.archived);if(!r||!r.startDate||r.startDate.slice(0,10)<todo.endDate.slice(0,10))fail('Kies uitsluitend vervolgonderdelen na de oorspronkelijke check-out.');
   const next={...r};for(const k of ['startDate','endDate','deadline','bookableFrom'])if(r[k])next[k]=shiftDay(r[k].slice(0,10),delta);
-  const bound=local.components?.[id];if(r.tag==='hotel'||bound?.kind==='hotel'){
-   if(!bound||bound.kind!=='hotel'){missing.push({todo:id,reason:'Koppel dit vervolghotel eerst aan een kamer en financiële regel.'});add(r,next,null,null,{});continue;}
-   const component={...bound,checkin:next.startDate,checkout:next.endDate},linked=d.lines.find(l=>l.id===bound.line&&!l.sourceRemoved);if(!linked)fail('Financiële koppeling van een vervolghotel ontbreekt.');let result=hotelAmount(component,catalogs.hotels);if(Object.hasOwn(manual,id)){if(!finite(manual[id])||cents(manual[id])<=0)fail('Controleer het handmatige vervolgtarief.');result={amount:money(manual[id]),manual:true,unavailable:result.unavailable===true,date:result.date||null};}add(r,next,component,linked,result);
-  }else{add(r,next,bound||null,null,{});}
+  let bound=local.components?.[id];if(r.tag==='hotel'||bound?.kind==='hotel'){
+   const repair=repairs[id];if(repair){
+    if(typeof repair!=='object'||Array.isArray(repair)||Object.keys(repair).some(k=>!['line','hotel','room','board','provider','rooms'].includes(k)))fail('Controleer de aangevulde hotelkoppeling.');
+    const candidate={kind:'hotel',line:key(repair.line,'Kies de financiële regel van het vervolghotel.'),hotel:key(repair.hotel,'Kies het vervolghotel.'),room:key(repair.room,'Kies een kamer voor het vervolghotel.'),board:clean(repair.board||''),provider:clean(repair.provider||''),rooms:count(repair.rooms)};
+    if(bound?.line&&d.lines.some(l=>l.id===bound.line&&!l.sourceRemoved)&&bound.line!==candidate.line)fail('Gebruik de bestaande financiële koppeling van het vervolghotel.');
+    if(bound?.hotel&&bound.hotel!==candidate.hotel||bound?.room&&catalogs.hotels.find(h=>h.id===bound.hotel)?.rooms.some(r=>r.key===bound.room)&&bound.room!==candidate.room)fail('Wijzig een reeds gekoppeld hotel of kamer via de eigen todo.');
+    if(Object.entries(local.components||{}).some(([owner,c])=>owner!==id&&c.line===candidate.line))fail('Deze financiële regel is al aan een andere taak gekoppeld.');
+    bound=candidate;
+   }
+   const linked=d.lines.find(l=>l.id===bound?.line&&!l.sourceRemoved),hotel=catalogs.hotels.find(h=>h.id===bound?.hotel),room=hotel?.rooms.find(v=>v.key===bound?.room);
+   if(!bound||bound.kind!=='hotel'||!linked||!room||!Number.isInteger(bound.rooms)||bound.rooms<1){missing.push({todo:id,kind:'hotel-link',reason:'Vul hier de hotel-, kamer- en financiële koppeling van dit vervolghotel aan.'});add(r,next,null,null,{});continue;}
+   if(repair){next.title=[hotel.title,room.title].filter(Boolean).join(' | ')||next.title;next.quantity=bound.rooms;next.tag='hotel';}
+   const component={...bound,checkin:next.startDate,checkout:next.endDate};let result=hotelAmount(component,catalogs.hotels);if(Object.hasOwn(manual,id)){if(!finite(manual[id])||cents(manual[id])<=0)fail('Controleer het handmatige vervolgtarief.');result={amount:money(manual[id]),manual:true,unavailable:result.unavailable===true,date:result.date||null};}add(r,next,component,linked,result);
+  }else{if(repairs[id]||Object.hasOwn(manual,id))fail('Alleen vervolghotels kunnen een hotelkoppeling of handmatig hoteltarief krijgen.');add(r,next,bound||null,null,{});}
  }
  if(input.kind==='interrail'&&(!oldComponent||oldComponent.class!==c.class)&&d.todos.some(t=>!t.review&&!t.archived&&t.status==='done'&&t.tag==='option'))warnings.push('Controleer de al afgevinkte opties/reserveringen: de Interrail-klasse is gewijzigd of was nog niet gekoppeld. Optiebedragen blijven gelijk.');
  if(input.mode!=='keep'&&changes.some(v=>v.financial&&v.financial.before.costs!==null))warnings.push('Bestaande werkelijke kosten moeten opnieuw worden gecontroleerd bij een herberekening; de oude bedragen blijven in de wijzigingshistorie.');
  const lineIds=changes.filter(x=>x.financial).map(x=>x.financial.line);if(new Set(lineIds).size!==lineIds.length)fail('Meerdere taken verwijzen naar dezelfde financiële regel. Controleer de koppelingen.');
  const replacements=new Map(changes.filter(x=>x.financial).map(x=>[x.financial.line,x.financial.newTotal]));const sum=fn=>{let n=0;for(const l of d.lines.filter(l=>!l.sourceRemoved)){const value=fn(l);if(value===null)return null;n+=cents(value);}return n/100;};
- return {changes,missing,warnings:[...new Set(warnings)],oldTotal:sum(total),newTotal:sum(l=>replacements.has(l.id)?replacements.get(l.id):total(l)),optionsUnchanged:true};
+ return {changes,missing,warnings:[...new Set(warnings)],oldTotal:sum(total),newTotal:missing.length?null:sum(l=>replacements.has(l.id)?replacements.get(l.id):total(l)),optionsUnchanged:true};
 }
 export function applyQuote(state,booking,source,plan,actor,at=new Date().toISOString()){
  if(plan.missing.length)fail('Vul eerst alle ontbrekende tarieven en koppelingen in.');const local=structuredClone(state.dossiers?.[booking]||{});local.todos??={};local.lines??={};local.components??={};local.reviews??=[];local.changes??=[];
