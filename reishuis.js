@@ -1,4 +1,3 @@
-import {createHotelsUI} from './reishuis-hotels-ui.js';
 import {createIncomingCalls} from './reishuis-rinkel-ui.js';
 import {createDossierUI} from './reishuis-dossier-ui.js';
 import {selectRows,statusLabel,bookingDay} from './reishuis-view.mjs';
@@ -80,5 +79,5 @@ $('row-form').onsubmit=e=>{e.preventDefault();run(async()=>{const rows=[...$('ro
 $('refresh').onclick=()=>run(load);function resetSelection(){pages=[0,0,0,0,0];renderSelection();}$('search').oninput=resetSelection;$('status-filter').onchange=resetSelection;$('payment-filter').onchange=resetSelection;$('customer-search').oninput=renderCustomers;
 $('customers').onclick=()=>{$('customer-panel').hidden=false;$('customer-panel').scrollIntoView({behavior:'smooth'});};$('close-customers').onclick=()=>{$('customer-panel').hidden=true;};$('detail').addEventListener('close',()=>dossierUI.clear());$('close-detail').onclick=()=>{dossierUI.clear();$('detail').close();};$('cancel-settings').onclick=()=>$('preferences').close();
 const incomingCalls=createIncomingCalls({node,open:id=>run(()=>showBooking(id)),isEditing:()=>busy||$('detail').open||$('preferences').open||!$('customer-panel').hidden,onDenied:clearState,bookings:()=>state?.bookings||[],link:async data=>{if(busy)throw Error('Er wordt al opgeslagen.');busy=true;try{await load();await change(data);}finally{busy=false;}}});
-const hotelsUI=createHotelsUI({node,base,onDenied:clearState});$('hotels').onclick=()=>run(()=>hotelsUI.open());
+const hotelPage=(id,search='')=>{const u=new URL(base+'/hotels/',location.origin);if(id)u.searchParams.set('id',id);if(search)u.searchParams.set('q',search.slice(0,160));if($('detail').open&&$('detail').dataset.booking)u.searchParams.set('returnBooking',$('detail').dataset.booking);location.assign(u.href);};const hotelsUI={clear(){},openHotel:id=>hotelPage(id),open:({search=''}={})=>hotelPage(null,search)};$('hotels').onclick=()=>hotelsUI.open();
 run(async()=>{await load();incomingCalls.start();const booking=new URL(location.href).searchParams.get('booking');if(booking)await showBooking(booking);});
