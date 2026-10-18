@@ -3,7 +3,7 @@ const source=fs.readFileSync(__dirname+'/index.html','utf8').split('<script>')[2
 function fixture(options={}){
  const nodes=new Map(),calls=[];let checked=['ns','obb'];
  const node=s=>{if(!nodes.has(s))nodes.set(s,{value:'',checked:false,innerHTML:'',open:false,style:{},showModal(){this.open=true},close(){this.open=false}});return nodes.get(s);};
- const ctx=vm.createContext({document:{querySelector:node,querySelectorAll:()=>checked.map(value=>({value}))},window:{addEventListener(){}},crypto:require('node:crypto').webcrypto,structuredClone,console,setTimeout,clearTimeout,AbortSignal,confirm:()=>true});vm.runInContext(source,ctx);
+ const ctx=vm.createContext({document:{querySelector:node,querySelectorAll:()=>checked.map(value=>({value}))},window:{addEventListener(){}},crypto:require('node:crypto').webcrypto,URL,structuredClone,console,setTimeout,clearTimeout,AbortSignal,confirm:()=>true});vm.runInContext(source,ctx);
  const exec=code=>vm.runInContext(code,ctx);
  exec(`state={objects:[],exports:[]};draft={kind:'book',title:'Test',body:{format:'A4',values:{},sanityBooking:{id:'customer',number:'1234A',name:'Test'},sections:[{choice:'document',documentKind:'combinedTickets',ticketSources:['ns','obb'],ticketSourceMode:'all',title:'Tickets',selected:null,options:[]}]}}`);
  ctx.api=async(path,b)=>{calls.push({path,b:structuredClone(b)});if(options.api){const r=await options.api(path,b);if(r!==undefined)return r;}
@@ -82,4 +82,32 @@ test('export fill toggle rechecks optional fields and preserves an unchecked cho
  assert.match(f.node('#modal').innerHTML,/Weglaten op hun vaste plek: Extra Vienna/);
  f.ctx.cb={checked:false,disabled:false};await f.exec('reviewExportFill(cb)');assert.equal(f.exec('exportPlan.fillRequested'),false);assert.match(f.node('#modal').innerHTML,/Verplicht veld ontbreekt/);assert(!/id="fillPages" checked/.test(f.node('#modal').innerHTML));
  f.ctx.cb.checked=true;await f.exec('reviewExportFill(cb)');assert.equal(f.exec('exportPlan.errors.length'),0);
+});
+
+
+test('one dead NS PDF button keeps the other tickets and requires page review; no older mail is downloaded',async()=>{
+ const f=fixture();f.exec("draft.body.sections[0].ticketSources=['ns'];draft.body.sections.push(structuredClone(draft.body.sections[0]))");
+ f.ctx.api=async(path,b)=>{if(path==='/api/mail-tickets/search')return {references:['ABCDEF'],messages:[{id:'new',reference:'ABCDEF',latest:true,tickets:[{id:'valid',title:'Valid'},{id:'dead',title:'Expired'},{id:'valid2',title:'Valid 2'}]},{id:'old',reference:'ABCDEF',latest:false,tickets:[{id:'old',title:'Old'}]}]};if(path.startsWith('/api/upload'))return {id:'pdf-'+b,pages:1};if(path==='/api/tickets/inspect')return {pages:[{asset:b.asset,page:0,mail:'new',reference:'ABCDEF',travelDate:'2026-10-14',dateNeedsReview:false}]};if(path==='/api/tickets/compose')return {asset:'combined',pages:b.pages.length};throw Error(path);};
+ const downloads=[];f.ctx.fetch=async(path,r)=>{const id=JSON.parse(r.body).ticket;downloads.push(id);return id==='dead'?{ok:false,json:async()=>({error:'No PDF',code:'TICKET_NOT_PDF'})}:{ok:true,arrayBuffer:async()=>id};};
+ await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.pages,2);assert.equal(f.slot().selected.reviewRequired,true);assert.match(f.slot().selected.warnings.join(' '),/ABCDEF.*Expired.*overgeslagen/);assert.deepEqual(downloads,['valid','dead','valid2']);assert.equal(f.exec('draft.body.sections[1].selected.pages'),2);assert.equal(f.exec('draft.body.sections[1].selected.reviewRequired'),true);
+});
+
+test('a cancelled reference does not block another reference or fall back to its older mail',async()=>{
+ const f=fixture();const report={warnings:[],incomplete:false};const chosen=f.ctx.autoTicketMessages({references:['ABCDEF','GHIJKL'],messages:[{id:'cancel',reference:'ABCDEF',latest:true,cancelled:true,tickets:[]},{id:'old',reference:'ABCDEF',latest:false,tickets:[{id:'old'}]},{id:'current',reference:'GHIJKL',latest:true,tickets:[{id:'valid'}]}]},report);assert.deepEqual(Array.from(chosen,m=>m.id),['current']);assert.match(report.warnings.join(' '),/ABCDEF.*geannuleerde referentie/);
+});
+
+test('ÖBB portal link is shown directly after failed automatic import, never for older, cancelled or foreign messages',async()=>{
+ const link='https://shop.oebbtickets.at/en/ticket/postcheckout/example';
+ const f=fixture({api:async path=>{if(path==='/api/mail-tickets/search')return {provider:'ÖBB',references:['1111222233334444'],messages:[{id:'new',reference:'1111222233334444',latest:true,tickets:[],manualLinks:[{url:link},{url:'javascript:alert(1)'},{url:'https://evil.example/ticket'}]},{id:'old',reference:'1111222233334444',latest:false,tickets:[],manualLinks:[{url:link+'-old'}]},{id:'foreign',reference:'9999888877776666',latest:true,tickets:[],manualLinks:[{url:link+'-foreign'}]}]};if(path==='/api/tickets/drive-search')return {items:[]};}});
+ f.exec("draft.body.sections[0].ticketSources=['obb']");await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected,null);assert.match(f.slot().issue,/alleen een ticketlink/);const html=f.ctx.documentSlotCard(f.slot(),0);assert.match(html,/ÖBB-ticketpagina openen/);assert(html.includes('href="'+link+'"'));assert(!html.includes('javascript:'));assert(!html.includes('evil.example'));assert(!html.includes('-old'));assert(!html.includes('-foreign'));assert(!JSON.stringify(f.slot()).includes('postcheckout'));
+ f.exec('ticketPortalCache.delete(draft.body.sections[0])');assert.match(f.ctx.documentSlotCard(f.slot(),0),/openTicketPortals/);await f.exec('openTicketPortals(0)');await f.ctx.lastRun;assert(f.node('#modal').innerHTML.includes('href="'+link+'"'));
+ f.ctx.rememberTicketPortals(f.slot(),{references:['1111222233334444'],messages:[{reference:'1111222233334444',latest:true,cancelled:true,tickets:[],manualLinks:[{url:link}]}]},'obb');assert.equal(f.ctx.ticketPortalActions(f.slot(),0),'');
+});
+
+test('a portal link from the previous customer is never rendered after changing bookings',()=>{
+ const f=fixture();f.ctx.rememberTicketPortals(f.slot(),{references:['ABCDEF'],messages:[{reference:'ABCDEF',latest:true,tickets:[],manualLinks:[{url:'https://shop.oebbtickets.at/en/ticket/postcheckout/old-customer'}]}]},'obb');assert(f.ctx.ticketPortalActions(f.slot(),0).includes('old-customer'));f.exec("draft.body.sanityBooking.id='other-customer'");assert(!f.ctx.ticketPortalActions(f.slot(),0).includes('old-customer'));
+});
+
+test('manual PDF picking also keeps surviving downloads and shows the skipped link before insertion',async()=>{
+ const f=fixture();f.ctx.document.querySelectorAll=()=>[{value:'0'}];f.exec("ticketPick={book:draft,bookingId:draft.body.sanityBooking.id,provider:'ns',result:{messages:[{id:'new',reference:'ABCDEF',tickets:[{id:'good',title:'Good'},{id:'dead',title:'Dead'}]}]}};");f.ctx.fetch=async(path,r)=>JSON.parse(r.body).ticket==='dead'?{ok:false,json:async()=>({error:'No PDF',code:'TICKET_NOT_PDF'})}:{ok:true,arrayBuffer:async()=>'good'};f.ctx.ticketPagesDraw=()=>{};f.exec('ticketFetchPDFs({disabled:false})');await f.ctx.lastRun;assert.equal(f.exec('ticketPick.pages.length'),1);assert.match(f.node('#modal').innerHTML,/ABCDEF.*Dead.*overgeslagen/);
 });

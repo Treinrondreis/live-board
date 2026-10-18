@@ -12,7 +12,7 @@ export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,
     const prefix=BOOKLETS_PREFIX;
     if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
     for(const [key,value] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow, noarchive','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'}))res.setHeader(key,value);
-    const fail=(code,message)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:message}));return true;};
+    const fail=(code,message,details={})=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:message,...details}));return true;};
     const owner=await authenticate(req);
     if(!owner){
       // A cross-site OAuth return has no SameSite=Strict cookie. A deliberate
@@ -51,7 +51,7 @@ export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,
         if(action==='search'){const result=await mail.search(body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}
         if(action==='download'){const bytes=await mail.download(body);res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':bytes.length});res.end(bytes);return true;}
         return fail(404,'Ticketactie niet gevonden.');
-      }catch(error){return fail(error.status===429?429:400,error.message||'Ticketimport mislukt.');}
+      }catch(error){return fail(error.status===429?429:400,error.message||'Ticketimport mislukt.',error.code==='TICKET_NOT_PDF'?{code:error.code}:{});}
     }
     if(!config.upstream||!config.secret||config.secret.length<32)return fail(503,'De online boekjesmaker wordt nog ingericht.');
     let target;
