@@ -45,14 +45,16 @@ export function createPunctualityArchive(db,options={}){
   if(!selection.available){linkedLegs.clear();return;}
   linkedLegs=new Map([...linkedLegs].filter(([id])=>selection.legs.some(l=>l.leg_id===id)));
   const signature=l=>hash([l.version_id,l.train_number,l.observation?.train_number,l.from_station,l.to_station,l.travel_date,l.arrival_date,l.departure_time,l.arrival_time]);
-  const reused=new Map();
   for(const leg of selection.legs.filter(l=>l.status==='active'&&linkedLegs.get(l.leg_id)!==signature(l))){
    const numbers=[...new Set([leg.train_number,leg.observation?.train_number].map(digits).filter(Boolean))];if(!numbers.length)continue;
-   const start=Date.parse(leg.travel_date)-86400000,end=Date.parse(leg.arrival_date||leg.travel_date)+2*86400000,key=JSON.stringify([numbers,start,end]);
-   if(!reused.has(key))reused.set(key,await query('SELECT event_id,payload FROM punctuality_events WHERE train_number IN ('+numbers.map((_,i)=>'$'+(i+1)).join(',')+') AND planned_at>=$'+(numbers.length+1)+' AND planned_at<$'+(numbers.length+2),[...numbers,start,end]));
-   for(const event of reused.get(key)){const row=JSON.parse(event.payload);if(!punctualityLegMatches(row,leg))continue;
-    const sql='INSERT INTO punctuality_legs(leg_id,version_id,event_id,event_mode) VALUES($1,$2,$3,$4) ON CONFLICT(leg_id,event_id) DO NOTHING',args=[leg.leg_id,leg.version_id,event.event_id,row.event_mode];
-    if(db.pool)await db.pool.query(sql,args);else db.sqlite.prepare(sql.replace(/\$\d+/g,'?')).run(...args);
+   const start=Date.parse(leg.travel_date)-86400000,end=Date.parse(leg.arrival_date||leg.travel_date)+2*86400000;let cursor='';
+   while(true){
+    const events=await query('SELECT event_id,payload FROM punctuality_events WHERE train_number IN ('+numbers.map((_,i)=>'$'+(i+1)).join(',')+') AND planned_at>=$'+(numbers.length+1)+' AND planned_at<$'+(numbers.length+2)+' AND event_id>$'+(numbers.length+3)+' ORDER BY event_id LIMIT 200',[...numbers,start,end,cursor]);
+    for(const event of events){const row=JSON.parse(event.payload);if(!punctualityLegMatches(row,leg))continue;
+     const sql='INSERT INTO punctuality_legs(leg_id,version_id,event_id,event_mode) VALUES($1,$2,$3,$4) ON CONFLICT(leg_id,event_id) DO NOTHING',args=[leg.leg_id,leg.version_id,event.event_id,row.event_mode];
+     if(db.pool)await db.pool.query(sql,args);else db.sqlite.prepare(sql.replace(/\$\d+/g,'?')).run(...args);
+    }
+    if(events.length<200)break;cursor=events.at(-1).event_id;
    }linkedLegs.set(leg.leg_id,signature(leg));
   }
  }
