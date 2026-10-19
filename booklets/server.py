@@ -3,7 +3,7 @@ import copy
 from pdf_geometry import display_meta, normalize_page
 import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
-import field_background,field_flow
+import field_background,field_flow,field_fit
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 import export_names,export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks
 import trip_fillers, automatic_builder
@@ -164,6 +164,7 @@ def fields_validate(fields,meta):
         field_keys(f)
         field_background.validate(f)
         field_flow.validate(f)
+        field_fit.validate(f)
         if f.get('type')=='prefilled' and (not isinstance(f.get('template',''),str) or len(f.get('template',''))>20000):raise ValueError('Standaardtekst mag maximaal 20.000 tekens bevatten.')
         n=int(f['page'])
         if not 0<=n<len(meta): raise ValueError('Ongeldige veldpagina.')
@@ -327,10 +328,9 @@ def check_layout(body,values):
             flow=field_flow.layout(f,value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else sample,width,available,TOKEN,font_name(f),align)
             needed=flow['needed'];width_ok=True
         else:
-            lines=value.splitlines();needed=len(lines)*size*1.5
-            width_ok=all(pdfmetrics.stringWidth(line,font_name(f),size)<=width for line in lines)
-        fits=flow['fits'] if f.get('type') in ('text','prefilled') else needed<=available and width_ok
-        results.append({'name':f['key'],'page':int(f['page'])+1,'fits':fits,'heightPercent':round(needed/m['height']*100,1),'availablePercent':float(f['h']),'widthFits':width_ok,'size':size,'font':f.get('font','Open Sans'),'columns':f.get('columns',1),'lineSpacing':f.get('lineSpacing',1.5),'exampleKeys':example_keys})
+            flow=field_fit.plain(f,value,width,available,font_name(f));needed=flow['needed'];width_ok=flow['widthFits']
+        size=flow['size'];fits=flow['fits']
+        results.append({'name':f['key'],'page':int(f['page'])+1,'fits':fits,'heightPercent':round(needed/m['height']*100,1),'availablePercent':float(f['h']),'widthFits':width_ok,'size':size,'originalSize':flow['originalSize'],'minimumSize':flow['minimumSize'],'autoFit':flow['autoFit'],'shrunk':flow['shrunk'],'font':f.get('font','Open Sans'),'columns':f.get('columns',1),'lineSpacing':f.get('lineSpacing',1.5),'exampleKeys':example_keys})
     return {'results':results,'fits':all(r['fits'] for r in results)}
 
 def make_export(book,options=None):
@@ -405,8 +405,8 @@ def make_export(book,options=None):
                         if not flow['fits']:raise ValueError(f"Het tekstblok bij {s['title']} past niet in {f.get('columns',1)} kolom(men) van {float(f['h']):g}% hoogte. Vergroot het tekstvlak in Bouwsteen beheren, verkort de tekst of plaats het vervolg in een ander tekstblok. Neem daarna de nieuwe bouwsteenversie over in dit boekje.")
                         field_flow.draw(cv,flow,x,h*(1-float(f['y'])/100))
                         continue
-                    lines=wrap_text(value,fw,size) if f.get('type')=='text' else value.splitlines(); lineheight=size*1.5
-                    if len(lines)*lineheight>fh or any(pdfmetrics.stringWidth(line,font_name(f),size)>fw for line in lines): raise ValueError(f"Tekst past niet in ‘{f['key']}’ bij {s['title']}. Verkort de tekst of vergroot het veld.")
+                    fitted=field_fit.plain(f,value,fw,fh,font_name(f));lines=fitted['lines'];size=fitted['size'];lineheight=size*1.5
+                    if not fitted['fits']:raise ValueError(f"Tekst past niet in ‘{f['key']}’ bij {s['title']}. Verkort de tekst, vergroot het veld of controleer de minimale lettergrootte.")
                     if any(ord(char)>0xFFFF for char in value): raise ValueError('Emoji’s worden in deze proef nog niet ondersteund.')
                     cv.setFont(font_name(f),size);cv.setFillColor(f.get('color','#172d35'))
                     y=h*(1-float(f['y'])/100)-size

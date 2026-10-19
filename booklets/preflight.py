@@ -41,7 +41,7 @@ def check(s,body,objects,fill=False):
                     if f.get('type') in ('text','prefilled'):
                         flow=s.field_flow.layout(f,value if f['type']=='prefilled' else f['template'],{} if f['type']=='prefilled' else values,w,h,s.TOKEN,s.font_name(f),align)
                         fits=flow['fits']
-                    else:fits=len(value.splitlines())*size*1.5<=h and all(s.pdfmetrics.stringWidth(line,s.font_name(f),size)<=w for line in value.splitlines())
+                    else:fits=s.field_fit.plain(f,value,w,h,s.font_name(f))['fits']
                     if not fits:error(i,title,'Pagina '+str(f['page']+1)+': tekst past niet in “'+f['key']+'”.')
                 except (ValueError,KeyError,TypeError) as e:error(i,title,e)
         except (ValueError,KeyError,TypeError) as e:error(i,title,e)

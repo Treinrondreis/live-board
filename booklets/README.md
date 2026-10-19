@@ -383,3 +383,20 @@ basis van één exact overeenkomende sjabloonnaam worden getoond. Bij meerdere
 kandidaten of ontbrekende herkomst blijft het boekje onder ‘Zonder gekoppeld
 sjabloon’ bereikbaar, met de eventueel bewaarde naam. Dit overzicht leest alleen
 bestaande gegevens en wijzigt geen boekjes, PDF’s of Sanity.
+
+### Tekst automatisch kleiner maken
+
+Bij Opmaak kan ieder tekst- of invulveld optioneel `autoFit` gebruiken
+(‘Lettertype verkleinen als de tekst niet past’). De ingestelde lettergrootte
+blijft het maximum. `minSize` is aanpasbaar van 6 pt tot die grootte; zonder
+expliciete minimumwaarde geldt 8 pt, of de oorspronkelijke grootte als die lager is.
+Bestaande velden blijven standaard ongewijzigd. Paginanummers en inhoudsopgaven
+gebruiken deze optie niet.
+
+De voorbeeldcontrole, exportcontrole en uiteindelijke PDF meten dezelfde werkelijk
+ingevulde tekst met hetzelfde lettertype en dezelfde opmaak. Alleen tekst die
+niet past wordt verkleind, in stappen van 0,25 pt met het exacte minimum als
+ondergrens. De oorspronkelijke veldinstelling blijft behouden, zodat een kortere
+tekst in een volgend boekje weer de gewone grootte krijgt. Tekst wordt niet
+weggelaten: past deze ook op het minimum niet, dan blijft de exportcontrole dit
+melden. Ook persoonlijke tekstblokken met één of twee kolommen ondersteunen dit.
