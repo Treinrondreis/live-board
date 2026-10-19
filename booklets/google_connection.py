@@ -1,7 +1,7 @@
 """Read-only Google Docs OAuth for the local Windows pilot. No Codex credentials."""
 import base64, ctypes, hashlib, json, os, re, secrets, threading, time
 from urllib.parse import urlencode, urlparse, parse_qs
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
 
 LOCK=threading.RLock()
@@ -17,12 +17,12 @@ def document_id(url):
         raise ValueError('Plak een Google Docs-link: https://docs.google.com/document/d/…')
     return match[1]
 
-def request(url,data=None,token=None,limit=20*1024*1024):
+def request(url,data=None,token=None,limit=20*1024*1024,opener=None):
     headers={'User-Agent':'Treinrondreis-Boekjesmaker/1'}
     if token:headers['Authorization']='Bearer '+token
     if data is not None:headers['Content-Type']='application/x-www-form-urlencoded'
     try:
-        with urlopen(Request(url,urlencode(data).encode() if data is not None else None,headers),timeout=25) as r:
+        with (opener or urlopen)(Request(url,urlencode(data).encode() if data is not None else None,headers),timeout=25) as r:
             raw=r.read(limit+1)
             if len(raw)>limit:raise ValueError('Het Google-document of de afbeelding is te groot.')
             return raw
@@ -140,8 +140,22 @@ def fetch_document(data,url):
     i=document_id(url)
     return json.loads(request('https://docs.googleapis.com/v1/documents/'+i+'?includeTabsContent=true',token=token(data)))
 
+def validate_image_url(url):
+    try:
+        p=urlparse(url)
+        google_image=bool(p.hostname and p.hostname.endswith('.googleusercontent.com'))
+        docs_image=p.hostname=='docs.google.com' and bool(re.fullmatch(r'/docs-images-rt/[A-Za-z0-9_=\-]+',p.path))
+        if p.scheme=='https' and not p.username and not p.password and not p.fragment and p.port in (None,443) and (google_image or docs_image):return
+    except (ValueError,TypeError):pass
+    raise ValueError('Deze afbeelding heeft geen ondersteunde Google-bron. Gebruik een afbeelding die in Google Docs is ingevoegd, of upload de pagina als PDF.')
+
+
+class GoogleImageRedirect(HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        validate_image_url(newurl)
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+
 def fetch_image(url):
-    p=urlparse(url)
-    if p.scheme!='https' or not p.hostname or not p.hostname.endswith('.googleusercontent.com') or p.port not in (None,443):
-        raise ValueError('Deze afbeelding heeft geen ondersteunde Google-bron. Plaats de afbeelding rechtstreeks in Google Docs.')
-    return request(url,limit=15*1024*1024)
+    validate_image_url(url)
+    return request(url,limit=15*1024*1024,opener=build_opener(GoogleImageRedirect()).open)

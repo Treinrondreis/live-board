@@ -400,3 +400,13 @@ ondergrens. De oorspronkelijke veldinstelling blijft behouden, zodat een kortere
 tekst in een volgend boekje weer de gewone grootte krijgt. Tekst wordt niet
 weggelaten: past deze ook op het minimum niet, dan blijft de exportcontrole dit
 melden. Ook persoonlijke tekstblokken met één of twee kolommen ondersteunen dit.
+
+### Afbeeldingen uit Google Docs
+
+De import leest de afbeeldingsadressen die Google Docs zelf via de Docs API
+teruggeeft. Naast HTTPS-subdomeinen van googleusercontent.com wordt het specifieke
+Google Docs-pad `https://docs.google.com/docs-images-rt/…` ondersteund. Andere
+Docs-paden, externe hosts, gebruikersgegevens in de URL en afwijkende poorten
+blijven geweigerd. Ook iedere omleiding wordt opnieuw gecontroleerd. Er wordt
+geen OAuth-token naar de afbeeldingsbron gestuurd; de bestaande limiet van 15 MB
+per download blijft gelden. De bron in Google Docs wordt niet gewijzigd.
