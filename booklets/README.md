@@ -362,3 +362,24 @@ Een tekstpassingsfout opent het rapport in Tekst & velden en kan naar het juiste
 veld op de juiste pagina in Opmaak springen. Alleen een unieke combinatie van
 veldnaam en pagina krijgt een directe verwijzing. Opmaak-, validatie-, PDF- en
 opslagregels zijn verder ongewijzigd; er zijn geen nieuwe Sanity-schrijfacties.
+
+### Boekjes per sjabloon
+
+Het algemene boekingenoverzicht toont standaard alleen het nieuwste niet-verwijderde
+boekje per Sanity-boeking, gesorteerd op aanmaakdatum. Oudere boekjes blijven via
+een expliciete keuze bereikbaar en zijn visueel minder opvallend. De kaart toont
+de sjabloontitel; het dubbelzinnige label ‘Actueel boekje’ is vervallen.
+
+Een knop ‘Boekjes (aantal)’ bij ieder sjabloon en de aanklikbare sjabloontitel op
+boekjes openen dezelfde verzameling. Die bevat standaard alle niet-verwijderde
+boekjes van dat sjabloon, inclusief oudere boekjes. Filter, prullenbak en de keuze
+voor oudere boekjes blijven bij browser-terug/vooruit en herladen bewaard via
+schermsoort, ID en booleans in de route. Klantnamen en zoektekst staan niet in de URL.
+
+De opgeslagen templateId (of batchGroup.templateId) bepaalt de herkomst; na een
+naamswijziging blijft de koppeling behouden. Een ontbrekend origineel wordt niet
+vervangen door een gelijknamig sjabloon. Alleen oude boekjes zonder ID mogen op
+basis van één exact overeenkomende sjabloonnaam worden getoond. Bij meerdere
+kandidaten of ontbrekende herkomst blijft het boekje onder ‘Zonder gekoppeld
+sjabloon’ bereikbaar, met de eventueel bewaarde naam. Dit overzicht leest alleen
+bestaande gegevens en wijzigt geen boekjes, PDF’s of Sanity.
