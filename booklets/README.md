@@ -410,3 +410,13 @@ Docs-paden, externe hosts, gebruikersgegevens in de URL en afwijkende poorten
 blijven geweigerd. Ook iedere omleiding wordt opnieuw gecontroleerd. Er wordt
 geen OAuth-token naar de afbeeldingsbron gestuurd; de bestaande limiet van 15 MB
 per download blijft gelden. De bron in Google Docs wordt niet gewijzigd.
+
+### Volgorde en breedte van routeafbeeldingen
+
+Afbeeldingen die in Google Docs aan dezelfde alinea hangen worden op hun verticale
+positie gesorteerd, daarna horizontaal. Afbeeldingen bij verschillende alinea’s
+houden de documentvolgorde. Bij korte A4-routes gebruiken zowel kaart als foto de
+beschikbare paginabreedte, met behoud van verhouding en 25 mm zijmarges. QR-codes
+behouden hun aparte compacte opmaak. Langere tekst-/afbeeldingscombinaties en A5
+behouden de bestaande indeling. De A4-render-versie is verhoogd zodat opnieuw
+ophalen de gecorrigeerde opmaak gebruikt; bestaande opgeslagen PDF’s veranderen niet.
