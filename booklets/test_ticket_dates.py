@@ -5,6 +5,23 @@ import test_cloud,ticket_dates
 s=test_cloud.cloud.server
 
 class TicketDateTests(unittest.TestCase):
+    def test_ticket_display_details_only_use_explicit_labels(self):
+        self.assertEqual(ticket_dates.ticket_details('Ticket\nFrom: Utrecht Centraal\nTo: Wien Hbf\nPassengers: 2\nTicket number: TEST12345'), {'originStation':'Utrecht Centraal','destinationStation':'Wien Hbf','passengerCount':2,'ticketNumber':'TEST12345'})
+        self.assertEqual(ticket_dates.ticket_details('Leiden Centraal → Utrecht Centraal\n1 volwassene'), {'originStation':'Leiden Centraal','destinationStation':'Utrecht Centraal','passengerCount':1})
+        self.assertEqual(ticket_dates.ticket_details('Price 2 EUR\nIssued: 12.03.2027\nBooking ABCDEFG'), {})
+        self.assertEqual(ticket_dates.ticket_details('* * DELFT -> AMERSFOORT CENTRAAL* * 22* * ****** -> *****VIA [1184]*****'), {'originStation':'DELFT','destinationStation':'AMERSFOORT CENTRAAL'})
+        self.assertNotIn('passengerCount',ticket_dates.ticket_details('Passengers: 1\nPassengers: 2'))
+        self.assertNotIn('originStation',ticket_dates.ticket_details('Leiden → Utrecht\nAssen → Utrecht'))
+
+    def test_ticket_metadata_is_saved_but_rejects_invalid_counts_and_oversized_labels(self):
+        a,_=self.upload(['Ticket'])
+        def body(extra):return {'format':'A4','sections':[{'oneOff':True,'title':'Test','asset':a['id'],'pages':1,'fields':[],'pageSources':[{'asset':a['id'],'page':0,**extra}]}]}
+        valid=body({'originStation':'Delft','destinationStation':'Utrecht','passengerCount':2})
+        s.validate_body('book',valid)
+        self.assertEqual(valid['sections'][0]['pageSources'][0]['passengerCount'],2)
+        for extra in ({'passengerCount':True},{'passengerCount':0},{'passengerCount':100},{'originStation':'x'*101},{'ticketNumber':{}}):
+            with self.assertRaises(ValueError):s.validate_body('book',body(extra))
+
     def test_cora_gate_page_is_omitted_without_changing_tickets_or_original_pdf(self):
         gate='Het station betreden of verlaten\nDit is geen vervoerbewijs.\nDit passageticket is bedoeld voor het openen van poortjes.'
         a,raw=self.upload(['Ticket\nDeparture: 08.03.2027',gate,'Seat reservation\nDeparture: 08.03.2027'])

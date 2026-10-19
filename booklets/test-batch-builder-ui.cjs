@@ -78,3 +78,6 @@ test('manual corrections survive returning to the group and a double start canno
 test('editing a generated book queues a new PDF while keeping the earlier PDF and other finished bookings',async()=>{
  const f=fixture();await f.start();await f.ctx.runBatchQueue('generate');const group=f.exec('batchSession.id'),book=f.objects.get(f.rows()[0].bookId),old=f.rows()[0].exportId;book.revision++;book.body.values.extra='Gewijzigde reis';await f.ctx.openBatchGroup(group);assert.equal(f.rows()[0].status,'queued');assert.equal(f.rows()[1].status,'done');await f.ctx.runBatchQueue('prepare');await f.ctx.runBatchQueue('generate');assert.equal(f.exports.length,3);assert(f.exports.some(e=>e.id===old));assert.notEqual(f.rows()[0].exportId,old);
 });
+
+
+test('returning after one correction rechecks that row and preserves other batch statuses',async()=>{const f=fixture();await f.start();f.rows()[1].status='error';f.rows()[1].messages=['Ander document ontbreekt'];await f.ctx.openBatchBook(0);f.exec("draft.title='Aangepast';dirty=true");await f.ctx.returnToBookBatch();assert.equal(f.rows()[0].status,'ready');assert.equal(f.rows()[1].status,'error');assert.deepEqual(Array.from(f.rows()[1].messages),['Ander document ontbreekt']);assert.equal(f.exec('view'),'batch');assert.equal(f.objects.get(f.rows()[0].bookId).title,'Aangepast');});

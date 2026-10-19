@@ -285,6 +285,9 @@ def validate_body(kind,b,prepared=False):
                         for flag in ('dateNeedsReview','dateUnknownAccepted'):
                             if flag in p and type(p[flag]) is not bool:raise ValueError('Ongeldige datumcontrole.')
                         if p.get('documentRole','unknown') not in ('ticket','reservation','unknown'):raise ValueError('Ongeldig documenttype voor ticketsortering.')
+                        for detail in ('originStation','destinationStation','ticketNumber'):
+                            if detail in p and (not isinstance(p[detail],str) or len(p[detail])>100):raise ValueError('Ongeldige ticketdetails.')
+                        if 'passengerCount' in p and (type(p['passengerCount']) is not int or not 1<=p['passengerCount']<=99):raise ValueError('Ongeldig aantal ticketreizigers.')
                         if p.get('departureTime') and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',str(p['departureTime'])):raise ValueError('Ongeldige vertrektijd.')
                         if not manual_dates and key=='pageSources' and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and (p.get('dateNeedsReview') or (not value and not p.get('dateUnknownAccepted'))):candidate['reviewRequired']=True
                 if not manual_dates and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
