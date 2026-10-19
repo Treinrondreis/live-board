@@ -420,3 +420,24 @@ beschikbare paginabreedte, met behoud van verhouding en 25 mm zijmarges. QR-code
 behouden hun aparte compacte opmaak. Langere tekst-/afbeeldingscombinaties en A5
 behouden de bestaande indeling. De A4-render-versie is verhoogd zodat opnieuw
 ophalen de gecorrigeerde opmaak gebruikt; bestaande opgeslagen PDF’s veranderen niet.
+
+### Ticketreferenties en meldingen
+
+Een gevonden ticket bij één ingestelde vervoerder voldoet ook voor dezelfde
+kandidaatreferentie bij een andere ingestelde vervoerder. Een vergeefse tweede
+zoekactie geeft dan geen ontbrekend-ticketalarm. Een andere ontbrekende referentie
+of een echte downloadfout blijft zichtbaar; annuleringen blijven apart behandeld.
+Afzender, exacte referentie en geldige PDF-download blijven vereist.
+
+Stationnamen binnen hotelnamen gelden niet als treinonderdeel. Expliciete
+NS-/DNR-/ATL-labels bij treinonderdelen worden herkend in referentievelden en
+beschrijvingen. Historische NS-codes van zeven of acht tekens blijven ondersteund;
+nummerlengte is een aanwijzing, geen zelfstandig bewijs van vervoerder of geldigheid.
+ÖBB-codes van twaalf of zestien cijfers worden ook met spaties per vier gezocht.
+MAV-codes van tien cijfers (ook met 23/24) en gegroepeerde ČD-ordernummers blijven
+ondersteund. Een nieuwe factuur zonder tickets verdringt geen eerdere echte
+vervoerdersbevestiging; een annulering doet dat wel.
+
+De melding onderscheidt geen passende mail van een gevonden mail zonder
+ondersteunde PDF/downloadknop. Bij een ticketprobleem opent ‘Ticketmails zoeken’
+direct het zoekvenster; de melding geeft ook aan wanneer downloaden/uploaden nodig is.
