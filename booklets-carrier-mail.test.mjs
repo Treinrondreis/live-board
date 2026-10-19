@@ -95,3 +95,26 @@ test('grouped ÖBB and ČD references search both original mail spelling and com
 
 test('implicit NS codes are not also ÖBB references, explicitly labelled short ÖBB codes still work',()=>{const b={todos:[{title:'NJ (EUN) RIT',supplierBookingNumber:'ABCDEFG'},{title:'ÖBB treinticket',supplierBookingNumber:'HIJKLM'},{title:'Nightjet',supplierBookingNumber:'1111222233334444'}]};assert.deepEqual(carrierReferences(b,'obb'),['HIJKLM','1111222233334444']);assert.deepEqual(carrierReferences(b,'ns'),['ABCDEFG']);});
 test('issued ÖBB voucher PDF links are allowed without permitting ticket issuance or arbitrary endpoints',async()=>{const url='https://shop.oebbtickets.at/en/ticket/voucher/fixture-id';assert(safeCarrierPDF(url,'obb'));for(const path of ['/en/ticket/postcheckout/fixture-id','/en/ticket/offer/journey','/en/ticket/voucher/fixture-id?issue=true'])assert.equal(safeCarrierPDF('https://shop.oebbtickets.at'+path,'obb'),null);const m=mail('obb','issued',[]);m.payload.parts[0].body.data=Buffer.from(bodies.obb+' '+url).toString('base64url');const f=fixture('obb',[],{messages:[m]}),result=await f.control.search({provider:'obb',query:refs.obb});assert.equal(result.messages[0].tickets.length,1);assert(result.messages[0].manualLinks.some(l=>l.url===url));assert(!f.calls.some(c=>c.path.includes('postcheckout')));});
+
+test('hotel station names never create train references, labelled NS codes retain both journey dates',()=>{
+ const b={todos:[{title:'IntercityHotel Beispiel Hauptbahnhof | Twin',supplierBookingNumber:'HOTELX',startDate:'2027-05-02'},
+ {title:'Treinticket heenreis',supplierBookingNumber:'ATL: ABCDEFG',startDate:'2027-05-02'},
+ {title:'Treinticket terugreis',description:'ATL: ABCDEFG',startDate:'2027-05-05'}]};
+ assert.deepEqual(bookingReferences(b),['ABCDEFG']);assert.deepEqual(carrierReferences(b,'db'),[]);
+ assert.deepEqual(referenceDates(b,['ABCDEFG']),[{reference:'ABCDEFG',dates:['2027-05-02','2027-05-05']}]);
+});
+test('12-digit ÖBB references support grouped search and provider confirmation parsing',()=>{
+ assert.deepEqual(carrierReferences({todos:[{title:'ÖBB ticket',supplierBookingNumber:'1111 2222 3333'}]},'obb'),['111122223333']);
+ assert.match(carrierSearchQuery('obb','111122223333'),/"1111 2222 3333"/);
+ assert.deepEqual(carrierMessageReferences('obb','','Booking code: 1111 2222 3333'),['111122223333']);
+ for(const ref of ['2300000001','2400000001'])assert.deepEqual(carrierReferences({todos:[{title:'MAV ticket',supplierBookingNumber:ref}]},'mav'),[ref]);
+ assert.deepEqual(carrierMessageReferences('cd','www.cd.cz - information about order No. 123456 789 00',''),['12345678900']);
+});
+test('a matching carrier mail without a recognized PDF remains available for actionable diagnostics',async()=>{
+ const r=await fixture('db',[]).control.search({provider:'db',query:refs.db});assert.equal(r.messages.length,1);assert.equal(r.messages[0].tickets.length,0);assert.equal(r.messages[0].selected,false);
+});
+
+test('a newer receipt without tickets does not hide the latest actual ticket confirmation',async()=>{
+ const good=mail('db','old',['Ticket_fixture.pdf']),receipt=mail('db','new',['Rechnung.pdf']);
+ const r=await fixture('db',[],{messages:[receipt,good]}).control.search({provider:'db',query:refs.db});assert(r.messages.find(m=>m.id==='old').selected);assert(!r.messages.find(m=>m.id==='new').latest);
+});
