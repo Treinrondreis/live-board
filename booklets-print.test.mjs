@@ -38,7 +38,7 @@ function fixture(){
 }
 
 test('magazine defaults, inclusive tax/shipping and explicit international country handling',()=>{
- const p=printSettings(settings,20),a=p.articles[0];assert.equal(p.delivery_method,'post');assert.equal(a.product,'tijdschrift');assert.equal(a.finishing,'folding-stapling');assert.equal(a.folding,'middle_long');assert.equal(a.finishing_extra,'none');assert.equal(a.copies,2);assert.equal(a.papertype_cover,'250');assert.equal(a.papertype,'100');
+ const p=printSettings(settings,20),a=p.articles[0];assert.equal(p.delivery_method,'post');assert.equal(a.product,'tijdschrift');assert.equal(a.finishing,'folding-stapling');assert.equal(a.folding,'middle_long');assert.equal(a.finishing_extra,'none');assert.equal(a.number,2);assert.equal(a.copies,20);assert.equal(a.printside_back,1);assert.equal(a.papertype_cover,'250');assert.equal(a.papertype,'100');
  const be=printSettings({...settings,address:{...address,country:'België',postalcode:'1000'}},20);assert.equal(be.country,'BE');assert.equal(be.delivery_method,'international');
  assert.throws(()=>printSettings({...settings,address:{...address,country:''}},20),/land/);assert.throws(()=>printSettings({...settings,address:{...address,country:'DE'}},20),/postcode/);assert.throws(()=>printSettings(settings,19),/vier/);
  const split=printAddress({firstName:'Demo',address:'Voorbeeldstraat 10 B',country:'nederland'});assert.equal(split.number,'10');assert.equal(split.number_ext,'B');assert.equal(split.country,'NL');
@@ -46,7 +46,7 @@ test('magazine defaults, inclusive tax/shipping and explicit international count
 });
 test('preparation reads exact booking, quotes do not upload or order, client cannot supply page count',async()=>{
  const f=fixture(),p=await f.api.prepare({exportId:id});assert.equal(p.address.country,'NL');assert.equal(p.defaults.cover,'250');
- const q=await f.api.quote({exportId:id,settings,pages:999});assert.equal(q.price.totalCents,1452);assert.equal(f.calls.find(c=>c.path.endsWith('/calculate')).body.articles.map(a=>JSON.parse(a))[0].number,20);
+ const q=await f.api.quote({exportId:id,settings,pages:999});assert.equal(q.price.totalCents,1452);assert.equal(f.calls.find(c=>c.path.endsWith('/calculate')).body.articles.map(a=>JSON.parse(a))[0].copies,20);
  assert(!f.calls.some(c=>c.path==='/api/rest/orders'||c.path==='/api/rest/documents'));assert(!JSON.stringify(q).includes(f.token));
  await assert.rejects(f.api.order({exportId:id,quoteId:q.id}),/Bevestig/);
 });
@@ -56,7 +56,7 @@ test('changed price, expired quote, changed PDF and rotated credentials block or
 test('confirmed exact PDF uploads once, duplicate simultaneous clicks cannot create duplicate orders',async()=>{
  const f=fixture(),q=await f.api.quote({exportId:id,settings}),request={exportId:id,quoteId:q.id,confirmed:true};await Promise.all([f.api.order(request),f.api.order(request)]);await f.api.order(request);
  assert.equal(f.calls.filter(c=>c.path==='/api/rest/orders').length,1);assert.equal(f.calls.filter(c=>c.path==='/api/rest/documents').length,1);assert.equal(f.record.state,'placed');
- const article=JSON.parse(f.calls.find(c=>c.path==='/api/rest/orders').body.articles[0]);assert.equal(article.add_file_method,'upload');assert.match(article.filenames,/^reisboekje-[a-f0-9-]+\.pdf$/);assert.equal(article.file_url,undefined);
+ const article=JSON.parse(f.calls.find(c=>c.path==='/api/rest/orders').body.articles[0]);assert.equal(article.number,2);assert.equal(article.copies,20);assert.equal(article.printside_back,1);assert.equal(article.add_file_method,'upload');assert.match(article.filenames,/^reisboekje-[a-f0-9-]+\.pdf$/);assert.equal(article.file_url,undefined);
 });
 test('lost order response is reconciled by unique reference after restart, never resubmitted',async()=>{
  const f=fixture(),q=await f.api.quote({exportId:id,settings});f.postFailure=true;await f.api.order({exportId:id,quoteId:q.id,confirmed:true});assert.equal(f.record.state,'placed');await f.printer().order({exportId:id,quoteId:q.id,confirmed:true});assert.equal(f.calls.filter(c=>c.path==='/api/rest/orders').length,1);
@@ -64,4 +64,11 @@ test('lost order response is reconciled by unique reference after restart, never
 test('unknown order outcome stays blocked; known rejected order and upload failure can be corrected',async()=>{
  const f=fixture(),q=await f.api.quote({exportId:id,settings});f.record={quote_id:q.id,state:'uncertain',payload:{reference:'TRR-'+id,environment:'live'}};await f.api.order({exportId:id,quoteId:q.id,confirmed:true});assert(!f.calls.some(c=>c.path==='/api/rest/orders'));
  for(const kind of ['uploadFailure','rejected']){const g=fixture(),quote=await g.api.quote({exportId:id,settings});g[kind]=true;await assert.rejects(g.api.order({exportId:id,quoteId:quote.id,confirmed:true}));assert.equal(g.record.state,kind==='rejected'?'rejected':'upload_failed');g[kind]=false;await g.api.order({exportId:id,quoteId:quote.id,confirmed:true});assert.equal(g.record.state,'placed');}
+});
+
+test('printer field names keep independently chosen quantities separate from verified PDF pages',()=>{
+ const request=printSettings({...settings,copies:7},40),article=request.articles[0];
+ // Print&Bind product catalogue: number = oplage, copies = pagina's.
+ assert.equal(article.number,7);assert.equal(article.copies,40);assert.equal(article.printside_back,1);
+ assert.equal(article.printside,'double');assert.equal(article.finishing_cover,'none');
 });

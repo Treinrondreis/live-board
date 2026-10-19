@@ -28,7 +28,7 @@ export function printSettings(input,pages){
  if(!Number.isInteger(c.copies)||c.copies<1||c.copies>1000)throw Error('Kies 1 tot 1000 exemplaren.');
  if(!options.paper.includes(c.paper)||!options.covers.includes(c.cover)||!['all','cover','none'].includes(c.color)||!['standard','fast','budget'].includes(c.production))throw Error('Kies geldige papier- en productie-instellingen.');
  if(!Number.isInteger(pages)||pages<8||pages%4)throw Error('Maak een druk-PDF met minimaal acht pagina’s en een veelvoud van vier pagina’s.');
- return {...out,delivery_method:out.country==='NL'?'post':'international',delivery_option:'standard',production_method:c.production,articles:[{product:'tijdschrift',add_file_method:'email',number:pages,copies:c.copies,size:'a4',printside:'double',color:c.color,papertype:c.paper,papertype_cover:c.cover,finishing_cover:'none',finishing:'folding-stapling',folding:'middle_long',finishing_extra:'none',check_doc:false}]};
+ return {...out,delivery_method:out.country==='NL'?'post':'international',delivery_option:'standard',production_method:c.production,articles:[{product:'tijdschrift',add_file_method:'email',number:c.copies,copies:pages,size:'a4',printside:'double',color:c.color,papertype:c.paper,papertype_cover:c.cover,finishing_cover:'none',printside_back:1,finishing:'folding-stapling',folding:'middle_long',finishing_extra:'none',check_doc:false}]};
 }
 export function printPrice(data){
  const amount=data?.amount,shipping=data?.delivery_amount,reduced=data?.amount_tax_reduced,standard=data?.amount_tax_standard;

@@ -3,7 +3,8 @@
 The latest immutable export has a **Prijs & bestellen** button. Defaults: A4
 portrait magazine (`tijdschrift`), folding/stapling on the long side, duplex,
 full colour, 100 g interior, 250 g cover, no rounded corners or extra cover
-finishing, two copies, post and standard one-day production. Production is not
+finishing, printed reverse side of the cover, two copies, post and standard
+one-day production. Production is not
 the postal delivery time. Copies, paper, cover, colour and standard/fast/budget
 production are editable. The PDF must contain at least eight A4 portrait pages
 and a multiple of four; downloadable-only exports are rejected.
@@ -25,7 +26,10 @@ returned in browser responses, sent to the PDF service, or written in order data
 
 API contract: <https://www.printenbind.nl/api/docs#/>. The current order schema
 requires `articles` as JSON strings, despite object examples in the documentation.
-`number` comes from the verified PDF, never the browser. Prices add the documented
+The product catalogue names quantity `number` and page count `copies`: map the
+editable quantity to `number`, and the verified PDF page count to `copies`, never
+a client-supplied page count. `printside_back: 1` explicitly prints the back of
+the cover. Prices add the documented
 reduced/standard tax to `amount`; shipping is already included in `amount` and
 must not be added a second time. Incomplete prices cannot be confirmed.
 
@@ -61,3 +65,10 @@ and public documentation example address. The price service returned HTTP 500;
 the authentication check succeeded. Do not report live pricing or real order
 production as verified until Print&Bind resolves or explains that response.
 No live document upload or order was performed during development.
+
+
+On 2026-10-19 the corrected request (2 magazines, 32 verified pages, printed
+reverse cover) was retried using the code builder and the public documentation
+example address. The price endpoint still returned HTTP 500, Server Error,
+without field-level validation details. No quote was accepted and no PDF was
+uploaded or ordered. Keep this integration as a draft.
