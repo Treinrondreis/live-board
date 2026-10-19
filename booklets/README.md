@@ -339,3 +339,26 @@ het werkgeheugen, gebonden aan hetzelfde boekje en dezelfde boeking. Sluiten
 verwijdert die stappen; verlopen en afgeronde voortgangsschermen worden overgeslagen.
 Herladen opent het opgeslagen hoofdscherm. Late ticketresultaten mogen een
 verlaten stap niet heropenen of alsnog pagina's aan het boekje toevoegen.
+
+### Tabjes in de bouwsteeneditor
+
+De rechterkolom is verdeeld in Basis, Tekst & velden, Pagina en Opmaak, in die
+volgorde. Basis bevat naam, inhoudsopgave-instellingen, metadata, herkenning en
+brongegevens. Tekst & velden bevat veldkeuze, tekst, invulcodes, opmaakknoppen voor
+tekst en de tekstpassingscontrole. Pagina bevat vaste paginaopmaak en nummering.
+Opmaak bevat kolommen, positie, lettertype, kleur en achtergronden van het gekozen
+veld. Het voorbeeld links en de bediening rechts scrollen apart; Sluiten en
+Opslaan blijven bovenaan zichtbaar.
+
+Tabwissels tonen bestaande DOM-panelen zonder opnieuw renderen of opslaan.
+Gekozen pagina, veld en invoer blijven daardoor behouden. Een nieuwe editor begint
+bij Basis. De actieve tab blijft uitsluitend in een WeakMap in werkgeheugen en
+wordt niet in het document, browseropslag of de URL opgeslagen. Pijltoetsen,
+Home en End ondersteunen het tablist-/tabpanel-patroon.
+
+Klikken op een bestaand veld in het voorbeeld selecteert dat veld en opent Tekst
+& velden; klikken op een lege plek houdt de bestaande veldtoevoeging beschikbaar.
+Een tekstpassingsfout opent het rapport in Tekst & velden en kan naar het juiste
+veld op de juiste pagina in Opmaak springen. Alleen een unieke combinatie van
+veldnaam en pagina krijgt een directe verwijzing. Opmaak-, validatie-, PDF- en
+opslagregels zijn verder ongewijzigd; er zijn geen nieuwe Sanity-schrijfacties.
