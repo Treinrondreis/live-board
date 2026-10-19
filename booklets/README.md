@@ -330,3 +330,12 @@ het betreffende opgeslagen scherm. Onopgeslagen wijzigingen vragen de bestaande
 bevestiging en een lopende groep blokkeert verlaten. De vaste knop voor terug
 naar de groep en de actie bij pagina's kiezen bewaren de correctie, controleren
 dat ene boekje opnieuw en behouden de andere groepsregels.
+
+
+Dialogen hebben ook een eigen tijdelijke stap met een zichtbare terugknop en
+kruimelpad. Terug/vooruit herstelt de oorspronkelijke DOM en formulierinvoer
+zonder opnieuw ophalen of opslaan. Maximaal 24 stappen blijven uitsluitend in
+het werkgeheugen, gebonden aan hetzelfde boekje en dezelfde boeking. Sluiten
+verwijdert die stappen; verlopen en afgeronde voortgangsschermen worden overgeslagen.
+Herladen opent het opgeslagen hoofdscherm. Late ticketresultaten mogen een
+verlaten stap niet heropenen of alsnog pagina's aan het boekje toevoegen.
