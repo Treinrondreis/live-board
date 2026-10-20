@@ -1,0 +1,6 @@
+export function installReishuisShell(current){
+ document.body.classList.add('rh-shell');const nav=document.createElement('nav');nav.className='rh-menu';nav.setAttribute('aria-label','Hoofdmenu');
+ for(const [key,title,url] of [['home','Reishuis','/seinhuis/reishuis/'],['bookings','Boekingen','/seinhuis/reishuis/boekingen/'],['hotels','Hotels','/seinhuis/reishuis/hotels/'],['unlinked','Niet gekoppeld','/seinhuis/reishuis/hotels/?view=unlinked'],['seinhuis','Seinhuis','/seinhuis/']]){const a=document.createElement('a');a.href=url;a.textContent=title;if(key===current)a.setAttribute('aria-current','page');nav.append(a);}
+ const toggle=document.createElement('button');toggle.className='rh-menu-toggle';toggle.textContent='☰ Menu';toggle.type='button';toggle.setAttribute('aria-expanded','false');toggle.onclick=()=>{const on=document.body.classList.toggle('rh-menu-open');toggle.setAttribute('aria-expanded',String(on));};document.body.prepend(toggle,nav);
+ const tools=document.querySelector('.app-nav');if(tools)tools.className='rh-tools';let content=document.querySelector('main');if(!content){content=document.createElement('main');document.body.append(content);}content.id='rh-content';return content;
+}

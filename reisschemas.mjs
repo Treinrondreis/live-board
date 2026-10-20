@@ -1,3 +1,4 @@
+import {createReisschemaSummary,defaultLookupPlans,reisschemaSummary} from './reisschema-summary.mjs';
 import {readFile} from 'node:fs/promises';
 import {floraRegister} from './flora-register.mjs';
 import {enrichChanges} from './reisschema-changes.mjs';
@@ -8,7 +9,7 @@ import {enrichPunctuality,punctualityHistory,punctualityStatus} from './punctual
 
 const prefix='/seinhuis/reisschemas';
 // Separate owner-only section; original itineraries stay immutable.
-export function createReisschemasHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req),register=floraRegister,lookupPlans=async(number,date)=>(await import('./journeys.mjs')).journeyPlansForDate(number,date),controls=controlRoutes}={}){
+export function createReisschemasHandler({authenticate=async req=>(await import('./admin-security.mjs')).adminAuthenticated(req),register=floraRegister,lookupPlans=defaultLookupPlans,controls=controlRoutes}={}){
  return async(req,res,url)=>{
   if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
   for(const [k,v] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow, noarchive','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}))res.setHeader(k,v);
@@ -18,8 +19,8 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
    return reply(401,{error:'Log eerst in als Seinhuis-beheerder.'});
   }
   const path=url.pathname.slice(prefix.length);
-  if(await controls(req,res,url))return true;
-  async function summary(){const data=await register.summary();let notifications=[];if(data.available&&register.notificationContexts)notifications=await register.notificationContexts();return {...data,legs:data.available?await enrichPunctuality(await enrichChanges(data.legs,lookupPlans)):[],notifications,punctualityStatus:punctualityStatus()};}
+  if(await controls(req,res,url)){if(req.method!=='GET')reisschemaSummary.invalidate();return true;}
+  const summary=register===floraRegister&&lookupPlans===defaultLookupPlans?reisschemaSummary:createReisschemaSummary({register,lookupPlans});
   if(path==='/api/punctuality'&&req.method==='GET'){
    const id=url.searchParams.get('legId');if(!/^[a-f0-9-]{36}$/.test(id||''))return reply(400,{error:'Ongeldige rit.'});
    const data=await register.summary();if(!data.available)return reply(503,{error:'Register niet bereikbaar.'});
@@ -53,12 +54,12 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
      if(!row.notification_context)await register.recordLegEvent(row.version_id,'observation',{...snapshot,leg_id:row.leg_id,request_id:data.requestId+'-observation'});
      await register.recordLegEvent(row.version_id,'communication',{leg_id:row.leg_id,change_key,communicated_at:data.communicatedAt,method:data.method,reference:data.reference||'',request_id:data.requestId});
     }
-    return reply(200,{ok:true});
+    reisschemaSummary.invalidate();return reply(200,{ok:true});
    }catch{return reply(400,{error:'Opslaan niet bevestigd. Vernieuw de pagina en controleer de registratie.'});}
   }
   if(req.method!=='GET')return reply(405,{error:'Actie niet beschikbaar.'});
   if(path==='/api/register')return reply(200,await summary());
-  const files={'':'reisschemas.html','/':'reisschemas.html','/reisschemas.js':'reisschemas.js','/reisschemas.css':'reisschemas.css','/reisschema-number-policy.mjs':'reisschema-number-policy.mjs','/punctuality-view.mjs':'punctuality-view.mjs'};
+  const files={'':'reisschemas.html','/':'reisschemas.html','/reisschemas.js':'reisschemas.js','/reisschema-table.mjs':'reisschema-table.mjs','/reisschemas.css':'reisschemas.css','/reisschema-number-policy.mjs':'reisschema-number-policy.mjs','/punctuality-view.mjs':'punctuality-view.mjs'};
   if(!files[path])return reply(404,{error:'Niet gevonden.'});
   const file=files[path],ext=file.split('.').pop();
   res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});

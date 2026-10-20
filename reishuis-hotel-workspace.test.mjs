@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {hotelFinancialIndex,hotelTodoIndex,hotelStays} from './reishuis-hotel-links.mjs';
 import {normalizeDossier} from './reishuis-dossier.mjs';
 import {normalizeHotel} from './reishuis-hotels.mjs';
-const h=normalizeHotel({_id:'fixture-hotel',title:'Voorbeeldhotel',titleShort:'Voorbeeld',bookingPriceSource:'cms',rooms:[{_key:'double',title:'Standaard',titleShort:'Double',prices:[{price:'120'}]}]});
-const todo={_key:'stay',done:true,title:'Voorbeeld | Double',tag:'hotel',done:true,startDate:'2027-03-05',endDate:'2027-03-08',quantity:2,supplierBookingNumber:'fixture-reservation'},line={_key:'invoice',title:'5 mrt. - 8 mrt.: Voorbeeldhotel | Double',quantity:2,price:210,costs:199};
+const h=normalizeHotel({_id:'fixture-hotel',title:'Voorbeeldhotel',titleShort:'Voorbeeld',bookingPriceSource:'cms',meals:'roomOnly',rooms:[{_key:'double',title:'Standaard',titleShort:'Double',prices:[{price:'120'}]}]});
+const todo={_key:'stay',done:true,title:'Voorbeeld | Double (zonder ontbijt)',tag:'hotel',done:true,startDate:'2027-03-05',endDate:'2027-03-08',quantity:2,supplierBookingNumber:'fixture-reservation'},line={_key:'invoice',title:'5 mrt. - 8 mrt.: Voorbeeldhotel | Double',quantity:2,price:210,costs:199};
 const booking=()=>({id:'fixture-booking',index:'F-9001',name:'Fictieve Reiziger',status:'te verwerken',hotelTodos:hotelTodoIndex([todo]),hotelFinancialLines:hotelFinancialIndex([line])});
 const get=(b=booking(),s={})=>hotelStays([b],s,[h],h.id,'2027-01-01');
 test('financial index preserves stable dossier identities and minimal fields only',()=>{

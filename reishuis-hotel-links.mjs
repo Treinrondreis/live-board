@@ -1,3 +1,4 @@
+import {comparableStay} from './reishuis-comparison.mjs';
 import {hotelNight} from './reishuis-hotel-pricing.mjs';
 import {createHash} from 'node:crypto';
 import {mergeDossier} from './reishuis-dossier.mjs';
@@ -47,7 +48,7 @@ export function hotelMatches(dossier,hotels,components={},original,resolve=hotel
   if(t.component){if(!(claims.get(t.component.line)||[]).includes(t.id))claims.set(t.component.line,[...(claims.get(t.component.line)||[]),t.id]);continue;}
   if(t.tag!=='hotel')continue;
   const originalTodo=original?.todos.find(r=>r.id===t.id&&r.tag==='hotel'&&name(r.title)===name(t.title)),anchor=originalTodo||t;
-  const found=resolve(anchor.title);if(found.length!==1){results[t.id]={reason:found.length?'Meerdere hotels passen bij deze naam.':'Hotelnaam niet eenduidig herkend.'};continue;}
+  const found=t.hotelLink?hotels.filter(h=>h.id===t.hotelLink):resolve(anchor.title);if(found.length!==1){results[t.id]={reason:found.length?'Meerdere hotels passen bij deze naam.':'Hotelnaam niet eenduidig herkend.'};continue;}
   const h=found[0],room=roomForTitle(t.title,h),start=date(anchor.startDate),end=date(anchor.endDate),result={hotel:h.id,room:room?.key||'',reason:'Geen eenduidige financiële regel met dezelfde hotelnaam en datum.'};results[t.id]=result;
   if(!start||!end||end<=start)continue;
   let lines=dossier.lines.filter(l=>!l.sourceRemoved&&l.type==='product'&&resolve(l.title).length===1&&resolve(l.title)[0].id===h.id).filter(l=>{
@@ -69,32 +70,32 @@ export function hotelFinancialIndex(lines){
  return list.filter(l=>typeof l._key==='string'&&list.filter(r=>r._key===l._key).length===1).map(l=>({id:'source-'+createHash('sha256').update(JSON.stringify(['line',l._key,0])).digest('hex').slice(0,32),title:typeof l.title==='string'?l.title:'',date:date(l.date),quantity:num(l.quantity??l.amount??1),price:num(l.price),costs:num(l.costs),type:['product','discount','margin','option'].includes(l.type)?l.type:'product'}));
 }
 const lineTotal=(line,field)=>{if(!line||line.sourceRemoved||typeof line.quantity!=='number'||!Number.isFinite(line.quantity)||typeof line[field]!=='number'||!Number.isFinite(line[field]))return null;const value=Math.round(line.quantity*line[field]*100)/100;return Number.isFinite(value)?value:null;};
-function currentStayPrice(c,hotels){
+function currentStayPrice(c,hotels,line,originalLine,todo){
  if(!c)return {price:null,reason:'Hotel, kamer en financiële regel nog niet eenduidig gekoppeld.'};
  const h=hotels.find(h=>h.id===c.hotel),room=h?.rooms.find(r=>r.key===c.room),start=date(c.checkin),end=date(c.checkout),nights=(Date.parse(end)-Date.parse(start))/86400000;
  if(!room||!start||!end||!Number.isInteger(nights)||nights<1||nights>366||!Number.isInteger(c.rooms)||c.rooms<1||c.rooms>100)return {price:null,reason:'Controleer kamer, datums en aantal kamers.'};
- let amount=0;const sources=new Set();for(let i=0;i<nights;i++){const d=new Date(Date.parse(start)+i*86400000).toISOString().slice(0,10),r=hotelNight(h,room,d,hotels,c);if(r.missing)return {price:null,reason:r.missing};amount+=Math.round(r.price*100)*c.rooms;sources.add(r.source||'APO');}return {price:amount/100,source:[...sources].join(' / ')};
+ let amount=0;const sources=new Set();for(let i=0;i<nights;i++){const d=new Date(Date.parse(start)+i*86400000).toISOString().slice(0,10),r=hotelNight(h,room,d,hotels,c);if(r.missing)return {price:null,reason:r.missing};amount+=Math.round(r.price*100)*c.rooms;sources.add(r.source||'APO');}const source=[...sources].join(' / ');return {...comparableStay({base:amount/100,source,hotel:h,room,component:c,line,originalLine,todo,originalHotel:(hotelsForTitle(originalLine?.title||todo?.title,hotels).length===1?hotelsForTitle(originalLine?.title||todo?.title,hotels)[0]:null)}),source};
 }
-export function hotelStays(bookings,state,hotels,id,today,period='upcoming',page=0){
+export function hotelStays(bookings,state,hotels,id,today,period='upcoming',page=0,{includePending=false}={}){
  const stays=[],resolve=hotelResolver(hotels),byId=new Map(hotels.map(h=>[h.id,h]));let uncertain=0;
  for(const b of bookings){
   const local=state.dossiers?.[b.id]||{},source={todos:b.hotelTodos||[],lines:b.hotelFinancialLines||[],personal:{}},dossier=mergeDossier(source,local),active=dossier.todos.filter(t=>!t.review&&!t.archived);
-  if(!active.some(t=>t.component?.hotel===id||!t.component&&t.tag==='hotel'&&resolve(t.title).some(h=>h.id===id)))continue;
+  if(id!==null&&!active.some(t=>t.hotelLink===id||t.component?.hotel===id||!t.component&&t.tag==='hotel'&&resolve(t.title).some(h=>h.id===id)))continue;
   const automatic=hotelMatches(dossier,hotels,local.components,source,resolve),claims=new Map();for(const t of active){const c=t.component||automatic[t.id]?.component;if(c?.line)claims.set(c.line,(claims.get(c.line)||0)+1);}
   for(const t of active){
-   if(t.status!=='done')continue;
+   if(t.status!=='done'&&!includePending)continue;
    const c=hotelRateChoice(t.component||automatic[t.id]?.component,hotels);if(c&&c.kind!=='hotel')continue;
-   const found=c?.hotel?(byId.has(c.hotel)?[byId.get(c.hotel)]:[]):t.tag==='hotel'?resolve(t.title):[];
-   if(found.length!==1){if(found.some(h=>h.id===id))uncertain++;continue;}if(found[0].id!==id)continue;
+   const found=c?.hotel?(byId.has(c.hotel)?[byId.get(c.hotel)]:[]):t.hotelLink?(byId.has(t.hotelLink)?[byId.get(t.hotelLink)]:[]):t.tag==='hotel'?resolve(t.title):[];
+   if(found.length!==1){if(found.some(h=>h.id===id))uncertain++;continue;}if(id!==null&&found[0].id!==id)continue;const hotelId=found[0].id;
    const checkin=date(c?.checkin||t.startDate),checkout=date(c?.checkout||t.endDate),rooms=c?.rooms??t.quantity;
    const cancelled=/^(geannuleerd|geannuleerd door klant|cancelled|canceled)$/.test(String(b.status||'').trim().toLowerCase()),past=!!checkout&&checkout<=today;
    if(period==='cancelled'){if(!cancelled)continue;}else if(period==='past'?!past:past)continue;
-   const unique=!!c?.line&&claims.get(c.line)===1,line=unique?dossier.lines.find(l=>l.id===c.line):null,current=unique?currentStayPrice(c,hotels):{price:null,reason:'Financiële koppeling ontbreekt of is dubbelzinnig.'},nightCount=checkin&&checkout?(Date.parse(checkout)-Date.parse(checkin))/86400000:null;
-   stays.push({todo:t.id,booking:b.id,index:b.index,name:b.name,checkin,checkout,rooms:Number.isInteger(rooms)&&rooms>0?rooms:null,room:byId.get(id)?.rooms.find(r=>r.key===c?.room)?.title||t.title.split('|').slice(1).join(' | ').trim(),status:b.status,cancelled,attention:cancelled?'Reis geannuleerd; hotel is nog geboekt.':b.status==='wacht op reactie klant'?'Wacht op reactie klant; hotel is al geboekt.':'',calculated:lineTotal(line,'price'),actual:lineTotal(line,'costs'),current:current.price,priceReason:current.reason||'',provider:current.source||(byId.get(id)?.bookingPriceSource==='cms'?'Contract':c?.provider||''),supplierBookingNumber:t.supplierBookingNumber||'',roomNights:Number.isInteger(nightCount)&&nightCount>0&&Number.isInteger(rooms)&&rooms>0?nightCount*rooms:null,needsReview:!!t.sourceRemoved||!checkin||!checkout||checkout<=checkin||!Number.isInteger(rooms)||rooms<1||!unique});
+   const unique=!!c?.line&&claims.get(c.line)===1,line=unique?dossier.lines.find(l=>l.id===c.line):null,current=unique?currentStayPrice({...c,breakfastPersons:c.breakfastPersons??(!active.some(other=>other.id!==t.id&&other.tag==='hotel'&&(other.component?.checkin||other.startDate)<checkout&&(other.component?.checkout||other.endDate)>checkin)?b.travellers:null)},hotels,line,source.lines.find(l=>l.id===c.line),t):{price:null,reason:'Financiële koppeling ontbreekt of is dubbelzinnig.'},nightCount=checkin&&checkout?(Date.parse(checkout)-Date.parse(checkin))/86400000:null;
+   stays.push({hotel:hotelId,todo:t.id,booking:b.id,index:b.index,name:b.name,checkin,checkout,rooms:Number.isInteger(rooms)&&rooms>0?rooms:null,room:byId.get(hotelId)?.rooms.find(r=>r.key===c?.room)?.title||t.title.split('|').slice(1).join(' | ').trim(),status:b.status,cancelled,attention:cancelled?'Reis geannuleerd; hotel is nog geboekt.':b.status==='wacht op reactie klant'?'Wacht op reactie klant; hotel is al geboekt.':'',calculated:lineTotal(line,'price'),actual:lineTotal(line,'costs'),current:current.price,baseCurrent:current.basePrice??null,breakfast:current.breakfast||'Onbekend',saving:current.price!==null&&typeof lineTotal(line,'price')==='number'?Math.round((lineTotal(line,'price')-current.price)*100)/100:null,priceReason:current.reason||'',provider:current.source||(byId.get(hotelId)?.bookingPriceSource==='cms'?'Contract':c?.provider||''),supplierBookingNumber:t.supplierBookingNumber||'',roomNights:Number.isInteger(nightCount)&&nightCount>0&&Number.isInteger(rooms)&&rooms>0?nightCount*rooms:null,needsReview:!!t.sourceRemoved||!checkin||!checkout||checkout<=checkin||!Number.isInteger(rooms)||rooms<1||!unique});
   }
  }
  stays.sort((a,b)=>(a.checkin||'9999').localeCompare(b.checkin||'9999')||a.index.localeCompare(b.index)||a.todo.localeCompare(b.todo));
  const summarize=list=>{const actual=list.filter(r=>r.actual!==null&&r.roomNights),knownNights=actual.reduce((n,r)=>n+r.roomNights,0);return {bookings:new Set(list.map(r=>r.booking)).size,stays:list.length,rooms:list.some(r=>r.rooms===null)?null:list.reduce((n,r)=>n+r.rooms,0),roomNights:list.some(r=>r.roomNights===null)?null:list.reduce((n,r)=>n+r.roomNights,0),averageActual:knownNights?Math.round(actual.reduce((n,r)=>n+Math.round(r.actual*100),0)/knownNights)/100:null,actualMissing:list.filter(r=>r.actual===null).length};};
  const months={};for(const r of stays){const month=r.checkin?.slice(0,7)||'unknown';if(!months[month])months[month]=[];months[month].push(r);}for(const month of Object.keys(months))months[month]=summarize(months[month]);
- const total=stays.length,pages=Math.max(1,Math.ceil(total/25)),current=Math.min(page,pages-1);return {stays:stays.slice(current*25,current*25+25),total,page:current,pages,uncertain,summary:summarize(stays),months};
+ const total=stays.length,pages=Math.max(1,Math.ceil(total/25)),current=Math.min(page,pages-1);return {stays:page===-1?stays:stays.slice(current*25,current*25+25),total,page:current,pages,uncertain,summary:summarize(stays),months};
 }
