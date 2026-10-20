@@ -1,3 +1,4 @@
+import book_links
 """Local pilot. PDF originals and published exports are immutable. No AI services; optional read-only Google Docs connection."""
 import copy
 from pdf_geometry import display_meta, normalize_page
@@ -503,6 +504,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200,('<!doctype html><meta charset=utf-8><title>Google koppelen</title><p>'+html.escape(message)+'</p>').encode(),'text/html; charset=utf-8',{'Cache-Control':'no-store','Referrer-Policy':'no-referrer'})
         session=self.auth()
         if not session:return self.send(401,{'error':'Log eerst in.'})
+        if path=='/api/linked-books':
+            with db() as c:return self.send(200,book_links.linked(c,parse_qs(urlparse(self.path).query).get('bookingId',[''])[0]))
         if path=='/api/google/status':
             return self.send(200,google_connection.status(DATA))
         if path=='/api/export-storage':

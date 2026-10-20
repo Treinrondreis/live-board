@@ -39,7 +39,7 @@ export async function fetchReishuisDossier(id,{fetcher=fetch,config=sanityConfig
 export function mergeDossier(source,local={}){
  const merge=(rows,overrides={})=>[...rows.map(r=>({...r,...(overrides[r.id]?._edited?Object.fromEntries(overrides[r.id]._edited.map(k=>[k,overrides[r.id][k]])):overrides[r.id]),localChanged:!!overrides[r.id],localStatus:!!overrides[r.id]&&(!overrides[r.id]._edited||overrides[r.id]._edited.includes('status'))})),...Object.entries(overrides).filter(([id])=>!rows.some(r=>r.id===id)).map(([id,r])=>({...r,id,localChanged:true,sourceRemoved:!r.local}))];
  return {...source,contacts:local.contacts||{phones:[],emails:[]},personal:{...source.personal,...local.personal},comment:local.notes?.comment??source.comment,notes:local.notes?.notes??source.notes,
- todos:[...merge(source.todos,local.todos).map(t=>({...t,component:local.components?.[t.id]||null})),...(local.reviews||[]).filter(t=>!t.archived),...(local.reviews||[]).filter(t=>t.archived)],changeHistory:local.changes||[],lines:merge(source.lines,local.lines),localChanged:Object.keys(local).length>0};
+ todos:[...merge(source.todos,local.todos).map(t=>({...t,component:local.components?.[t.id]||null,hotelLink:local.hotelLinks?.[t.id]||null})),...(local.reviews||[]).filter(t=>!t.archived),...(local.reviews||[]).filter(t=>t.archived)],changeHistory:local.changes||[],lines:merge(source.lines,local.lines),localChanged:Object.keys(local).length>0};
 }
 function bad(){const e=Error('Invalid dossier input');e.status=400;throw e;}
 function clean(values,fields){

@@ -1,7 +1,7 @@
 export function createIncomingCalls({node,open,isEditing,onDenied,bookings=()=>[],link=async()=>{}}){
  const root=document.getElementById('incoming-call'),anchor=document.getElementById('rows'),status=document.getElementById('rinkel-state');let cursor,timer,generation=0,noticeTimers=[];
  const home=()=>{if(anchor.isConnected)anchor.before(root);};
- document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',home));
+ document.querySelectorAll('dialog,#detail').forEach(dialog=>dialog.addEventListener('close',home));
  function clear(){generation++;clearTimeout(timer);for(const t of noticeTimers)clearTimeout(t);noticeTimers=[];root.replaceChildren();root.hidden=true;status.hidden=true;status.textContent='';home();}
  async function poll(seq){
   let delay=3000;
@@ -16,7 +16,7 @@ export function createIncomingCalls({node,open,isEditing,onDenied,bookings=()=>[
    const events=(data.events||[]).filter(e=>Date.now()-e.at<1800000);if(!events.length)return;
    for(const event of events)if(event.matches?.length===1){try{await link({action:'rinkel-link',call:event.id,booking:event.matches[0].id,remember:false,confirm:true});}catch{status.textContent='Rinkel: gesprek nog niet opgeslagen; koppel het handmatig.';}if(seq!==generation)return;}
    for(const t of noticeTimers)clearTimeout(t);noticeTimers=[];root.replaceChildren();root.hidden=false;root.append(node('strong',data.recent?'Recente oproep'+(events.length===1?'':'en'):events.length===1?'Inkomende oproep':'Inkomende oproepen'));
-   const active=document.querySelector('dialog[open]');if(active)active.prepend(root);else home();
+   const active=document.querySelector('dialog[open]')||document.querySelector('#detail[open]');if(active)active.prepend(root);else home();
    for(const event of events){
     const section=node('div',undefined,'incoming-event'),matches=event.matches||[];
     section.append(node('p',matches.length===0?(event.anonymous?'Anonieme oproep: geen dossierherkenning mogelijk.':'Geen passend dossier gevonden voor dit nummer.'):matches.length===1?'Eén passend dossier.':'Meerdere dossiers bij dit telefoonnummer. Kies de juiste boeking.'));

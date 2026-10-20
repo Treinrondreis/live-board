@@ -1,3 +1,4 @@
+import {journeyTable} from './reisschema-table.mjs';
 import {numberAssessment,controlPolicy,manualControlAttention} from './reisschema-number-policy.mjs';
 import {punctualityView} from './punctuality-view.mjs';
 (()=>{
@@ -43,39 +44,7 @@ import {punctualityView} from './punctuality-view.mjs';
  const legs=()=>state?.available&&Array.isArray(state.legs)?state.legs:[];
  const notificationRows=()=>state?.available&&Array.isArray(state.notifications)?state.notifications:[];
  const ready=()=>state?.configured&&state?.available;
- function table(rows,withBooking=false){
-  const heads=withBooking?['Selectie','Melding','Boeking','Reisdatum','Trein / vervoer','Vertrek','Traject','Aankomst','Reisschema','Controle']:['Selectie','Melding','Trein / vervoer','Vertrek','Traject','Aankomst','Controle'];
-  const timeCell=(r,mode)=>{
-   const isArrival=mode==='arrival',old=r[mode+'_time'],oldDate=isArrival?(r.arrival_date||r.travel_date):r.travel_date;
-   const next=r.observation?.[mode+'_time'],nextDate=r.observation?.[mode+'_date'];
-   const changed=next&&(next!==old||nextDate!==oldDate);
-   const showDate=(day)=>day&&day!==r.travel_date?'<span class="arrival-date">'+escape(date(day))+'</span>':'';
-   const p=punctualityView(r,mode),displayed=changed?next:old;
-   const measured=p?'<span class="punctuality-current" title="'+escape(p.kind)+'"><span class="source-note">Actueel</span>'+(p.cancelled?'<strong>Uitval</strong>':p.label?'<span class="delay-minutes" aria-label="Vertraging in minuten">'+escape(p.label)+'</span>':p.delay===0?'<strong>Op tijd</strong>':'<strong>Onbekend</strong>')+'</span>':'';
-   const planned=(p?'<span class="source-note">Gepland</span>':'')+(changed?'<del aria-label="Tijd uit reisschema">'+escape(old||'Onbekend')+showDate(oldDate)+'</del><strong class="new-time" aria-label="Nieuwe gecontroleerde tijd">'+escape(next)+showDate(nextDate)+'</strong>':'<strong>'+escape(old||'Onbekend')+'</strong>'+showDate(oldDate));
-   return '<td class="time-cell"><span class="punctuality-times"><span>'+planned+'</span>'+measured+'</span>'+(p&&p.planned!==displayed?'<span class="source-note">Bronplanning '+escape(p.planned)+'</span>':'')+'</td>';
-  };
-  return '<table class="journey-table"><thead><tr>'+heads.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+sortLegs(rows).map(r=>{
-   const c=changeState(r),messages=[],policy=controlPolicy(r),number=numberAssessment(r,r.observation);
-   if(number.notify)messages.push('<span class="badge">Nr.</span>');
-   if(policy.extra_db_required)messages.push('<span class="badge">DB</span>');
-   if(c.alert)messages.push('<span class="attention" role="img" aria-label="Aandacht nodig" title="'+escape(r.observation.cancelled?'Trein vervalt':r.observation.connection_broken&&!r.observation.backup_communicated?'Aansluiting niet haalbaar; geen back-up gecommuniceerd':'Vertrek minimaal vier minuten vervroegd')+'">!</span>');
-   if(c.communicated)messages.push('<span class="communicated" role="img" aria-label="Wijziging gecommuniceerd" title="Gecommuniceerd op '+escape(new Date(r.communication.communicated_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'">✓</span>');
-   let source=r.observation?'<span class="source-note">'+escape(r.observation.source)+' · bron geraadpleegd '+escape(new Date(r.observation.observed_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>':'<span class="source-note">Nog geen gekoppelde controle</span>';
-   if(r.control){source+='<span class="source-note">Controle '+escape(new Date(r.control.checked_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';if(manualControlAttention(r))source+='<strong class="manual-task">Handmatig controleren: '+escape(r.control.reason)+' <a href="https://int.bahn.de/nl" target="_blank" rel="noopener noreferrer">DB openen ↗</a></strong>';else if(r.control.outcome==='manual')source+='<span class="source-note">Niet gecontroleerd: '+escape(r.control.reason)+'</span>';else if(r.control.assessment?.tightConnectionReview)source+='<strong class="manual-task">Aansluiting en eerder gecommuniceerde back-up beoordelen</strong>';}
-   if(r.control?.outcome==='checked'&&r.control.reason)source+='<span class="control-reason '+(number.notify||policy.extra_db_required?'manual-task':'source-note')+'">'+escape(r.control.reason)+(policy.extra_db_required?' <a href="https://int.bahn.de/nl" target="_blank" rel="noopener noreferrer">Extra DB-controle openen ↗</a>':'')+'</span>';
-   if(r.draft)source+='<span class="source-note">Concept aangemaakt; verzending afzonderlijk registreren</span>';
-   if(r.control?.assessment?.reservationReview)source+='<strong class="manual-task">Reservering beoordelen</strong>';
-   if(r.control?.assessment?.backupReview)source+='<span class="source-note">Eerder gecommuniceerde back-up opnieuw beoordelen</span>';
-   if(r.control?.assessment?.draftRequired&&!c.communicated)source+='<strong class="manual-task">Conceptmail voorbereiden</strong>';
-   if(r.control?.assessment?.arrival>0)source+='<span class="source-note">Latere aankomst: reisgevolgen beoordelen</span>';
-   if(r.last_planning_ok_at)source+='<span class="source-note">Laatst zonder vastgestelde afwijking: '+escape(new Date(r.last_planning_ok_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';
-   if(r.observation?.station_changed)source+='<strong class="manual-task">Nieuw traject: '+escape(r.observation.departure_station)+' → '+escape(r.observation.arrival_station)+(/^NJ\s/i.test(r.train_number)&&r.observation.departure_station!==r.from_station?' · Nightjet-instapstation gewijzigd: Newrest informeren ter voorkoming van no-show':'')+'</strong>';
-   if(r.receipt)source+='<span class="source-note">Ontvangst bevestigd '+escape(new Date(r.receipt.confirmed_at).toLocaleString('nl-NL',{timeZone:'Europe/Amsterdam'}))+'</span>';
-   if(Object.keys(r.punctuality||{}).length)source+='<button class="small-button" data-punctuality="'+escape(r.leg_id)+'">Stiptheidshistorie</button>';
-   return '<tr class="'+(c.alert||number.notify||policy.extra_db_required?'needs-attention':'')+'"><td class="selection-cell">'+(r.leg_id&&r.status==='active'&&['train','ferry'].includes(r.transport_type||'train')?'<input type="checkbox" data-select-leg="'+escape(r.leg_id)+'" aria-label="Selecteer rit '+escape(r.train_number)+' op '+escape(date(r.travel_date))+'"'+(checkedLegs.has(r.leg_id)?' checked':'')+'>':'')+'</td><td class="status-cell">'+messages.join(' ')+'</td>'+(withBooking?'<td><button class="text-button" data-booking="'+escape(bookingId(r))+'">'+escape(r.dossier)+'</button>'+(r.booking_key?'<br><span class="muted">'+escape(r.booking_key)+'</span>':'')+'</td><td>'+escape(date(r.travel_date))+'</td>':'')+'<td class="train-cell"><strong>'+escape(r.train_number||r.transport_type||'Onbekend')+'</strong>'+(number.changed?'<span class="badge">Nu '+escape(number.after)+'</span>':'')+(r.role==='backup'?'<span class="badge">Back-up</span>':'')+(r.observation?.cancelled?'<span class="badge">Vervalt</span>':'')+'</td>'+timeCell(r,'departure')+'<td class="route-cell"><span class="station">'+escape(r.from_station)+'</span><span class="route-arrow" aria-label="naar">→</span><span class="station">'+escape(r.to_station)+'</span>'+source+(r.observation?.connection_broken?'<span class="connection-note">Aansluiting niet haalbaar'+(r.observation.backup_communicated?' · back-up gecommuniceerd':'')+'</span>':'')+'</td>'+timeCell(r,'arrival')+(withBooking?'<td>'+documentLink(r.document_url)+'</td>':'')+'<td>'+(r.leg_id?'<button class="small-button" data-edit-leg="'+escape(r.leg_id)+'">Controleren / communicatie</button>':'')+'</td></tr>';
-  }).join('')+'</tbody></table>';
- }
+ const table=(rows,withBooking=false)=>journeyTable(rows,withBooking,{checkedLegs});
  function renderTrains(){
   el('register').innerHTML='';el('summary').textContent='';if(!ready())return;
   const q=normalized(el('search').value),day=el('train-date').value,until=el('train-until').value;
