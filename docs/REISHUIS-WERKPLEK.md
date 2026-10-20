@@ -98,3 +98,37 @@ Rinkel- en reisschemamakerbrowsertests blijven regressiecontroles.
 Werk via PR en groene CI. Handmatige uitrol: Booklets (achterwaarts compatibele
 leesroute), daarna hoofdapp. Verifieer beide deploymentstatussen en beveiligde
 live routes; gebruik geen klantmutaties voor productiecontrole.
+
+
+## Compacte werkplek en snelheid (vervolg op #155)
+
+Alle pagina's gebruiken nu dezelfde door `reishuis-shell.js` gemaakte kopbalk,
+met dezelfde groene achtergrond, ingelogde gebruiker en actiezone. Boekingen
+gebruiken dezelfde kolomopzet als Hotels; de todo gebruikt de volledige resterende
+schermhoogte. Oude vaste offsets uit de vroegere popup worden overschreven.
+Filters openen via een knop. Hotelrijen tonen vijf kaarten tegelijk met horizontaal
+scrollen en pijlen naar de overige resultaten. De compacte typografie en taakregels
+hebben minder witruimte en geen algemene zware vetdruk.
+
+De hotellijst en dashboarddata starten parallel. Een laadmelding vervangt het
+oude lege selectiescherm. Een later dashboardantwoord mag een inmiddels gekozen
+hotel niet overschrijven; de browsertest vertraagt dit antwoord bewust.
+De hotelnaamindex wordt eenmaal opgebouwd per berekeningspassage en naamresultaten
+worden hergebruikt. Ranking en besparingen delen één matching-/prijspassage voor
+de standaardperiode. Een lokale proef met 500 fictieve hotels en 1.000 boekingen
+mat circa 1.566 ms vóór en 42 ms na de wijziging voor een verse dashboardberekening.
+Dit is een lokale rekenmeting, geen garantie voor netwerk- of live laadtijden.
+
+Koppeling herkent unieke korte/lange namen met administratieve annotaties zoals
+[T] en {CHECK PRIJS}, het generieke woord Hotel en de expliciete plaatsvarianten
+Budapest/Boedapest en Vienna/Wenen/Wien. Dubbele passende namen blijven ambigu.
+De minimale bronindex leest nu ook tags en titels van overige todo's, zonder
+omschrijvingen of notities. Alleen taken die expliciet hotel zijn of uniek bij een
+hotelnaam passen komen in het hoteloverzicht; overige taken worden geen hotels.
+Alle bronophaling blijft GET/alleen-lezen. Geen productiedossier wordt voor een
+test gewijzigd.
+
+Besparingen zijn uitsluitend voor aankomende reizen en toekomstige hoteldata,
+onafhankelijk van een eventueel historisch hotelfilter. De kaart benoemt plaats,
+verblijfsperiode en voordeel. Oude/nieuwe prijs en 'hotelonderdelen' staan niet meer
+op de kaart. Ontbijt, beschikbaarheid en financiële ambiguïteit blijven gecontroleerd.
