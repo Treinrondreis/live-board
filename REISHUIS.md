@@ -234,3 +234,5 @@ De aangemelde gebruiker komt uitsluitend uit de serversessie. Lokale mutaties re
 Alle nieuwe routes behouden expliciete Reishuis-rol, same-origin, private/no-store en privacyheaders; lokale wijzigingen behouden CSRF, bronversie en revisiecontrole. Sanity blijft GET-only. Nieuwe resource- en browsertests gebruiken uitsluitend fictieve data.
 
 De knop Activiteit toont het bestaande algemene overzicht van maximaal 500 recente acties, met servergebruiker en links naar bekende boekingen. Dit overzicht wordt alleen op aanvraag geladen en blijft volledig achter de Reishuis-rol.
+
+Geboekte hotelonderdelen van geannuleerde reizen blijven ook in de aankomende/lopende of eerdere datumselectie zichtbaar, met doorhaling en waarschuwing. De hotelreservering kan immers nog bestaan. De aparte annuleringskeuze blijft beschikbaar. Dit vervangt de eerdere uitsluiting van geannuleerde reizen uit die datumselecties.
