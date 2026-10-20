@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
-import {hotelMatches,hotelStays,hotelTodoIndex,hotelRateChoice} from './reishuis-hotel-links.mjs';
+import {hotelMatches,hotelStays,hotelTodoIndex,hotelRateChoice,hotelResolver} from './reishuis-hotel-links.mjs';
 import {normalizeDossier,mergeDossier} from './reishuis-dossier.mjs';
 import {createReishuisHandler} from './reishuis.mjs';
 import {emptyReishuis} from './reishuis-store.mjs';
@@ -81,3 +81,6 @@ test('hotel overview only shows effectively booked tasks and warns on the trip s
  b.status='geannuleerd';assert.equal(read().total,1);const cancelled=hotelStays([b],state,hotels,hotels[0].id,'2027-01-01','cancelled').stays[0];assert.equal(cancelled.cancelled,true);assert.match(cancelled.attention,/geannuleerd/);
  const pending={...b,status:'te verwerken',hotelTodos:hotelTodoIndex([{...todo,done:false,status:'pending'}])};assert.equal(hotelStays([pending],{},hotels,hotels[0].id,'2027-01-01').total,0);
 });
+
+test('annotation and translated city variants match only a unique hotel and resolver reuses its index',()=>{let reads=0;const h={id:'fixture',get title(){reads++;return 'Voorbeeld Hotel Boedapest [T]';},titleShort:'Voorbeeld Budapest {CHECK PRIJS}',rooms:[]},resolve=hotelResolver([h]);for(let i=0;i<1000;i++)assert.equal(resolve('Voorbeeld Budapest | Double')[0].id,h.id);assert.equal(reads,1);assert.equal(resolve('Fr 01-01 | Voorbeeld Budapest (Teldar) | Double')[0].id,h.id);assert.equal(hotelResolver([h,{...h,id:'other'}])('Voorbeeld Budapest | Double').length,2);});
+test('known untagged hotel tasks join the overview but unrelated untagged tasks do not',()=>{const b={id:'fixture',index:'F-1',status:'te verwerken',hotelTodos:hotelTodoIndex([{...todo,tag:undefined},{_key:'other',title:'Documenten controleren',done:true}]),hotelFinancialLines:[]},r=hotelStays([b],{},hotels,'fixture-hotel','2027-01-01');assert.equal(r.stays.length,1);assert.equal(b.hotelTodos[0].tag,'');});
