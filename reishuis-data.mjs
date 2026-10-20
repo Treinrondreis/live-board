@@ -12,7 +12,7 @@ export async function fetchReishuisBookings({fetcher=fetch,config=sanityConfig()
  const all=[];let after='';
  for(let page=0;page<1000;page++){
   const u=new URL('https://il9cyh3m.api.sanity.io/v2026-10-03/data/query/production');
-  u.searchParams.set('query','*[_type == "tourBooking" && _id > $after] | order(_id asc)[0...100]{_id,_createdAt,_updatedAt,index,status,"hotelTodos":todos[tag=="hotel"]{_key,title,startDate,endDate,quantity,supplierBookingNumber},"hotelFinancialLines":lines[]{_key,title,date,quantity,amount,price,costs,type},firstName,lastName,dateDeparture,dateReturn,dateCreated,payments[]{status,price,dateDue,"hasLink":defined(checkoutUrl) && checkoutUrl != "",fulfillments[]{amount}},"photo":coalesce(trip->imagesWithData[0]->image.asset->url,trip->imagesWithData[0].image.asset->url)}');
+  u.searchParams.set('query','*[_type == "tourBooking" && _id > $after] | order(_id asc)[0...100]{_id,_createdAt,_updatedAt,index,status,"hotelTodos":todos[tag=="hotel"]{_key,title,startDate,endDate,quantity,status,done,supplierBookingNumber},"hotelFinancialLines":lines[]{_key,title,date,quantity,amount,price,costs,type},firstName,lastName,dateDeparture,dateReturn,dateCreated,payments[]{status,price,dateDue,"hasLink":defined(checkoutUrl) && checkoutUrl != "",fulfillments[]{amount}},"photo":coalesce(trip->imagesWithData[0]->image.asset->url,trip->imagesWithData[0].image.asset->url)}');
   u.searchParams.set('$after',JSON.stringify(after));u.searchParams.set('perspective','raw');
   const r=await fetcher(u,{method:'GET',redirect:'error',headers:{Authorization:`Bearer ${config.token}`},signal:AbortSignal.timeout(30000)});
   if(!r.ok)throw Error('Sanity read failed');

@@ -41,6 +41,6 @@ HTML en alle modules vallen onder de bestaande server-side Reishuis-rol, same-or
 
 ### Hotelboekingen: periode en annulering
 
-De standaardselectie **Aankomend en lopend** toont actieve verblijven waarvan de uitcheckdatum nog niet verstreken is. De uitcheckdag zelf valt onder **Eerdere boekingen**. Met **Geannuleerde boekingen** zijn annuleringen apart opvraagbaar: de gegevens zijn doorgestreept en krijgen het label Geannuleerd; de boekingslink blijft bruikbaar. Annuleringen tellen niet mee in de actieve standaardselectie. Dit is alleen een leesweergave, zonder wijzigingen in Sanity of financiële bedragen.
+De standaardselectie **Aankomend en lopend** toont geboekte/afgevinkte hotelonderdelen waarvan de uitcheckdatum nog niet verstreken is. De uitcheckdag zelf valt onder **Eerdere boekingen**. Met **Geannuleerde boekingen** zijn annuleringen apart opvraagbaar: de gegevens zijn doorgestreept en krijgen het label Geannuleerd; de boekingslink blijft bruikbaar. Geboekte hotels van geannuleerde reizen blijven ook in de datumselecties zichtbaar, met doorhaling en een waarschuwing; de reservering kan immers nog bestaan. Dit is alleen een leesweergave, zonder wijzigingen in Sanity of financiële bedragen.
 
 Regressie: synthetische tests controleren toekomstige/lopende verblijven, de uitcheckgrens, eerdere boekingen, annuleringsstatussen en de zichtbare doorhaling met dossierlink.

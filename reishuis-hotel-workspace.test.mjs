@@ -4,7 +4,7 @@ import {hotelFinancialIndex,hotelTodoIndex,hotelStays} from './reishuis-hotel-li
 import {normalizeDossier} from './reishuis-dossier.mjs';
 import {normalizeHotel} from './reishuis-hotels.mjs';
 const h=normalizeHotel({_id:'fixture-hotel',title:'Voorbeeldhotel',titleShort:'Voorbeeld',bookingPriceSource:'cms',rooms:[{_key:'double',title:'Standaard',titleShort:'Double',prices:[{price:'120'}]}]});
-const todo={_key:'stay',title:'Voorbeeld | Double',tag:'hotel',startDate:'2027-03-05',endDate:'2027-03-08',quantity:2,supplierBookingNumber:'fixture-reservation'},line={_key:'invoice',title:'5 mrt. - 8 mrt.: Voorbeeldhotel | Double',quantity:2,price:210,costs:199};
+const todo={_key:'stay',done:true,title:'Voorbeeld | Double',tag:'hotel',done:true,startDate:'2027-03-05',endDate:'2027-03-08',quantity:2,supplierBookingNumber:'fixture-reservation'},line={_key:'invoice',title:'5 mrt. - 8 mrt.: Voorbeeldhotel | Double',quantity:2,price:210,costs:199};
 const booking=()=>({id:'fixture-booking',index:'F-9001',name:'Fictieve Reiziger',status:'te verwerken',hotelTodos:hotelTodoIndex([todo]),hotelFinancialLines:hotelFinancialIndex([line])});
 const get=(b=booking(),s={})=>hotelStays([b],s,[h],h.id,'2027-01-01');
 test('financial index preserves stable dossier identities and minimal fields only',()=>{
@@ -19,7 +19,7 @@ test('unknown costs stay unknown, explicit zero remains zero, missing calendar n
 });
 test('ambiguous lines and duplicate claims cannot display guessed or double-counted money',()=>{
  const b=booking();b.hotelFinancialLines.push({...b.hotelFinancialLines[0],id:'fixture-duplicate'});const r=get(b).stays[0];assert.equal(r.actual,null);assert.equal(r.calculated,null);assert.equal(r.current,null);assert.equal(r.needsReview,true);
- const clean=booking(),id=clean.hotelTodos[0].id,component={kind:'hotel',hotel:h.id,room:'double',line:clean.hotelFinancialLines[0].id,checkin:todo.startDate,checkout:todo.endDate,rooms:2};const state={dossiers:{[clean.id]:{components:{[id]:component,'local-second':component},todos:{'local-second':{local:true,title:todo.title,tag:'hotel',startDate:todo.startDate,endDate:todo.endDate,quantity:2}}}}};assert.ok(get(clean,state).stays.every(r=>r.actual===null&&r.current===null));
+ const clean=booking(),id=clean.hotelTodos[0].id,component={kind:'hotel',hotel:h.id,room:'double',line:clean.hotelFinancialLines[0].id,checkin:todo.startDate,checkout:todo.endDate,rooms:2};const state={dossiers:{[clean.id]:{components:{[id]:component,'local-second':component},todos:{'local-second':{local:true,title:todo.title,tag:'hotel',done:true,startDate:todo.startDate,endDate:todo.endDate,quantity:2}}}}};assert.ok(get(clean,state).stays.every(r=>r.actual===null&&r.current===null));
 });
 test('summary covers whole selection, not just current pagination, and groups by check-in month',()=>{
  const list=Array.from({length:27},(_,i)=>({...booking(),id:'fixture-'+i,index:String(i)}));const result=hotelStays(list,{},[h],h.id,'2027-01-01','upcoming',1);assert.equal(result.stays.length,2);assert.equal(result.summary.bookings,27);assert.equal(result.months['2027-03'].roomNights,162);

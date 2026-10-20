@@ -55,3 +55,20 @@ body[data-layout=workspace] .intro{display:none}body[data-layout=workspace] #row
 /* Keep cancelled stays readable and their dossier links usable. */
 .hotel-stay-cancelled td:not(:nth-child(5)),.hotel-stay-cancelled td:nth-child(5)>strong,.hotel-stay-cancelled td:nth-child(5)>small{text-decoration:line-through}
 .hotel-cancellation-label{display:block;width:max-content;font-weight:700;color:#8c2828;background:#fff0ee;padding:.15rem .4rem;border-radius:.25rem}
+
+/* Compact dossier with a persistent identity and section navigation. */
+#detail.booking-dossier{width:min(1280px,calc(100vw - 32px));max-width:1280px;padding:0;background:#f4f9fc}
+#detail.booking-dossier>.section-head{position:sticky;top:0;z-index:4;background:#fff;padding:16px 24px;border-bottom:1px solid #dce8ef;margin:0}
+#detail.booking-dossier #detail-body{padding:12px 24px 24px}
+#detail-title{font-size:26px;margin:0}.dossier-tabs{position:sticky;top:0;z-index:3;padding:8px;margin:12px 0;gap:4px}.dossier-tabs button{padding:8px 12px;font-size:13px}
+.todo-item{padding:6px 8px}.todo-head{grid-template-columns:22px minmax(0,1fr) 115px}.todo-title{font-size:13px}.todo-provenance{display:none}.todo-editor{margin-top:1px}.todo-editor>summary{font-size:11px}.todo-meta{line-height:1.25;margin:1px 0}.todo-reference{display:block;font-size:12px;color:#075b70;overflow-wrap:anywhere}.todo-reference[hidden]{display:none}.todo-content .hotel-todo-link{padding:2px 0;font-size:11px;margin:0;background:none;border:0;text-decoration:underline}
+.hotel-booking-warning{display:block;color:#8a3d08;background:#fff4d9;padding:3px 5px;font-size:12px;max-width:300px;text-decoration:none}
+.resource-actions{display:flex;flex-wrap:wrap;gap:18px;margin:14px 0}#dossier-documents>a{display:block;margin:14px 0}.itinerary-leg{border-bottom:1px solid #dce8ef;padding:8px 0}.itinerary-leg p{margin:3px 0}#signed-user{margin-left:auto;font-size:12px}
+@media(max-width:650px){#detail.booking-dossier{width:100%;max-width:100%;max-height:100dvh;height:100dvh;margin:0;border-radius:0}#detail.booking-dossier>.section-head{padding:12px}#detail.booking-dossier #detail-body{padding:10px}#detail-title{font-size:20px}.dossier-tabs{flex-wrap:nowrap;overflow:auto}.dossier-tabs button{flex:none;white-space:nowrap}.todo-head{grid-template-columns:22px minmax(0,1fr) 100px}.todo-head select{grid-column:auto;width:100%;font-size:11px}.todo-reference{font-size:12px}}
+
+.dossier-overview{display:flex;gap:24px;align-items:center;background:#fff;border:1px solid #dce8ef;border-radius:10px;padding:18px;margin:12px 0}.dossier-overview img{width:32%;max-height:210px;object-fit:cover;border-radius:8px}.dossier-booking-number{display:block;font-size:32px;color:#07364e}.dossier-overview h3{margin:8px 0}.booking-status{background:#e4f1f1;padding:6px 10px;border-radius:5px}@media(max-width:650px){.dossier-overview{padding:12px;gap:12px}.dossier-overview img{width:30%}}
+
+.dossier-summary-line{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;padding:8px 0;border-bottom:1px solid #dce8ef}.dossier-summary-line span:first-child{font-weight:700}.dossier-summary-line small{color:#657d8e}.dossier-source-note{font-size:10px;color:#657d8e;margin:6px 0}.dossier-tabs{top:64px}@media(max-width:650px){.dossier-summary-line{font-size:11px;gap:3px 10px}.dossier-source-note{font-size:9px}.dossier-tabs{top:66px}}
+@media(max-width:850px){.app-nav{flex-wrap:wrap}#signed-user{max-width:45%;overflow-wrap:anywhere;text-align:right}}
+
+.hotel-user{font-size:12px;overflow-wrap:anywhere;margin-left:auto}.hotel-workspace-top h1{flex-shrink:0}@media(max-width:650px){.hotel-user{font-size:10px;max-width:50%}}

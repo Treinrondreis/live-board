@@ -6,7 +6,7 @@ import {normalizeDossier,mergeDossier} from './reishuis-dossier.mjs';
 import {createReishuisHandler} from './reishuis.mjs';
 import {emptyReishuis} from './reishuis-store.mjs';
 const hotels=[{id:'fixture-hotel',title:'Hotel Voorbeeld Amsterdam',titleShort:'Voorbeeld AMS',photos:[],rooms:[{key:'double',title:'Tweepersoonskamer',titleShort:'Double'}],apoRooms:[]},{id:'fixture-other',title:'Hotel Ander Voorbeeld',titleShort:'Ander',photos:[],rooms:[],apoRooms:[]}];
-const todo={_key:'stay',title:'Voorbeeld AMS | Double',tag:'hotel',startDate:'2027-01-03',endDate:'2027-01-05',quantity:2};
+const todo={_key:'stay',done:true,title:'Voorbeeld AMS | Double',tag:'hotel',done:true,startDate:'2027-01-03',endDate:'2027-01-05',quantity:2};
 const line={_key:'invoice',title:'03 jan.: Hotel Voorbeeld Amsterdam - Tweepersoonskamer',type:'product',quantity:1,price:240};
 const source=()=>normalizeDossier({_id:'fixture-booking',todos:[todo],lines:[line]});
 test('long/short hotel and room aliases plus Dutch date prefix link without altering money/status',()=>{
@@ -30,7 +30,7 @@ test('hotel overview applies local moves, archives, dates, rooms and cancellatio
  assert.equal(hotelStays([b],state,hotels,hotels[0].id,'2027-01-04').stays[0].rooms,2);assert.equal(hotelStays([b],state,hotels,hotels[0].id,'2027-01-05').total,0);assert.equal(hotelStays([b],state,hotels,hotels[0].id,'2027-01-05','past').total,1);
  state.dossiers={[b.id]:{components:{[id]:{kind:'hotel',hotel:hotels[1].id,checkin:'2027-02-02',checkout:'2027-02-05',rooms:3}},reviews:[{id:'review-fixture',title:todo.title,review:true,archived:true,tag:'hotel'}]}};
  assert.equal(hotelStays([b],state,hotels,hotels[0].id,'2027-01-01').total,0);const moved=hotelStays([b],state,hotels,hotels[1].id,'2027-01-01');assert.equal(moved.total,1);assert.equal(moved.stays[0].checkin,'2027-02-02');assert.equal(moved.stays[0].rooms,3);
- const cancelled={...b,status:'geannuleerd'};assert.equal(hotelStays([cancelled],state,hotels,hotels[1].id,'2027-01-01').total,0);assert.equal(hotelStays([cancelled],state,hotels,hotels[1].id,'2027-01-01','cancelled').total,1);
+ const cancelled={...b,status:'geannuleerd'};assert.equal(hotelStays([cancelled],state,hotels,hotels[1].id,'2027-01-01').total,1);assert.equal(hotelStays([cancelled],state,hotels,hotels[1].id,'2027-01-01','cancelled').total,1);
  const ambiguous=[...hotels,{...hotels[1],titleShort:'Voorbeeld AMS'}];assert.equal(hotelStays([b],emptyReishuis(),ambiguous,hotels[0].id,'2027-01-01').uncertain,1);
  const many=Array.from({length:27},(_,i)=>({...b,id:'fixture-'+i,index:String(i)}));const second=hotelStays(many,emptyReishuis(),hotels,hotels[0].id,'2027-01-01','upcoming',1);assert.equal(second.total,27);assert.equal(second.stays.length,2);assert.equal(second.pages,2);
 });
@@ -71,5 +71,13 @@ test('default includes future and ongoing stays; checkout day is past; cancellat
  const b={id:'fixture-period',index:'9990',name:'Fictieve Reiziger',status:'te verwerken',hotelTodos:hotelTodoIndex([todo])},state=emptyReishuis();
  for(const today of ['2027-01-01','2027-01-03','2027-01-04']){const r=hotelStays([b],state,hotels,hotels[0].id,today);assert.equal(r.total,1);assert.equal(r.stays[0].cancelled,false);assert.equal(hotelStays([b],state,hotels,hotels[0].id,today,'past').total,0);}
  assert.equal(hotelStays([b],state,hotels,hotels[0].id,'2027-01-05','past').total,1);
- for(const status of ['geannuleerd','Geannuleerd door klant','cancelled','canceled']){const cancelled={...b,status};assert.equal(hotelStays([cancelled],state,hotels,hotels[0].id,'2027-01-01').total,0);assert.equal(hotelStays([cancelled],state,hotels,hotels[0].id,'2027-01-01','cancelled').stays[0].cancelled,true);}
+ for(const status of ['geannuleerd','Geannuleerd door klant','cancelled','canceled']){const cancelled={...b,status};assert.equal(hotelStays([cancelled],state,hotels,hotels[0].id,'2027-01-01').total,1);assert.equal(hotelStays([cancelled],state,hotels,hotels[0].id,'2027-01-01','cancelled').stays[0].cancelled,true);}
+});
+
+test('hotel overview only shows effectively booked tasks and warns on the trip status',()=>{
+ const b={id:'fixture-booked',index:'9990',name:'Fictieve Reiziger',status:'wacht op reactie klant',hotelTodos:hotelTodoIndex([todo])},state=emptyReishuis(),id=b.hotelTodos[0].id;
+ const read=()=>hotelStays([b],state,hotels,hotels[0].id,'2027-01-01');assert.match(read().stays[0].attention,/Wacht op reactie klant/);
+ state.dossiers={[b.id]:{todos:{[id]:{status:'pending',_edited:['status']}}}};assert.equal(read().total,0);state.dossiers[b.id].todos[id].status='done';assert.equal(read().total,1);
+ b.status='geannuleerd';assert.equal(read().total,1);const cancelled=hotelStays([b],state,hotels,hotels[0].id,'2027-01-01','cancelled').stays[0];assert.equal(cancelled.cancelled,true);assert.match(cancelled.attention,/geannuleerd/);
+ const pending={...b,status:'te verwerken',hotelTodos:hotelTodoIndex([{...todo,done:false,status:'pending'}])};assert.equal(hotelStays([pending],{},hotels,hotels[0].id,'2027-01-01').total,0);
 });

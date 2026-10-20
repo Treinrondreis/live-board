@@ -119,3 +119,8 @@ test('unchanged responses are small and do not read Sanity or recreate booking p
  assert.equal(second.unchanged,true);assert.equal(second.bookings,undefined);assert.equal(calls,1);
  allowed=false;assert.equal((await request(h,path)).status,403);assert.equal(reads,2,'revoked users cannot read cached state');
 });
+
+test('unrelated client booking and item fields cannot forge the audit scope or an object key',()=>{
+ const state=emptyReishuis();applyChange(state,{action:'rows',rows:defaultRows,booking:'__proto__'},[],'fixture-user');assert.equal(state.history.at(-1).booking,undefined);assert.equal(Object.prototype.audit,undefined);
+ applyChange(state,{action:'dossier',booking:'fixture-audit',section:'notes',item:{forged:true},values:{notes:'Fictieve notitie'},source:{personal:{},todos:[],lines:[],notes:'',comment:''}},[{id:'fixture-audit'}],'fixture-user');assert.equal(state.history.at(-1).item,null);assert.equal(state.history.at(-1).booking,'fixture-audit');
+});
