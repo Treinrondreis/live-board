@@ -19,7 +19,7 @@ export function createReisschemasHandler({authenticate=async req=>(await import(
    return reply(401,{error:'Log eerst in als Seinhuis-beheerder.'});
   }
   const path=url.pathname.slice(prefix.length);
-  if(await controls(req,res,url))return true;
+  if(await controls(req,res,url)){if(req.method!=='GET')reisschemaSummary.invalidate();return true;}
   const summary=register===floraRegister&&lookupPlans===defaultLookupPlans?reisschemaSummary:createReisschemaSummary({register,lookupPlans});
   if(path==='/api/punctuality'&&req.method==='GET'){
    const id=url.searchParams.get('legId');if(!/^[a-f0-9-]{36}$/.test(id||''))return reply(400,{error:'Ongeldige rit.'});
