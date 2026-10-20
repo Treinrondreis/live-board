@@ -217,3 +217,20 @@ Sanity gebruiken kan die lokale status worden losgelaten. Alleen werkelijk
 gewijzigde velden worden vastgezet; een lokale aantekening bevriest de bronstatus
 niet. Bestaande oudere volledige lokale overrides blijven behouden en herkenbaar.
 Dossierbronformaat 2 ververst oude snapshots voor de gecorrigeerde statusweergave.
+
+
+## Dossierwerkplek en geboekte hotelonderdelen
+
+Hotelboekingen tonen alleen effectieve todo-status `done` (Sanity `done: true` of de lokale status). Lokaal weer openzetten verwijdert het onderdeel uit dit overzicht; onbekende/nog niet afgevinkte taken gelden niet als geboekt. Bij reisstatus geannuleerd of wacht op reactie klant staat een expliciete waarschuwing. Annuleringen blijven apart selecteerbaar en doorgestreept. De minimale gedeelde hotelindex bevat nu de bronstatus; bestaande snapshots worden via de bestaande verversing aangevuld.
+
+Een dossier opent met Basis, vervolgens Persoonsgegevens, Todo’s en aantekeningen, Factuur en financiën, Reisschema, Documenten, Communicatie en Historie. De identiteit blijft bovenaan staan; partnerreferenties hebben een eigen zichtbare regel. Langere todo-aantekeningen staan in de uitklapbare editor. De bestaande keuze Boekingenwerkplek behoudt de boekingenlijst naast het dossier op brede schermen.
+
+Reisschema leest het bestaande private register per dossiernummer (met/zonder A) en toont uitsluitend actieve ritten. Gedeelde/niet herkenbare nummers blokkeren de automatische koppeling. Alleen gevalideerde Google Docs/Drive-links krijgen een document-/PDF-link; de bestaande Google-rechten blijven gelden. Ontbrekende documenten of een onbereikbaar register worden expliciet gemeld. Er wordt geen nieuw reisschema gegenereerd, PDF publiek gemaakt of register geschreven.
+
+Documenten leest gekoppelde Sanity-brieven via de bestaande Boekjesmaker-reader. De download valideert opnieuw de exacte boeking-documentrelatie en streamt de originele PDF via een afgeschermde Reishuis-route. Exportproblemen blijven zichtbaar als een fout; er is geen vervangende of verzonnen PDF. De Boekjesmaker-link opent het bestaande gezamenlijke boekingenoverzicht onder de eigen Boekjesmaker-rechten; dit is geen automatische koppeling naar een specifiek boekje. E-mail is buiten scope. Communicatie toont de bestaande gekoppelde Rinkel-gesprekken en opname-/samenvattingsbediening.
+
+De aangemelde gebruiker komt uitsluitend uit de serversessie. Lokale mutaties registreren serveractor, tijd, actie, boeking en waar van toepassing sectie, onderdeel, gewijzigde veldnamen en nieuwe todo-status. Geen nieuwe ruwe veldwaarden in het actielog. Per boeking blijft dit auditspoor in Postgres bewaard, ook als het bestaande globale overzicht van 500 acties doorschuift; Historie vernieuwen laadt de actuele registratie. Herberekeningen behouden hun bestaande voor/na-historie met actor. Oude acties zonder actor/boekingskoppeling kunnen niet betrouwbaar achteraf worden toegeschreven. Dit is applicatiehistorie, geen extern onveranderbaar auditarchief.
+
+Alle nieuwe routes behouden expliciete Reishuis-rol, same-origin, private/no-store en privacyheaders; lokale wijzigingen behouden CSRF, bronversie en revisiecontrole. Sanity blijft GET-only. Nieuwe resource- en browsertests gebruiken uitsluitend fictieve data.
+
+De knop Activiteit toont het bestaande algemene overzicht van maximaal 500 recente acties, met servergebruiker en links naar bekende boekingen. Dit overzicht wordt alleen op aanvraag geladen en blijft volledig achter de Reishuis-rol.
