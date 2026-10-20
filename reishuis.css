@@ -70,3 +70,5 @@ body[data-layout=workspace] .intro{display:none}body[data-layout=workspace] #row
 
 .dossier-summary-line{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;padding:8px 0;border-bottom:1px solid #dce8ef}.dossier-summary-line span:first-child{font-weight:700}.dossier-summary-line small{color:#657d8e}.dossier-source-note{font-size:10px;color:#657d8e;margin:6px 0}.dossier-tabs{top:64px}@media(max-width:650px){.dossier-summary-line{font-size:11px;gap:3px 10px}.dossier-source-note{font-size:9px}.dossier-tabs{top:66px}}
 @media(max-width:850px){.app-nav{flex-wrap:wrap}#signed-user{max-width:45%;overflow-wrap:anywhere;text-align:right}}
+
+.hotel-user{font-size:12px;overflow-wrap:anywhere;margin-left:auto}.hotel-workspace-top h1{flex-shrink:0}@media(max-width:650px){.hotel-user{font-size:10px;max-width:50%}}

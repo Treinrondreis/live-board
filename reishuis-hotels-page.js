@@ -6,7 +6,9 @@ const ui=createHotelsUI({node,base,onDenied:()=>{ui.clear();document.getElementB
 const render=async()=>{rendering=true;try{const p=params(),id=p.get('id');if(identity(id))await ui.openHotel(id,{tab:p.get('tab'),search:(history.state?.hotelSearch||p.get('q')||'').slice(0,160)});else await ui.open({search:(history.state?.hotelSearch||p.get('q')||'').slice(0,160)});}finally{rendering=false;}};
 window.addEventListener('popstate',()=>void render());void render();
 
-const checkAccess=async()=>{try{const r=await fetch(base+'/api/access',{cache:'no-store',redirect:'error'});if(r.status===401||r.status===403){ui.clear();history.replaceState(null,'',location.href);document.getElementById('hotel-error').hidden=false;}}catch{/* No provider responses or private information in logs. */}};
+const checkAccess=async()=>{try{const r=await fetch(base+'/api/access',{cache:'no-store',redirect:'error'});if(r.status===401||r.status===403){ui.clear();history.replaceState(null,'',location.href);document.getElementById('hotel-error').hidden=false;}else if(r.ok){const data=await r.json();ui.setUser(data.user);}}catch{/* No provider responses or private information in logs. */}};
 setInterval(()=>{if(document.visibilityState==='visible')void checkAccess();},30000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void checkAccess();});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
+
+void checkAccess();
