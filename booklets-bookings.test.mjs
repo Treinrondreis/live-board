@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {createBookletsBookings,expandContent,variableValue,voucherAttachments} from './booklets-bookings.mjs';
 const span=text=>({_type:'block',style:'normal',children:[{_type:'span',text,marks:[]}],markDefs:[]});
 
+test('print address is read only from the exact booking, country stays explicit and drafts take precedence',async()=>{
+ const seen=[],rows=[{_id:'demo-a',firstName:'Other'},{_id:'demo-b',firstName:'Old',country:'nederland'},{_id:'drafts.demo-b',firstName:'Demo',lastName:'Reiziger',address:'Voorbeeldstraat 10',postalCode:'1000',city:'Voorbeeldstad',country:'belgie'}];
+ const c=createBookletsBookings({configuration:()=>({project:'fixture',dataset:'production',token:'synthetic-only'}),fetcher:async(u,init)=>{seen.push({u,init});return Response.json({result:rows});}});
+ const result=await c.address({bookingId:'demo-b'});assert.equal(result.firstName,'Demo');assert.equal(result.country,'belgie');assert.equal(result.postalCode,'1000');assert.equal(result._id,undefined);assert.equal(seen[0].init.method,undefined);assert(!seen[0].u.pathname.includes('mutate'));assert(!seen[0].u.searchParams.get('query').includes('docs'));
+ await assert.rejects(c.address({bookingId:'missing'}),/afleveradres/);await assert.rejects(c.address({bookingId:'drafts.demo-b'}),/Selecteer/);
+});
+
 test('name and compact postcode search use read-only parameterized queries and retain duplicate-number safety',async()=>{
  const calls=[];const c=createBookletsBookings({configuration:()=>({project:'fixture',dataset:'production',token:'synthetic-only'}),fetcher:async(url,init)=>{
   assert(!init.method||init.method==='GET');const q=url.searchParams.get('query');calls.push(url);

@@ -86,6 +86,12 @@ export function createBookletsBookings({fetcher=fetch,configuration=sanityConfig
   const by=new Map(docs.map(d=>[d._id,d]));b.docs=refs.map(id=>by.get(id)).filter(Boolean);return b;
  }
  return {
+  async address(p){
+   if(!idPattern.test(p.bookingId||'')||p.bookingId.startsWith('drafts.'))throw Error('Selecteer een Sanity-boeking.');
+   const rows=current(await query('*[_type=="tourBooking" && _id in [$id,"drafts."+$id]][0...3]{_id,firstName,lastName,address,postalCode,city,country}',{id:p.bookingId}));
+   const b=rows.find(r=>r._id===p.bookingId);if(!b)throw Error('Het afleveradres kon niet uit de gekoppelde Sanity-boeking worden gelezen.');
+   return {firstName:b.firstName||'',lastName:b.lastName||'',address:b.address||'',postalCode:b.postalCode||'',city:b.city||'',country:b.country||''};
+  },
   async search(p){
    const term=String(p.number||'').trim(),numeric=/^\d+[a-z]?$/i.test(term),fields='_id,index,firstName,lastName,dateDeparture,dateReturn,status,_updatedAt,trip->{title}';
    let rows;
