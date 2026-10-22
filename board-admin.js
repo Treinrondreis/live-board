@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-if(location.pathname.startsWith('/stationschef')){const a=document.createElement('a');a.href='/stationschef';a.textContent='Account en beveiliging';document.querySelector('header').append(a);}
+if(location.pathname.startsWith('/stationschef')){const a=document.createElement('a');a.href='/stationschef';a.textContent='Account en beveiliging';(document.querySelector('.sc-main > header')||document.querySelector('header')).append(a);}
 let layouts=[],boards=[],current=null,draft=null,dirty=false,timer=0,sequence=0,lastPreview=null;
 function message(text,kind=''){ $('message').textContent=text;$('message').className=kind; }
 async function api(path,body){const r=await fetch('/api/board-admin/'+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.error||'Het verzoek is niet gelukt.');return j;}

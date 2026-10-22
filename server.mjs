@@ -1,17 +1,26 @@
+import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
+import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
 import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
 import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
 import {handleAdminHub} from './admin-hub.mjs';
+import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
+import {handleReisschemas} from './reisschemas.mjs';
+import {configurePunctuality,backfillPunctuality} from './punctuality.mjs';
+import {floraRegister} from './flora-register.mjs';
+import {startReisschemaControls,handleReisschemaReceipt} from './reisschema-runtime.mjs';
+import {handleReishuis} from './reishuis.mjs';
 import {handleExpedia} from './expedia.mjs';
 import {startFlora} from './flora-schedule.mjs';
 import {handleBooklets} from './booklets-gateway.mjs';
 import {handlePlatformAdmin} from './platform-admin.mjs';
+import {stationschefPage} from './stationschef-layout.mjs';
 import {handleTreinhuisAccess} from './treinhuis-access.mjs';
 import {nightRule,runDay,observedDay} from './night-routes.mjs';
 import {attachBoardBookings} from './board-bookings.mjs';
-import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey} from './screen-settings.mjs';
+import {initScreenSettings,handleScreenSettings,screenSettings,screenTrainNumbers,screenCollectAllAtStation,screenHasSource,screenTrainMatches,screenTrainKey,screenPunctualityMatches} from './screen-settings.mjs';
 import {handleConnectionAdmin} from './connections-admin.mjs';
 import {handleAppCms} from './app-cms.mjs';
 import {startDayReports,handleDayReports} from './day-reports.mjs';
@@ -92,7 +101,7 @@ function loadDotEnv(filename){
 }
 function sendJson(res,status,obj){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(res.embedQuery?embedPayload(obj,res.embedQuery):obj));}
 function sendFile(res,filename){
-  const types={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".svg":"image/svg+xml",".png":"image/png",".ico":"image/x-icon"};
+  const types={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".svg":"image/svg+xml",".png":"image/png",".ico":"image/x-icon",".woff2":"font/woff2"};
   fs.readFile(filename,(err,data)=>{
     if(err){res.writeHead(404);return res.end("Not found");}
 
@@ -1083,7 +1092,11 @@ const server=http.createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,`http://${req.headers.host}`);
     if(url.pathname.startsWith('/api/views/'))res.embedQuery=url.searchParams;
+    if(await rinkelIncoming.receive(req,res,url))return;
+    if(await handleReishuis(req,res,url))return;
     if(await handleExpedia(req,res,url))return;
+    if(await handleReisschemaReceipt(req,res,url))return;
+    if(await handleReisschemas(req,res,url))return;
     if(await handleFlora(req,res,url))return;
     if(await handleBooklets(req,res,url))return;
     if(await handleAnalytics(req,res,url))return;
@@ -1095,6 +1108,7 @@ const server=http.createServer(async(req,res)=>{
     if(await handleAppCms(req,res,url))return;
     if(await handleKKTest(req,res,url))return;
     if(await handlePasswordReset(req,res,url))return;
+    if(await handleGoogleAccess(req,res,url))return;
     if(await handleTreinhuisAccess(req,res,url))return;
     if(await handleKilometerkampioen(req,res,url))return;
     if(await handleAdminHub(req,res,url))return;
@@ -1106,8 +1120,8 @@ const server=http.createServer(async(req,res)=>{
     }
     if(['/stationschef/borden','/stationschef/borden/'].includes(url.pathname)){
       res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');
-      if(!await adminAuthenticated(req)){res.writeHead(303,{Location:'/stationschef'});return res.end();}
-      return sendFile(res,path.join(publicDir,'board-admin.html'));
+      if(!await adminAuthenticated(req,'stations')){res.writeHead(303,{Location:'/stationschef'});return res.end();}
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(await stationschefPage(req,await fs.promises.readFile(path.join(publicDir,'board-admin.html'),'utf8'),'borden'));
     }
     if(await handleTreinreiziger(req,res,url))return;
     if(await handleBoardAdmin(req,res,url))return;
@@ -1233,6 +1247,7 @@ const server=http.createServer(async(req,res)=>{
 
 await initStorage();
 await initScreenSettings(config,{OJP:Object.values(swissStations).map(s=>s.name),NMBS:Object.values(belgianStations).map(s=>s.name)},settings=>screenBoardTrains(Date.now(),settings));
+configurePunctuality({getLegs:()=>floraRegister.summary(),screenMatch:screenPunctualityMatches});
 startConnectionMonitor(getStationPlatformLayout);
 startAnalyticsBackfill();
 startDayReports(()=>{
@@ -1246,7 +1261,10 @@ await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfi
 await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreOebb(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
 for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>Date.now()-86400000)ndovRows.set(row.id,row);
 server.listen(PORT,async()=>{
+  startReishuisCatalogSync();
   startFlora();
+  startReisschemaControls();
+  void backfillPunctuality();
   void checkNdovAccess();
   void startNdov();
   startBelgium();
@@ -1272,3 +1290,4 @@ server.listen(PORT,async()=>{
       .catch(e=>console.error("V4 historie-migratie mislukt:",e));
   },15000);
 });
+

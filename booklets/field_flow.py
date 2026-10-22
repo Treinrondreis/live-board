@@ -1,5 +1,6 @@
 """Flow one personal text block through a fixed one- or two-column box."""
 import math
+import field_fit
 from collections import deque
 from book_layout import rich_layout,draw_rich
 
@@ -12,6 +13,10 @@ def validate(field):
         if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not minimum<=value<=maximum:raise ValueError('Ongeldige kolomafstand of regelafstand.')
 
 def layout(field,template,values,width,height,token,font,align):
+    return field_fit.fit(field,lambda size:_layout({**field,'size':size},template,values,width,height,token,font,align))
+
+
+def _layout(field,template,values,width,height,token,font,align):
     validate(field)
     count=field.get('columns',1);gap=field.get('columnGapMm',8)*72/25.4 if count==2 else 0
     column_width=(width-gap)/count

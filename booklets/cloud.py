@@ -1,3 +1,4 @@
+import export_names
 """Private WSGI adapter. Seinhuis authenticates every customer-data request."""
 import hmac
 import json
@@ -21,7 +22,7 @@ BUSY=threading.BoundedSemaphore(1)
 def page(raw):
     text=raw.decode('utf-8')
     text=re.sub(r'(?<=[\x22\x27`])/(api|files|digital)/',lambda m:PREFIX+m.group(),text)
-    return text.replace('/seinhuis-logout-placeholder','/api/admin-security/logout').replace('href="/"','href="'+PREFIX+'/"').encode()
+    return text.replace('/seinhuis-logout-placeholder','/api/admin-security/logout').replace('href="/"','href="'+PREFIX+'/"').replace('src="/batch-builder.js','src="'+PREFIX+'/batch-builder.js').encode()
 
 class Handler(server.Handler):
     def auth(self):
@@ -116,7 +117,7 @@ def application(environ,start_response):
             if stream:stream.close()
             return response(500,{'error':'De druk-PDF kon niet worden geopend. Probeer opnieuw.'})
         mode='attachment' if 'download=' in environ.get('QUERY_STRING','') else 'inline'
-        try:start_response('200 OK',[('Content-Type','application/pdf'),('Content-Length',str(length)),('Content-Disposition',f'{mode}; filename="boekje-{ident[:8]}.pdf"'),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff')])
+        try:start_response('200 OK',[('Content-Type','application/pdf'),('Content-Length',str(length)),('Content-Disposition',export_names.disposition(server,ident,mode)),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff')])
         except Exception:
             if stream:stream.close()
             raise

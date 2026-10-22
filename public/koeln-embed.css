@@ -49,8 +49,8 @@ h2{margin:0;color:var(--red);font-size:22px;line-height:1.2;font-weight:700;lett
 .columns{color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
 .full-row{min-height:43px;border-bottom:1px solid #efedea;font-size:13px}
 .full-row:last-child{border-bottom:0}
-.full-row .time{font-size:15px}
-.full-row .train{font-size:13px}
+.full-row .time{font-size:17px}
+.full-row .train{font-size:14px}
 @media(max-width:720px){
   body{padding:0}.board{border-left:0;border-right:0;border-radius:0}
   .board-head{padding:11px 11px 8px}h2{font-size:19px}

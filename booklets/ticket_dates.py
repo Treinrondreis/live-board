@@ -72,6 +72,8 @@ def moment_dates(body,slot,candidate):
 def inspect(s,payload):
     provider=payload.get('provider','ns')
     if provider not in PROVIDERS:raise ValueError('Onbekende vervoerder voor datumcontrole.')
+    omit_gate_pass=payload.get('omitGatePass',False)
+    if type(omit_gate_pass) is not bool:raise ValueError('Ongeldige keuze voor het weglaten van poortjespagina’s.')
     ident=payload.get('asset');asset=s.asset(ident)
     if not 1<=asset['pages']<=100:raise ValueError('Controleer één tot honderd documentpagina’s.')
     suggested=payload.get('suggestedDates',[]);allowed=payload.get('travelDates',[]);continuations=payload.get('continuationDates',[])
@@ -80,10 +82,11 @@ def inspect(s,payload):
     for n,page in enumerate(reader.pages):
         if time.monotonic()>deadline:raise ValueError('Datumcontrole duurt te lang. Upload minder pagina’s tegelijk.')
         text=page.extract_text() or ''
+        if provider=='ns' and omit_gate_pass and is_gate_pass(text):continue
         value,source,review=labelled_date(text,provider,allowed)
         if not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
-        pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text)})
+        pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text),**ticket_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.
     dates={p['travelDate'] for p in pages if p['travelDate']}
     if len(dates)==1:
@@ -91,10 +94,19 @@ def inspect(s,payload):
             if not p['travelDate'] and p['dateSource']=='unknown':p.update(travelDate=next(iter(dates)),dateSource='pdf-continuation',dateNeedsReview=True)
     return {'pages':pages}
 
+
+def is_gate_pass(text):
+    """Require the explicit non-ticket notice and independent gate-pass wording."""
+    # Embedded PDF fonts can insert whitespace inside words such as vervoerbew ijs.
+    normalized=''.join(text.casefold().split())
+    return ('ditisgeenvervoerbewijs' in normalized
+            and ('hetstationbetredenofverlaten' in normalized or 'passageticket' in normalized)
+            and journey_details(text)['documentRole']=='unknown')
+
 def journey_details(text):
     """Only explicit standalone headings and departure labels are ordering hints."""
     reservation=r'(?:seat reservation|reservation only|reservation ticket|sitzplatzreservierung|reservierung|helyjegy|helybiztos[ií]t[aá]s|m[ií]stenka)'
-    ticket=r'(?:e[ -]?ticket|online[ -]?ticket|fahrkarte|j[ií]zdenka|menetjegy|ticket)'
+    ticket=r'(?:e[ -]?ticket|online[ -]?ticket|fahrkarte|vervoerbewijs|j[ií]zdenka|menetjegy|ticket)'
     heading=lambda pattern:bool(re.search(r'^\s*'+pattern+r'\s*[:\-]?\s*$',text,re.I|re.M))
     role='reservation' if heading(reservation) else 'ticket' if heading(ticket) else 'unknown'
     times=set(re.findall(r'(?:departure(?: time)?|abfahrt|vertrektijd|odjezd)\s*[:：]?\s*(?:'+DATE+r'\s+)?([0-2]\d:[0-5]\d)',text,re.I))
@@ -102,3 +114,33 @@ def journey_details(text):
     if mav:times.add(mav[1])
     times={t for t in times if int(t[:2])<24}
     return {'documentRole':role,'departureTime':next(iter(times)) if len(times)==1 else ''}
+
+
+def ticket_details(text):
+    """Conservative display hints, never a statement of ticket validity or coverage."""
+    text=text[:100000];details={}
+    def station(value):
+        value=' '.join(value.split()).strip(' :')
+        return value if 2<=len(value)<=100 and re.search(r'[A-Za-zÀ-ž]',value) and not re.search(r'https?:|€|\d{2}[./]\d{2}|^(?:from|to|van|naar|von|nach|date|datum|departure|arrival)$',value,re.I) else ''
+    routes=set()
+    arrow_text=text.replace('*',' ')
+    for m in re.finditer(r"^\s*([A-Za-zÀ-ž][^>\n]{1,80}?)\s*(?:->|→)\s*([A-Za-zÀ-ž][A-Za-zÀ-ž .()'’/-]*?)(?=\s*(?:\d|$|->|→))",arrow_text,re.M):
+        origin,destination=station(m[1]),station(m[2])
+        if origin and destination:routes.add((origin,destination))
+    def labelled(labels):
+        values={station(m[1]) for m in re.finditer(r'^\s*(?:'+labels+r')\s*(?::[ \t]*|\n)([^\n]{2,100})$',text,re.I|re.M)}-{''}
+        return next(iter(values)) if len(values)==1 else ''
+    origin=labelled(r'from|van|von|departure station|abfahrtsbahnhof')
+    destination=labelled(r'to|naar|nach|arrival station|zielbahnhof')
+    if origin and destination:routes.add((origin,destination))
+    if len(routes)==1:details['originStation'],details['destinationStation']=next(iter(routes))
+    counts={int(m[1]) for m in re.finditer(r'(?:aantal reizigers|number of passengers|reisende|personen|passengers)\s*[:：]\s*(\d{1,2})(?!\d)',text,re.I)}
+    counts.update(int(m[1]) for m in re.finditer(r'\b(\d{1,2})\s+(?:personen|persons?|passengers|reizigers)\b',text,re.I))
+    if not counts:
+        adults={int(m[1]) for m in re.finditer(r'\b(\d{1,2})\s+(?:volwassen(?:e|en)|adults?|erwachsene(?:r)?)\b',text,re.I)}
+        children={int(m[1]) for m in re.finditer(r'\b(\d{1,2})\s+(?:kinderen|kind|children|child|kinder)\b',text,re.I)}
+        if len(adults)==1 and len(children)<=1:counts={next(iter(adults))+next(iter(children),0)}
+    if len(counts)==1 and 1<=next(iter(counts))<=99:details['passengerCount']=next(iter(counts))
+    numbers={m[1].upper() for m in re.finditer(r'(?:ticketnummer|ticket number|fahrkartennummer|ticket[- ]?nr[.]?)\s*[:：]\s*([A-Z0-9][A-Z0-9/-]{4,29})\b',text,re.I)}
+    if len(numbers)==1:details['ticketNumber']=next(iter(numbers))
+    return details

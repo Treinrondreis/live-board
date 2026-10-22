@@ -32,5 +32,9 @@ assert.equal((await call('/api/app-content/feed?url=https%3A%2F%2Flocalhost',nul
 assert.equal((await call('/seinhuis/paginas')).headers['X-Robots-Tag'],'noindex, nofollow, noarchive');
 assert.equal((await call('/app/cms.css',null,false)).status,200);
 assert.equal((await call('/app/cms-render.js',null,false)).status,200);
+for(const path of ['/seinhuis/treinreiziger','/seinhuis/treinreiziger/','/seinhuis/paginas']){const page=await call(path);assert.equal(page.status,200);assert.match(page.out,/Menu Treinreiziger/);assert.match(page.out,/aria-label="Onderdelen"/);assert.doesNotMatch(page.out,/<!--TR_GLOBAL_NAV-->/);assert.equal((await call(path,null,false)).status,302);}
+assert.equal((await call('/seinhuis/paginas.css',null,false)).status,401);
+assert.equal((await call('/seinhuis/paginas.css')).status,200);
+assert.equal((await call('/seinhuis/paginas',{example:true})).status,405);
 db.close();console.log('PASS: content validation, draft privacy, publication, previous version, conflict protection, authentication, CSRF and feed allowlist');
 const hiddenSource=defaultContent();hiddenSource.pages[0].sections[0].showSource=false;assert.equal(validateContent(hiddenSource).pages[0].sections[0].showSource,false);assert.equal(validateContent(defaultContent()).pages[0].sections[0].showSource,true);

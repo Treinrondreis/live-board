@@ -1,5 +1,32 @@
 # Boekjesmaker in Seinhuis
 
+## Meerdere boekjes met één sjabloon
+
+Via **Meerdere boekjes maken** kunnen één tot vijf boekingsnummers met één
+sjabloon worden voorbereid. Bij een dubbel boekingsnummer kiest de gebruiker
+eerst de juiste boeking. Voorbereiden maakt nieuwe, afzonderlijk opgeslagen
+boekjes; bestaande boekjes blijven behouden. Klantwaarden, documentselecties en
+persoonlijke overlays uit het sjabloon worden voor de nieuwe boeking geleegd.
+
+De browser verwerkt de groep na elkaar via de bestaande beveiligde API’s.
+Laat het scherm open tijdens het ophalen en genereren. Stoppen kan na het
+huidige boekje; opgeslagen groepen zijn daarna hervatbaar via hetzelfde scherm.
+Er is geen zelfstandige achtergrondwerker die doorgaat na het sluiten van de
+browser. De groepsverwijzing staat bij ieder boekje op de server; klantgegevens
+of sleutels worden hiervoor niet in browseropslag gezet.
+
+Alleen gecontroleerde regels kunnen samen worden gegenereerd, met een aparte
+PDF en de bestaande opslaginstelling per boeking. Ontbrekende documenten,
+onbevestigde voorstellen en onbereikbare bronnen blijven voor individuele
+controle staan. Een opgeslagen boekje kan worden geopend, aangepast en via
+**Opslaan en terug naar groep** opnieuw worden gecontroleerd. De controles
+worden vóór elke PDF opnieuw uitgevoerd. Wijzigingen van collega’s worden niet
+overschreven; reeds gemaakte PDF’s van dezelfde boekversie worden bij hervatten
+overgenomen. Een later gewijzigd boekje vraagt opnieuw controle en kan een nieuwe
+PDF krijgen; de vorige PDF blijft bewaard. De exportlijst bevat hiervoor alleen
+het revisienummer van het boekje, geen extra kopie van klantgegevens. Sanity
+wordt in deze werkwijze uitsluitend gelezen.
+
 Independent Python service, private Railway networking only. Public entry point:
 `https://treinbord.up.railway.app/seinhuis/boekjesmaker/`.
 The Node gateway checks the existing **owner** session on every request. KM-only
@@ -256,3 +283,161 @@ From booklets: python test_cloud.py and python test_migration.py.
 Validate private access, owner vs KM member, cross-origin rejection, upload,
 generation, previews and PDF downloads online after deployment. Do not claim live
 verification based only on local tests.
+
+
+### Niet-beschikbare ticketlinks
+
+Een ticketknop die HTML in plaats van een PDF levert, krijgt de expliciete foutcode
+`TICKET_NOT_PDF`. De automatische en handmatige import slaan alleen die knop over;
+andere actuele ticket-PDF's blijven beschikbaar. De melding noemt de referentie en
+PDF-knop. Een overgeslagen niet-PDF-link is een rustige importnotitie; een ontbrekende actuele referentie of datumconflict blijft een controlepunt.
+Een expliciet geannuleerde referentie gebruikt nooit een oudere bevestigingsmail
+of een Drive-terugval. Andere referenties kunnen wel worden opgehaald. Netwerk-,
+rechten-, inspectie- en opslagfouten worden niet als annulering behandeld.
+
+Bij een actuele ÖBB-mail met alleen een ticketportallink verschijnt direct een
+knop naar de ticketpagina, met uitleg dat de PDF eerst moet worden gedownload en
+geüpload. Alleen de gecontroleerde HTTPS-host en het bekende postcheckout-pad
+worden toegelaten. Er wordt geen ticket uitgegeven of automatisch gedownload bij
+ÖBB. Ticketportaal- en downloadlinks blijven uitsluitend tijdelijk in het browsergeheugen en worden
+niet in het boekje opgeslagen. Na herladen zoekt de knop de actuele mail opnieuw.
+
+
+### Ticketoverzicht en navigatie
+
+Ticketpagina's krijgen conservatieve weergavegegevens uit expliciete PDF-labels:
+route, reizigersaantal en eventueel ticketnummer. Het overzicht groepeert route,
+datum, documenttype en aantal personen. Vervolgpagina's van dezelfde ticketbron
+worden niet opnieuw geteld. Onbekende aantallen blijven onbekend; aantallen per
+richting of reservering zijn geen totaal aantal unieke reisdeelnemers. Bestaande
+boekjes kunnen de details opnieuw lezen zonder hun handmatig gekozen pagina's
+of bevestigde datums te vervangen. Het boekje blijft onopgeslagen tot opslaan.
+
+Alfabetische NS-referenties gelden niet impliciet als ÖBB-referentie. Korte
+ÖBB-codes vereisen een expliciete ÖBB-aanduiding; zestiencijferige boekingscodes
+blijven direct herkenbaar. Bestaande onterechte ÖBB-meldingen worden alleen
+opgeruimd als dezelfde code aantoonbaar in de opgeslagen NS-import zit; concrete
+ontbrekende andere referenties en datumproblemen blijven controlepunten.
+
+Uitgegeven ÖBB-ticketlinks onder het bekende `/en|de/ticket/voucher/`-pad mogen
+als PDF worden opgehaald. Ticketuitgifte- en bestelacties worden niet aangeroepen.
+Bij HTTP 403 meldt de app de weigering met een rechtstreekse downloadknop; de
+gebruiker kan de PDF zelf ophalen en uploaden. Beveiliging wordt niet omzeild.
+
+Browsergeschiedenis gebruikt uitsluitend schermsoort en object-/groeps-ID in
+de URL en history state, geen klantinhoud. Terug/vooruit en opnieuw laden openen
+het betreffende opgeslagen scherm. Onopgeslagen wijzigingen vragen de bestaande
+bevestiging en een lopende groep blokkeert verlaten. De vaste knop voor terug
+naar de groep en de actie bij pagina's kiezen bewaren de correctie, controleren
+dat ene boekje opnieuw en behouden de andere groepsregels.
+
+
+Dialogen hebben ook een eigen tijdelijke stap met een zichtbare terugknop en
+kruimelpad. Terug/vooruit herstelt de oorspronkelijke DOM en formulierinvoer
+zonder opnieuw ophalen of opslaan. Maximaal 24 stappen blijven uitsluitend in
+het werkgeheugen, gebonden aan hetzelfde boekje en dezelfde boeking. Sluiten
+verwijdert die stappen; verlopen en afgeronde voortgangsschermen worden overgeslagen.
+Herladen opent het opgeslagen hoofdscherm. Late ticketresultaten mogen een
+verlaten stap niet heropenen of alsnog pagina's aan het boekje toevoegen.
+
+### Tabjes in de bouwsteeneditor
+
+De rechterkolom is verdeeld in Basis, Tekst & velden, Pagina en Opmaak, in die
+volgorde. Basis bevat naam, inhoudsopgave-instellingen, metadata, herkenning en
+brongegevens. Tekst & velden bevat veldkeuze, tekst, invulcodes, opmaakknoppen voor
+tekst en de tekstpassingscontrole. Pagina bevat vaste paginaopmaak en nummering.
+Opmaak bevat kolommen, positie, lettertype, kleur en achtergronden van het gekozen
+veld. Het voorbeeld links en de bediening rechts scrollen apart; Sluiten en
+Opslaan blijven bovenaan zichtbaar.
+
+Tabwissels tonen bestaande DOM-panelen zonder opnieuw renderen of opslaan.
+Gekozen pagina, veld en invoer blijven daardoor behouden. Een nieuwe editor begint
+bij Basis. De actieve tab blijft uitsluitend in een WeakMap in werkgeheugen en
+wordt niet in het document, browseropslag of de URL opgeslagen. Pijltoetsen,
+Home en End ondersteunen het tablist-/tabpanel-patroon.
+
+Klikken op een bestaand veld in het voorbeeld selecteert dat veld en opent Tekst
+& velden; klikken op een lege plek houdt de bestaande veldtoevoeging beschikbaar.
+Een tekstpassingsfout opent het rapport in Tekst & velden en kan naar het juiste
+veld op de juiste pagina in Opmaak springen. Alleen een unieke combinatie van
+veldnaam en pagina krijgt een directe verwijzing. Opmaak-, validatie-, PDF- en
+opslagregels zijn verder ongewijzigd; er zijn geen nieuwe Sanity-schrijfacties.
+
+### Boekjes per sjabloon
+
+Het algemene boekingenoverzicht toont standaard alleen het nieuwste niet-verwijderde
+boekje per Sanity-boeking, gesorteerd op aanmaakdatum. Oudere boekjes blijven via
+een expliciete keuze bereikbaar en zijn visueel minder opvallend. De kaart toont
+de sjabloontitel; het dubbelzinnige label ‘Actueel boekje’ is vervallen.
+
+Een knop ‘Boekjes (aantal)’ bij ieder sjabloon en de aanklikbare sjabloontitel op
+boekjes openen dezelfde verzameling. Die bevat standaard alle niet-verwijderde
+boekjes van dat sjabloon, inclusief oudere boekjes. Filter, prullenbak en de keuze
+voor oudere boekjes blijven bij browser-terug/vooruit en herladen bewaard via
+schermsoort, ID en booleans in de route. Klantnamen en zoektekst staan niet in de URL.
+
+De opgeslagen templateId (of batchGroup.templateId) bepaalt de herkomst; na een
+naamswijziging blijft de koppeling behouden. Een ontbrekend origineel wordt niet
+vervangen door een gelijknamig sjabloon. Alleen oude boekjes zonder ID mogen op
+basis van één exact overeenkomende sjabloonnaam worden getoond. Bij meerdere
+kandidaten of ontbrekende herkomst blijft het boekje onder ‘Zonder gekoppeld
+sjabloon’ bereikbaar, met de eventueel bewaarde naam. Dit overzicht leest alleen
+bestaande gegevens en wijzigt geen boekjes, PDF’s of Sanity.
+
+### Tekst automatisch kleiner maken
+
+Bij Opmaak kan ieder tekst- of invulveld optioneel `autoFit` gebruiken
+(‘Lettertype verkleinen als de tekst niet past’). De ingestelde lettergrootte
+blijft het maximum. `minSize` is aanpasbaar van 6 pt tot die grootte; zonder
+expliciete minimumwaarde geldt 8 pt, of de oorspronkelijke grootte als die lager is.
+Bestaande velden blijven standaard ongewijzigd. Paginanummers en inhoudsopgaven
+gebruiken deze optie niet.
+
+De voorbeeldcontrole, exportcontrole en uiteindelijke PDF meten dezelfde werkelijk
+ingevulde tekst met hetzelfde lettertype en dezelfde opmaak. Alleen tekst die
+niet past wordt verkleind, in stappen van 0,25 pt met het exacte minimum als
+ondergrens. De oorspronkelijke veldinstelling blijft behouden, zodat een kortere
+tekst in een volgend boekje weer de gewone grootte krijgt. Tekst wordt niet
+weggelaten: past deze ook op het minimum niet, dan blijft de exportcontrole dit
+melden. Ook persoonlijke tekstblokken met één of twee kolommen ondersteunen dit.
+
+### Afbeeldingen uit Google Docs
+
+De import leest de afbeeldingsadressen die Google Docs zelf via de Docs API
+teruggeeft. Naast HTTPS-subdomeinen van googleusercontent.com wordt het specifieke
+Google Docs-pad `https://docs.google.com/docs-images-rt/…` ondersteund. Andere
+Docs-paden, externe hosts, gebruikersgegevens in de URL en afwijkende poorten
+blijven geweigerd. Ook iedere omleiding wordt opnieuw gecontroleerd. Er wordt
+geen OAuth-token naar de afbeeldingsbron gestuurd; de bestaande limiet van 15 MB
+per download blijft gelden. De bron in Google Docs wordt niet gewijzigd.
+
+### Volgorde en breedte van routeafbeeldingen
+
+Afbeeldingen die in Google Docs aan dezelfde alinea hangen worden op hun verticale
+positie gesorteerd, daarna horizontaal. Afbeeldingen bij verschillende alinea’s
+houden de documentvolgorde. Bij korte A4-routes gebruiken zowel kaart als foto de
+beschikbare paginabreedte, met behoud van verhouding en 25 mm zijmarges. QR-codes
+behouden hun aparte compacte opmaak. Langere tekst-/afbeeldingscombinaties en A5
+behouden de bestaande indeling. De A4-render-versie is verhoogd zodat opnieuw
+ophalen de gecorrigeerde opmaak gebruikt; bestaande opgeslagen PDF’s veranderen niet.
+
+### Ticketreferenties en meldingen
+
+Een gevonden ticket bij één ingestelde vervoerder voldoet ook voor dezelfde
+kandidaatreferentie bij een andere ingestelde vervoerder. Een vergeefse tweede
+zoekactie geeft dan geen ontbrekend-ticketalarm. Een andere ontbrekende referentie
+of een echte downloadfout blijft zichtbaar; annuleringen blijven apart behandeld.
+Afzender, exacte referentie en geldige PDF-download blijven vereist.
+
+Stationnamen binnen hotelnamen gelden niet als treinonderdeel. Expliciete
+NS-/DNR-/ATL-labels bij treinonderdelen worden herkend in referentievelden en
+beschrijvingen. Historische NS-codes van zeven of acht tekens blijven ondersteund;
+nummerlengte is een aanwijzing, geen zelfstandig bewijs van vervoerder of geldigheid.
+ÖBB-codes van twaalf of zestien cijfers worden ook met spaties per vier gezocht.
+MAV-codes van tien cijfers (ook met 23/24) en gegroepeerde ČD-ordernummers blijven
+ondersteund. Een nieuwe factuur zonder tickets verdringt geen eerdere echte
+vervoerdersbevestiging; een annulering doet dat wel.
+
+De melding onderscheidt geen passende mail van een gevonden mail zonder
+ondersteunde PDF/downloadknop. Bij een ticketprobleem opent ‘Ticketmails zoeken’
+direct het zoekvenster; de melding geeft ook aan wanneer downloaden/uploaden nodig is.

@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';
+import {stationschefPage} from './stationschef-layout.mjs';
 import {adminAuthenticated} from './admin-security.mjs';
 import {stationAliases,normalized} from './connections-rules.mjs';
 import {readConnectionSettings,writeConnectionSettings} from './connections-store.mjs';
@@ -28,7 +29,7 @@ export async function handleConnectionAdmin(req,res,url){
  if(!['/stationschef/aansluitingen','/stationschef/aansluitingen/','/stationschef/aansluitingen.js','/stationschef/api/aansluitingen'].includes(url.pathname))return false;
  res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');res.setHeader('X-Content-Type-Options','nosniff');
  const json=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
- if(!await adminAuthenticated(req)){if(url.pathname.includes('/api/'))json(401,{error:'Log eerst in bij Stationschef.'});else{res.writeHead(303,{Location:'/stationschef'});res.end();}return true;}
+ if(!await adminAuthenticated(req,'stations')){if(url.pathname.includes('/api/'))json(401,{error:'Log eerst in bij Stationschef.'});else{res.writeHead(303,{Location:'/stationschef'});res.end();}return true;}
  try{
  if(url.pathname==='/stationschef/api/aansluitingen'){
  if(req.method==='GET'){json(200,{...await readConnectionSettings(),stations:stationAliases});return true;}
@@ -40,6 +41,6 @@ export async function handleConnectionAdmin(req,res,url){
  json(200,await writeConnectionSettings(validateConnectionRules(data.rules),data.revision));return true;
  }
  if(req.method!=='GET'){json(405,{error:'Niet toegestaan.'});return true;}
- const js=url.pathname.endsWith('.js');res.writeHead(200,{'Content-Type':js?'text/javascript':'text/html; charset=utf-8'});res.end(await readFile(new URL(js?'./connections-admin.js':'./connections-admin.html',import.meta.url)));return true;
+ const js=url.pathname.endsWith('.js');res.writeHead(200,{'Content-Type':js?'text/javascript':'text/html; charset=utf-8'});const source=await readFile(new URL(js?'./connections-admin.js':'./connections-admin.html',import.meta.url),'utf8');res.end(js?source:await stationschefPage(req,source,'aansluitingen'));return true;
  }catch(e){json(e.status||500,{error:e.status?e.message:'Opslaan is mislukt. Probeer opnieuw.'});return true;}
 }

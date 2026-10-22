@@ -1,5 +1,6 @@
 import {initBoardCache,cleanupHistory,retentionPolicy} from './board-cache.mjs';
 import {initJourneys,recordJourneyMeasurements} from "./journeys.mjs";
+import {initPunctuality,recordPunctuality} from './punctuality.mjs';
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -116,6 +117,7 @@ export async function initStorage(){
     backend="postgresql";
     await initDataHub({backend,pool,sqlite:null});
     await initJourneys({backend,pool,sqlite:null});
+    await initPunctuality({backend,pool,sqlite:null});
     await initStationPlatformLayouts();
   await initBoardCache({backend,pool,sqlite});
     return {backend};
@@ -183,6 +185,7 @@ export async function initStorage(){
   loadLegacyStateCache();
   await initDataHub({backend,pool:null,sqlite});
   await initJourneys({backend,pool:null,sqlite});
+  await initPunctuality({backend,pool:null,sqlite});
   await initStationPlatformLayouts();
   await initBoardCache({backend,pool,sqlite});
   return {backend};
@@ -194,6 +197,7 @@ export function getStorageInfo(){
     backend,
     historyDays:3,
     retention:"3 days; ICE/NJ/RJ 30 days",retentionPolicy,
+    punctualityRetention:'permanent for selected large-screen and registered itinerary events',
     legacyHeartbeatMinutes:0,
     dbRetention:{
       fernverkehr:"ICE/NJ/RJ 30 days; others 3 days",
@@ -277,6 +281,7 @@ export async function recordObservations(trains,source,observedAt=Date.now()){
       sqlite.exec("COMMIT");}catch(e){sqlite.exec("ROLLBACK");throw e;}
   }
   await recordCanonicalObservations(trains,source,observedAt);
+  await recordPunctuality(trains,source,observedAt);
   await recordJourneyMeasurements(trains,source,observedAt);
   void cleanupOldObservations(observedAt).catch(e=>console.error('Retention:',e.message));
 }

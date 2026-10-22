@@ -1,6 +1,7 @@
 import {createClient} from 'hafas-client';
 import {profile} from 'hafas-client/p/oebb/index.js';
 import {saveBoardCache,loadBoardCache} from './board-cache.mjs';
+import {recordPunctuality} from './punctuality.mjs';
 export const oebbStations={'wien-oebb':{name:'Wien Hbf',stop:'8103000',country:'AT'},'salzburg-oebb':{name:'Salzburg Hbf',stop:'8100002',country:'AT'},'innsbruck-oebb':{name:'Innsbruck Hbf',stop:'8100108',country:'AT'},'graz-oebb':{name:'Graz Hbf',stop:'8100173',country:'AT'}};
 export const oebbState={status:'starting',lastSuccessAt:null,error:null};
 const cache=new Map(),clock=t=>new Intl.DateTimeFormat('nl-NL',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit'}).format(t);
@@ -13,7 +14,7 @@ export function oebbRows(page,departures,at=Date.now()){
  return [{id,source:'OEBB',sourceTripId:d.tripId,number,category,train:d.line.name||category+' '+number,observedAt:oebbStations[page].name,eventMode:'departure',countryCode:'AT',plannedTimestamp:planned,expectedTimestamp:expected,plannedTime:clock(planned),time:clock(planned),currentTime:clock(expected),track,plannedTrack:d.plannedPlatform||'',currentTrack:d.platform||'',hasRealtime,delay:hasRealtime?Math.round(d.delay/60):0,cancelled,status:cancelled?'Geannuleerd':hasRealtime?(d.delay?'Vertraging':'Op tijd'):'',from:oebbStations[page].name,to:d.direction||d.destination?.name||'—',futureRoute:[d.direction||d.destination?.name].filter(Boolean),messageTimestamp:at}];});
 }
 export async function scanOebb(){if(busy)return;busy=true;try{
- for(const [page,s] of Object.entries(oebbStations)){const d=await client.departures(s.stop,{duration:1440,results:1000,products:{nationalExpress:true,national:true,interregional:true,regional:true,suburban:true,bus:false,ferry:false,subway:false,tram:false,onCall:false}});const at=Date.now(),rows=oebbRows(page,d.departures||d,at);const saved={at,rows};cache.set(page,saved);await saveBoardCache('OEBB:'+page,saved,at);}
+ for(const [page,s] of Object.entries(oebbStations)){const d=await client.departures(s.stop,{duration:1440,results:1000,products:{nationalExpress:true,national:true,interregional:true,regional:true,suburban:true,bus:false,ferry:false,subway:false,tram:false,onCall:false}});const at=Date.now(),rows=oebbRows(page,d.departures||d,at);const saved={at,rows};cache.set(page,saved);await saveBoardCache('OEBB:'+page,saved,at);await recordPunctuality(rows,'OEBB',at);}
  oebbState.status='ready';oebbState.error=null;oebbState.lastSuccessAt=new Date().toISOString();
  }catch(e){oebbState.status='error';oebbState.error=e.message;}finally{busy=false;}}
 export async function restoreOebb(){for(const page of Object.keys(oebbStations)){const saved=await loadBoardCache('OEBB:'+page);if(saved)cache.set(page,saved);}}

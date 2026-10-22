@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "preview:admin-ui": "node scripts/preview-admin-ui.mjs",
+    "preview:treinreiziger-admin": "node scripts/preview-treinreiziger-admin.mjs",
     "start": "node server.mjs",
     "check": "node scripts/check.mjs all",
     "check:syntax": "node scripts/check.mjs syntax",
     "test": "node scripts/check.mjs unit",
-    "test:browser": "node scripts/check.mjs browser"
+    "test:browser": "node scripts/check.mjs browser",
+    "test:google-access-browser": "node test-google-access-browser.mjs"
   },
   "engines": {
     "node": ">=24.0.0 <25"

@@ -14,3 +14,5 @@ el('trainsearch').oninput=render;el('connectionsearch').oninput=render;
 document.addEventListener('click',async e=>{if(['trains','connections'].includes(e.target.dataset.tab))await load();const id=e.target.dataset.trainConfirm;if(!id)return;try{await request('/review',{revision:state.revision,type:'train',id,confirmed:state.rows.find(r=>r.id===id).status!=='Bevestigd'});await load();}catch(e){el('trainprogress').textContent=e.message;}});
 document.addEventListener('change',async e=>{const id=e.target.dataset.connection;if(!id||!e.target.value)return;try{await request('/review',{revision:state.revision,type:'connection',id,backup:e.target.value==='yes'});await load();}catch(err){alert(err.message);}});
 })();
+
+

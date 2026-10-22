@@ -1,11 +1,12 @@
+import book_links
 """Local pilot. PDF originals and published exports are immutable. No AI services; optional read-only Google Docs connection."""
 import copy
 from pdf_geometry import display_meta, normalize_page
 import ticket_import,ticket_dates,train_screen
 import booking_documents,ticket_drive
-import field_background,field_flow
+import field_background,field_flow,field_fit
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
-import export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks,print_orders
+import export_names,export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks,print_orders
 import trip_fillers, automatic_builder
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
@@ -165,6 +166,7 @@ def fields_validate(fields,meta):
         field_keys(f)
         field_background.validate(f)
         field_flow.validate(f)
+        field_fit.validate(f)
         if f.get('type')=='prefilled' and (not isinstance(f.get('template',''),str) or len(f.get('template',''))>20000):raise ValueError('Standaardtekst mag maximaal 20.000 tekens bevatten.')
         n=int(f['page'])
         if not 0<=n<len(meta): raise ValueError('Ongeldige veldpagina.')
@@ -286,6 +288,9 @@ def validate_body(kind,b,prepared=False):
                         for flag in ('dateNeedsReview','dateUnknownAccepted'):
                             if flag in p and type(p[flag]) is not bool:raise ValueError('Ongeldige datumcontrole.')
                         if p.get('documentRole','unknown') not in ('ticket','reservation','unknown'):raise ValueError('Ongeldig documenttype voor ticketsortering.')
+                        for detail in ('originStation','destinationStation','ticketNumber'):
+                            if detail in p and (not isinstance(p[detail],str) or len(p[detail])>100):raise ValueError('Ongeldige ticketdetails.')
+                        if 'passengerCount' in p and (type(p['passengerCount']) is not int or not 1<=p['passengerCount']<=99):raise ValueError('Ongeldig aantal ticketreizigers.')
                         if p.get('departureTime') and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',str(p['departureTime'])):raise ValueError('Ongeldige vertrektijd.')
                         if not manual_dates and key=='pageSources' and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and (p.get('dateNeedsReview') or (not value and not p.get('dateUnknownAccepted'))):candidate['reviewRequired']=True
                 if not manual_dates and slot.get('documentKind') in (*booking_documents.TICKET_KINDS,'voucher') and candidate.get('pageSources') and not candidate.get('reviewRequired'):
@@ -325,10 +330,9 @@ def check_layout(body,values):
             flow=field_flow.layout(f,value if f.get('type')=='prefilled' else f['template'],{} if f.get('type')=='prefilled' else sample,width,available,TOKEN,font_name(f),align)
             needed=flow['needed'];width_ok=True
         else:
-            lines=value.splitlines();needed=len(lines)*size*1.5
-            width_ok=all(pdfmetrics.stringWidth(line,font_name(f),size)<=width for line in lines)
-        fits=flow['fits'] if f.get('type') in ('text','prefilled') else needed<=available and width_ok
-        results.append({'name':f['key'],'page':int(f['page'])+1,'fits':fits,'heightPercent':round(needed/m['height']*100,1),'availablePercent':float(f['h']),'widthFits':width_ok,'size':size,'font':f.get('font','Open Sans'),'columns':f.get('columns',1),'lineSpacing':f.get('lineSpacing',1.5),'exampleKeys':example_keys})
+            flow=field_fit.plain(f,value,width,available,font_name(f));needed=flow['needed'];width_ok=flow['widthFits']
+        size=flow['size'];fits=flow['fits']
+        results.append({'name':f['key'],'page':int(f['page'])+1,'fits':fits,'heightPercent':round(needed/m['height']*100,1),'availablePercent':float(f['h']),'widthFits':width_ok,'size':size,'originalSize':flow['originalSize'],'minimumSize':flow['minimumSize'],'autoFit':flow['autoFit'],'shrunk':flow['shrunk'],'font':f.get('font','Open Sans'),'columns':f.get('columns',1),'lineSpacing':f.get('lineSpacing',1.5),'exampleKeys':example_keys})
     return {'results':results,'fits':all(r['fits'] for r in results)}
 
 def make_export(book,options=None):
@@ -403,8 +407,8 @@ def make_export(book,options=None):
                         if not flow['fits']:raise ValueError(f"Het tekstblok bij {s['title']} past niet in {f.get('columns',1)} kolom(men) van {float(f['h']):g}% hoogte. Vergroot het tekstvlak in Bouwsteen beheren, verkort de tekst of plaats het vervolg in een ander tekstblok. Neem daarna de nieuwe bouwsteenversie over in dit boekje.")
                         field_flow.draw(cv,flow,x,h*(1-float(f['y'])/100))
                         continue
-                    lines=wrap_text(value,fw,size) if f.get('type')=='text' else value.splitlines(); lineheight=size*1.5
-                    if len(lines)*lineheight>fh or any(pdfmetrics.stringWidth(line,font_name(f),size)>fw for line in lines): raise ValueError(f"Tekst past niet in ‘{f['key']}’ bij {s['title']}. Verkort de tekst of vergroot het veld.")
+                    fitted=field_fit.plain(f,value,fw,fh,font_name(f));lines=fitted['lines'];size=fitted['size'];lineheight=size*1.5
+                    if not fitted['fits']:raise ValueError(f"Tekst past niet in ‘{f['key']}’ bij {s['title']}. Verkort de tekst, vergroot het veld of controleer de minimale lettergrootte.")
                     if any(ord(char)>0xFFFF for char in value): raise ValueError('Emoji’s worden in deze proef nog niet ondersteund.')
                     cv.setFont(font_name(f),size);cv.setFillColor(f.get('color','#172d35'))
                     y=h*(1-float(f['y'])/100)-size
@@ -488,6 +492,7 @@ class Handler(BaseHTTPRequestHandler):
     def get(self):
         path=urlparse(self.path).path
         if path=='/':return self.send(200,(ROOT/'index.html').read_bytes(),'text/html; charset=utf-8')
+        if path=='/batch-builder.js':return self.send(200,(ROOT/'batch-builder.js').read_bytes(),'application/javascript; charset=utf-8',{'Cache-Control':'no-store'})
         if path=='/api/session':
             with db() as c:setup=c.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0
             s=self.auth();return self.send(200,{'setup':setup,'user':s['user'] if s else None,'version':APP_VERSION})
@@ -500,6 +505,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200,('<!doctype html><meta charset=utf-8><title>Google koppelen</title><p>'+html.escape(message)+'</p>').encode(),'text/html; charset=utf-8',{'Cache-Control':'no-store','Referrer-Policy':'no-referrer'})
         session=self.auth()
         if not session:return self.send(401,{'error':'Log eerst in.'})
+        if path=='/api/linked-books':
+            with db() as c:return self.send(200,book_links.linked(c,parse_qs(urlparse(self.path).query).get('bookingId',[''])[0]))
         if path=='/api/google/status':
             return self.send(200,google_connection.status(DATA))
         if path=='/api/export-storage':
@@ -511,7 +518,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/state':
             with db() as c:
                 rows=book_activity.catalogue(c)
-                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at','driveStored')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at,COALESCE(g.verified,0) AS driveStored FROM exports e LEFT JOIN export_details d ON d.id=e.id LEFT JOIN export_drive g ON g.id=e.id ORDER BY e.rowid DESC")]
+                exports=[{k:r[k] for k in ('id','book_id','title','created','report','note','summary','deleted_at','driveStored','bookRevision')} for r in c.execute("SELECT e.*,COALESCE(d.note,'') AS note,COALESCE(d.summary,'') AS summary,d.deleted_at,COALESCE(g.verified,0) AS driveStored,json_extract(e.snapshot,'$.revision') AS bookRevision FROM exports e LEFT JOIN export_details d ON d.id=e.id LEFT JOIN export_drive g ON g.id=e.id ORDER BY e.rowid DESC")]
             for o in rows:
                 if o['kind']=='block':o['body']['format']=pdf_format(asset(o['body']['asset'])['meta'])
             for r in exports:r['report']=json.loads(r['report'])
@@ -547,7 +554,7 @@ class Handler(BaseHTTPRequestHandler):
                     if export_history.deleted(c,i):return self.send(404,{'error':'Deze drukversie staat in de prullenbak.'})
                     if not c.execute('SELECT id FROM exports WHERE id=?',(i,)).fetchone():return self.send(404,{'error':'Niet gevonden.'})
                 with export_storage.pdf(SimpleNamespace(**globals()),i) as p:
-                    return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':f'{"attachment" if parse_qs(urlparse(self.path).query).get("download") else "inline"}; filename="boekje-{i[:8]}.pdf"'})
+                    return self.send(200,p.read_bytes(),'application/pdf',{'Content-Disposition':export_names.disposition(SimpleNamespace(**globals()),i,'attachment' if parse_qs(urlparse(self.path).query).get('download') else 'inline')})
             a=asset(i);p=DATA/'pdfs'/f'{i}.pdf'
             if kind=='asset':return self.send(200,p.read_bytes(),'application/pdf')
             page=int(page or 0)

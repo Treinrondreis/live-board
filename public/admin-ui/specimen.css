@@ -1,0 +1,8 @@
+/* Demonstration layout only; product styles use tokens.css and components.css. */
+.tr-ui .spec-nav-symbol { width: 22px; text-align: center; font-size: 20px; line-height: 1; }
+.tr-ui .spec-caption { text-align: left; padding: 10px 16px; font-size: 14px; color: var(--tr-muted); }
+.tr-ui .spec-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.tr-ui .spec-swatch { display: flex; align-items: end; padding: 12px; min-height: 76px; border-radius: 12px; min-width: 95px; font-size: 14px; font-weight: 600; }
+.tr-ui .spec-swatch--blue { color: white; background: var(--tr-blue); }
+.tr-ui .spec-swatch--green { color: white; background: var(--tr-gradient-end); }
+.tr-ui .spec-swatch--paper { color: var(--tr-text); background: var(--tr-background); border: 1px solid var(--tr-line); }

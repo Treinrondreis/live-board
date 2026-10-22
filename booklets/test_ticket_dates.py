@@ -5,6 +5,42 @@ import test_cloud,ticket_dates
 s=test_cloud.cloud.server
 
 class TicketDateTests(unittest.TestCase):
+    def test_ticket_display_details_only_use_explicit_labels(self):
+        self.assertEqual(ticket_dates.ticket_details('Ticket\nFrom: Utrecht Centraal\nTo: Wien Hbf\nPassengers: 2\nTicket number: TEST12345'), {'originStation':'Utrecht Centraal','destinationStation':'Wien Hbf','passengerCount':2,'ticketNumber':'TEST12345'})
+        self.assertEqual(ticket_dates.ticket_details('Leiden Centraal → Utrecht Centraal\n1 volwassene'), {'originStation':'Leiden Centraal','destinationStation':'Utrecht Centraal','passengerCount':1})
+        self.assertEqual(ticket_dates.ticket_details('Price 2 EUR\nIssued: 12.03.2027\nBooking ABCDEFG'), {})
+        self.assertEqual(ticket_dates.ticket_details('* * DELFT -> AMERSFOORT CENTRAAL* * 22* * ****** -> *****VIA [1184]*****'), {'originStation':'DELFT','destinationStation':'AMERSFOORT CENTRAAL'})
+        self.assertNotIn('passengerCount',ticket_dates.ticket_details('Passengers: 1\nPassengers: 2'))
+        self.assertNotIn('originStation',ticket_dates.ticket_details('Leiden → Utrecht\nAssen → Utrecht'))
+
+    def test_ticket_metadata_is_saved_but_rejects_invalid_counts_and_oversized_labels(self):
+        a,_=self.upload(['Ticket'])
+        def body(extra):return {'format':'A4','sections':[{'oneOff':True,'title':'Test','asset':a['id'],'pages':1,'fields':[],'pageSources':[{'asset':a['id'],'page':0,**extra}]}]}
+        valid=body({'originStation':'Delft','destinationStation':'Utrecht','passengerCount':2})
+        s.validate_body('book',valid)
+        self.assertEqual(valid['sections'][0]['pageSources'][0]['passengerCount'],2)
+        for extra in ({'passengerCount':True},{'passengerCount':0},{'passengerCount':100},{'originStation':'x'*101},{'ticketNumber':{}}):
+            with self.assertRaises(ValueError):s.validate_body('book',body(extra))
+
+    def test_cora_gate_page_is_omitted_without_changing_tickets_or_original_pdf(self):
+        gate='Het station betreden of verlaten\nDit is geen vervoerbewijs.\nDit passageticket is bedoeld voor het openen van poortjes.'
+        a,raw=self.upload(['Ticket\nDeparture: 08.03.2027',gate,'Seat reservation\nDeparture: 08.03.2027'])
+        ctx=SimpleNamespace(**vars(s))
+        result=ticket_dates.inspect(ctx,{'asset':a['id'],'provider':'ns','omitGatePass':True})
+        self.assertEqual([p['page'] for p in result['pages']],[0,2])
+        self.assertEqual((s.DATA/'pdfs'/f"{a['id']}.pdf").read_bytes(),raw)
+        for payload in ({'provider':'ns'},{'provider':'db','omitGatePass':True}):
+            self.assertEqual(len(ticket_dates.inspect(ctx,{'asset':a['id'],**payload})['pages']),3)
+        with self.assertRaises(ValueError):ticket_dates.inspect(ctx,{'asset':a['id'],'omitGatePass':'yes'})
+
+    def test_gate_detection_requires_both_markers_and_never_drops_a_ticket_or_reservation_heading(self):
+        self.assertTrue(ticket_dates.is_gate_pass('Het station betreden of verlaten\nDit is geen\nvervoerbewijs.'))
+        self.assertTrue(ticket_dates.is_gate_pass('Het station betre den of verlaten\nDit  is geen vervoerbew ijs.'))
+        self.assertFalse(ticket_dates.is_gate_pass('Dit is geen vervoerbewijs.'))
+        self.assertFalse(ticket_dates.is_gate_pass('Het station betreden of verlaten'))
+        for heading in ('Ticket','Seat reservation'):
+            self.assertFalse(ticket_dates.is_gate_pass(heading+'\nHet station betreden of verlaten\nDit is geen vervoerbewijs.'))
+
     def test_voucher_written_check_in_dates_ignore_check_out_and_incheck_times(self):
         text='Hotelvoucher\nAankomst: 8 maart 2027\nVertrek: 10 maart 2027\nInchecken: Vanaf 15.00 uur tot middernacht'
         self.assertEqual(ticket_dates.labelled_date(text,'voucher'),('2027-03-08','pdf',False))

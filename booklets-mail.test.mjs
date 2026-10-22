@@ -34,3 +34,15 @@ test('an NS desk option or unrelated sender cannot replace a confirmed ticket ma
  option.payload.headers[0].value='ns@treinrondreis.nl';foreign.payload.headers[0].value='ns@evil.example';f.messages.push(option,foreign);
  const result=await f.control.search({query:'ABCDEFG'});assert.equal(result.messages[0].id,'new');assert(!result.messages.some(m=>m.id==='desk-option'||m.id==='foreign'));
 });
+
+test('non-PDF ticket links have a distinct code; network errors are not called cancellations',async()=>{
+ const f=fixture({fetcher:async()=>new Response('<html>Unavailable</html>')});const result=await f.control.search({query:'ABCDEFG'});await assert.rejects(f.control.download({ticket:result.messages[0].tickets[0].id}),e=>e.code==='TICKET_NOT_PDF');
+ const g=fixture({fetcher:async()=>{throw Error('Network');}});const other=await g.control.search({query:'ABCDEFG'});await assert.rejects(g.control.download({ticket:other.messages[0].tickets[0].id}),e=>e.message==='Network'&&!e.code);
+});
+
+test('an issued ÖBB PDF reports a remote refusal distinctly and never calls issuance',async()=>{const url='https://shop.oebbtickets.at/en/ticket/voucher/fixture-id',m={id:'issued',internalDate:'1790000000000',payload:{headers:[{name:'From',value:'noreply@oebb.at'},{name:'Subject',value:'ÖBB ticket'}],parts:[{mimeType:'text/plain',body:{data:Buffer.from('Booking code: 1111 2222 3333 4444\n'+url).toString('base64url')}}]}},seen=[];const control=createBookletsMail({google:{status:async()=>({connected:true}),reader:async()=>async path=>path==='messages'?{messages:[{id:'issued'}]}:m},fetcher:async u=>{seen.push(u.href);return new Response('Blocked',{status:403});}});const result=await control.search({provider:'obb',query:'1111222233334444'});await assert.rejects(control.download({ticket:result.messages[0].tickets[0].id}),e=>e.code==='TICKET_REMOTE_BLOCKED'&&e.message.includes('403'));assert.deepEqual(seen,[url]);});
+
+test('trusted NS mail with an unlabelled exact reference and ticket attachment can be imported',async()=>{
+ const f=fixture(),m=message('attached','ABCDEF','2028-01-01',[]);m.payload.headers[1].value='Uw tickets ABCDEF';m.payload.parts.push({mimeType:'application/pdf',filename:'Ticket_ABCDEF.pdf',body:{data:Buffer.from('%PDF-fixture').toString('base64url')}});f.messages.splice(0,f.messages.length,m);
+ const r=await f.control.search({provider:'ns',query:'ABCDEF'});assert.equal(r.messages[0].reference,'ABCDEF');assert.equal(r.messages[0].tickets.length,1);assert(r.messages[0].selected);assert.equal((await f.control.download({ticket:r.messages[0].tickets[0].id})).subarray(0,5).toString(),'%PDF-');
+});

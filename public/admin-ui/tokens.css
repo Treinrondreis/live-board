@@ -1,0 +1,42 @@
+/* Treinrondreis beheer · foundation 1.0.0. Opt in with a .tr-ui root. */
+.tr-ui {
+  --tr-blue: #186c99;
+  --tr-blue-hover: #125579;
+  --tr-gradient-start: #176b85;
+  --tr-gradient-end: #4c711c;
+  --tr-gradient: linear-gradient(105deg, var(--tr-gradient-start), #337453 55%, var(--tr-gradient-end));
+  --tr-text: #203e50;
+  --tr-muted: #526979;
+  --tr-background: #f3f8fb;
+  --tr-surface: #ffffff;
+  --tr-surface-soft: #eaf3f8;
+  --tr-line: #d8e5ed;
+  --tr-control-line: #788e9e;
+  --tr-focus: #102f45;
+  --tr-success: #23613e;
+  --tr-success-bg: #eaf5ee;
+  --tr-attention: #805409;
+  --tr-attention-bg: #fff5db;
+  --tr-alarm: #b3253b;
+  --tr-alarm-bg: #fff0f2;
+  --tr-font-body: 'TR Open Sans', 'Segoe UI', sans-serif;
+  --tr-font-heading: 'TR Montserrat', 'Segoe UI', sans-serif;
+  --tr-space-1: 4px;
+  --tr-space-2: 8px;
+  --tr-space-3: 12px;
+  --tr-space-4: 16px;
+  --tr-space-5: 20px;
+  --tr-space-6: 24px;
+  --tr-space-8: 32px;
+  --tr-space-10: 40px;
+  --tr-space-12: 48px;
+  --tr-radius-control: 12px;
+  --tr-radius-card: 16px;
+  --tr-shadow: 0 6px 24px #1a49610a;
+  --tr-header-height: 76px;
+  --tr-sidebar-width: 244px;
+  color: var(--tr-text);
+  background: var(--tr-background);
+  font: 400 16px/1.6 var(--tr-font-body);
+  color-scheme: light;
+}

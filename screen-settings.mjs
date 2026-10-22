@@ -1,6 +1,7 @@
 import {validateNightRoute,nightWarnings} from './night-routes.mjs';
 import {readMail} from './flora-store.mjs';
 import {readFile} from 'node:fs/promises';
+import {stationschefPage} from './stationschef-layout.mjs';
 import {adminAuthenticated} from './admin-security.mjs';
 import {readBoardSettings,writeBoardSettings,insertBoardSettings} from './board-cache.mjs';
 import {readConnectionSettings} from './connections-store.mjs';
@@ -17,6 +18,10 @@ export async function initScreenSettings(config,sourceStations={},provider=()=>[
  for(const row of await readBoardSettings())if(row.page.startsWith(prefix))saved.set(row.page.slice(prefix.length),row);
 }
 export function screenSettings(id='0'){return saved.get(id)?.settings||(id==='0'?defaults:null);}
+export function screenPunctualityMatches(row){
+ const source=row.source==='NDOV_RIT'?'NDOV':row.source;
+ return [...new Set(['0',...saved.keys()])].map(id=>screenSettings(id)).filter(Boolean).some(settings=>source==='ViaggiaTreno'?settings.italy:screenTrainMatches({...row,source},settings));
+}
 export function screenTrainNumbers(){return [...new Set([defaults,...[...saved.values()].map(r=>r.settings)].filter(Boolean).flatMap(s=>s.trains.filter(t=>t.source==='DB').map(t=>t.number)))];}
 export function screenTrainMatches(row,settings){
  const source=screenSource(row),station=row.observedAt||row.station,number=String(row.number);
@@ -47,9 +52,9 @@ export async function handleScreenSettings(req,res,url){
  if(![base,base+'/',base+'.js',api].includes(url.pathname))return false;
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');
  const json=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(value));};
- if(!await adminAuthenticated(req)){if(url.pathname===api)json(401,{error:'Log eerst in bij Stationschef.'});else{res.writeHead(303,{Location:'/stationschef'});res.end();}return true;}
+ if(!await adminAuthenticated(req,'stations')){if(url.pathname===api)json(401,{error:'Log eerst in bij Stationschef.'});else{res.writeHead(303,{Location:'/stationschef'});res.end();}return true;}
  try{
- if(url.pathname!==api){if(req.method!=='GET'){json(405,{error:'Niet toegestaan.'});return true;}const js=url.pathname.endsWith('.js');res.writeHead(200,{'Content-Type':js?'text/javascript':'text/html; charset=utf-8'});res.end(await readFile(new URL(js?'./screen-settings.js':'./screen-settings.html',import.meta.url)));return true;}
+ if(url.pathname!==api){if(req.method!=='GET'){json(405,{error:'Niet toegestaan.'});return true;}const js=url.pathname.endsWith('.js');res.writeHead(200,{'Content-Type':js?'text/javascript':'text/html; charset=utf-8'});const source=await readFile(new URL(js?'./screen-settings.js':'./screen-settings.html',import.meta.url),'utf8');res.end(js?source:await stationschefPage(req,source,'treinbord'));return true;}
  if(req.method==='GET'){let bookings=[];try{bookings=(await readMail('trains-data')).value.rows||[];}catch{}json(200,{screens:[...new Set(['0',...saved.keys()])].map(id=>({...info(id),nightWarnings:nightWarnings(screenSettings(id),bookings,getObservations(screenSettings(id)))})),stations,stationsBySource,sources:screenSources,connections:(await readConnectionSettings()).rules});return true;}
  if(req.method!=='POST'){json(405,{error:'Niet toegestaan.'});return true;}
  const origin=(req.headers['x-forwarded-proto']==='https'||req.socket.encrypted?'https':'http')+'://'+req.headers.host;

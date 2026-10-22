@@ -74,5 +74,6 @@ for `post` and `international` so the printer selects the appropriate service.
 The same corrected request builder is used for calculation and final ordering.
 
 No live PDF upload or order has been tested. Pricing success does not verify
-production or payment. Keep this integration as a draft pending integration
-with current main and separate production approval.
+production or payment. The branch has been integrated with current main. Production rollout was
+authorized separately on 2026-10-22; final ordering still requires the user
+to confirm the exact PDF, address and quoted total in the application.

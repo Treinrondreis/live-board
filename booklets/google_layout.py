@@ -6,8 +6,8 @@ from reportlab.lib.units import mm
 from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Image, Table, TableStyle, KeepTogether, PageBreak
 from features import SIZES
 
-LAYOUT_VERSION='2026.09.27.2-compact-routes'
-A4_ROUTE_VERSION='2026.10.12-25mm'
+LAYOUT_VERSION='2026.10.19-positioned-image-order'
+A4_ROUTE_VERSION='2026.10.19-full-width-images'
 
 def render_version(fmt,layout):
     return A4_ROUTE_VERSION if fmt=='A4' and layout=='route' else ''
@@ -64,7 +64,13 @@ def normalize(doc,fetch_image):
                     else:bullet=props.get('glyphSymbol') or '•'
                 if plain.strip():out.append({'type':'text','html':text.rstrip().removesuffix('<br/>'),'plain':plain.strip(),'heading':p.get('paragraphStyle',{}).get('namedStyleType','').startswith(('HEADING','TITLE')) or (allbold and len(plain.strip())<100),'size':size,'bullet':bullet})
                 out.extend(embedded)
-                for key in p.get('positionedObjectIds',[]):out.append(image(tab.get('positionedObjects',{}).get(key,{}).get('positionedObjectProperties',{})))
+                positioned=tab.get('positionedObjects',{})
+                # Objects anchored to the same paragraph need not be listed in
+                # their visible order. Only compare positions within that anchor.
+                def position(key):
+                    props=positioned.get(key,{}).get('positionedObjectProperties',{}).get('positioning',{})
+                    return (props.get('topOffset',{}).get('magnitude',0),props.get('leftOffset',{}).get('magnitude',0))
+                for key in sorted(p.get('positionedObjectIds',[]),key=position):out.append(image(positioned.get(key,{}).get('positionedObjectProperties',{})))
             elif 'table' in e:
                 rows=[]
                 for row in e['table'].get('tableRows',[]):
@@ -156,9 +162,10 @@ def render(model,images,fmt,layout):
                 story.extend(intro);body=[]
             wide_a4=fmt=='A4' and not body and len(pics)>1
             if wide_a4:
-                main=picture(first,width,340);story.extend([main,Spacer(1,12)])
-                contact_height+=main.drawHeight+12
-                left=[picture(pics[1],cw,avail-contact_height-10)];right=[];remaining=pics[2:]
+                # Both maps and photos use the available width in source order;
+                # a second image is not inherently a small secondary illustration.
+                for pic in pics:story.extend([picture(pic,width,min(340,avail-12)),Spacer(1,12)])
+                left=[];right=[];remaining=[]
             elif body and len(' '.join(b['plain'] for b in body))>200:
                 left=[picture(first,cw,250 if fmt=='A5' else 285)];right=flows(body,cw);remaining=pics[1:]
             elif len(pics)>1:
