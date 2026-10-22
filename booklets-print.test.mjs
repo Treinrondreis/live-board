@@ -23,6 +23,7 @@ function fixture(){
    throw Error('Unknown private action');
   }
   assert.equal(new URL(url).origin,'https://www.printenbind.nl');assert.equal(init.headers.Authorization,'Bearer '+f.token);assert.equal(init.redirect,'error');
+  if(['/api/rest/orders/calculate','/api/rest/orders'].includes(path)){assert(Array.isArray(body.articles));assert(body.articles.every(a=>a&&typeof a==='object'&&!Array.isArray(a)),'articles must contain JSON objects, never encoded JSON strings');}
   if(path==='/api/rest/orders/calculate')return response({amount:f.changed?13:12,delivery_amount:3,amount_tax_reduced:0,amount_tax_standard:2.52,delivery_at:'2026-10-21'});
   if(path==='/api/rest/documents'){
    if(f.uploadFailure)throw Error('Unavailable');let all=[];for await(const chunk of init.body)all.push(chunk);const raw=Buffer.concat(all),filename=raw.toString().match(/filename="([^"]+)"/)[1];assert(raw.includes(bytes));assert.equal(Number(init.headers['Content-Length']),raw.length);return response({name:filename,size:bytes.length});
@@ -38,15 +39,15 @@ function fixture(){
 }
 
 test('magazine defaults, inclusive tax/shipping and explicit international country handling',()=>{
- const p=printSettings(settings,20),a=p.articles[0];assert.equal(p.delivery_method,'post');assert.equal(a.product,'tijdschrift');assert.equal(a.finishing,'folding-stapling');assert.equal(a.folding,'middle_long');assert.equal(a.finishing_extra,'none');assert.equal(a.number,2);assert.equal(a.copies,20);assert.equal(a.printside_back,1);assert.equal(a.papertype_cover,'250');assert.equal(a.papertype,'100');
- const be=printSettings({...settings,address:{...address,country:'België',postalcode:'1000'}},20);assert.equal(be.country,'BE');assert.equal(be.delivery_method,'international');
+ const p=printSettings(settings,20),a=p.articles[0];assert.equal(p.delivery_method,'post');assert.equal(p.delivery_option,undefined);assert.equal(a.product,'tijdschrift');assert.equal(a.finishing,'folding-stapling');assert.equal(a.folding,'middle_long');assert.equal(a.finishing_extra,'none');assert.equal(a.number,2);assert.equal(a.copies,20);assert.equal(a.printside_back,1);assert.equal(a.papertype_cover,'250');assert.equal(a.papertype,'100');
+ const be=printSettings({...settings,address:{...address,country:'België',postalcode:'1000'}},20);assert.equal(be.country,'BE');assert.equal(be.delivery_method,'international');assert.equal(be.delivery_option,undefined);
  assert.throws(()=>printSettings({...settings,address:{...address,country:''}},20),/land/);assert.throws(()=>printSettings({...settings,address:{...address,country:'DE'}},20),/postcode/);assert.throws(()=>printSettings(settings,19),/vier/);
  const split=printAddress({firstName:'Demo',address:'Voorbeeldstraat 10 B',country:'nederland'});assert.equal(split.number,'10');assert.equal(split.number_ext,'B');assert.equal(split.country,'NL');
  assert.equal(printPrice({amount:12,delivery_amount:3,amount_tax_reduced:0,amount_tax_standard:2.52}).totalCents,1452);assert.throws(()=>printPrice({amount:12}),/prijs/);
 });
 test('preparation reads exact booking, quotes do not upload or order, client cannot supply page count',async()=>{
  const f=fixture(),p=await f.api.prepare({exportId:id});assert.equal(p.address.country,'NL');assert.equal(p.defaults.cover,'250');
- const q=await f.api.quote({exportId:id,settings,pages:999});assert.equal(q.price.totalCents,1452);assert.equal(f.calls.find(c=>c.path.endsWith('/calculate')).body.articles.map(a=>JSON.parse(a))[0].copies,20);
+ const q=await f.api.quote({exportId:id,settings,pages:999});assert.equal(q.price.totalCents,1452);assert.equal(f.calls.find(c=>c.path.endsWith('/calculate')).body.articles[0].copies,20);
  assert(!f.calls.some(c=>c.path==='/api/rest/orders'||c.path==='/api/rest/documents'));assert(!JSON.stringify(q).includes(f.token));
  await assert.rejects(f.api.order({exportId:id,quoteId:q.id}),/Bevestig/);
 });
@@ -56,7 +57,7 @@ test('changed price, expired quote, changed PDF and rotated credentials block or
 test('confirmed exact PDF uploads once, duplicate simultaneous clicks cannot create duplicate orders',async()=>{
  const f=fixture(),q=await f.api.quote({exportId:id,settings}),request={exportId:id,quoteId:q.id,confirmed:true};await Promise.all([f.api.order(request),f.api.order(request)]);await f.api.order(request);
  assert.equal(f.calls.filter(c=>c.path==='/api/rest/orders').length,1);assert.equal(f.calls.filter(c=>c.path==='/api/rest/documents').length,1);assert.equal(f.record.state,'placed');
- const article=JSON.parse(f.calls.find(c=>c.path==='/api/rest/orders').body.articles[0]);assert.equal(article.number,2);assert.equal(article.copies,20);assert.equal(article.printside_back,1);assert.equal(article.add_file_method,'upload');assert.match(article.filenames,/^reisboekje-[a-f0-9-]+\.pdf$/);assert.equal(article.file_url,undefined);
+ const article=f.calls.find(c=>c.path==='/api/rest/orders').body.articles[0];assert.equal(article.number,2);assert.equal(article.copies,20);assert.equal(article.printside_back,1);assert.equal(article.add_file_method,'upload');assert.match(article.filenames,/^reisboekje-[a-f0-9-]+\.pdf$/);assert.equal(article.file_url,undefined);
 });
 test('lost order response is reconciled by unique reference after restart, never resubmitted',async()=>{
  const f=fixture(),q=await f.api.quote({exportId:id,settings});f.postFailure=true;await f.api.order({exportId:id,quoteId:q.id,confirmed:true});assert.equal(f.record.state,'placed');await f.printer().order({exportId:id,quoteId:q.id,confirmed:true});assert.equal(f.calls.filter(c=>c.path==='/api/rest/orders').length,1);

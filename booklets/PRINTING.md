@@ -24,8 +24,10 @@ Sandbox never falls back to a live token. Tokens stay server-side and are sent
 only to the fixed official HTTPS API origin without redirects. They are not
 returned in browser responses, sent to the PDF service, or written in order data.
 
-API contract: <https://www.printenbind.nl/api/docs#/>. The current order schema
-requires `articles` as JSON strings, despite object examples in the documentation.
+API contract: <https://www.printenbind.nl/api/docs#/>. Print&Bind support confirmed on 2026-10-22 that `articles` must contain JSON
+objects for both calculation and ordering. Never JSON-stringify individual articles;
+only serialize the complete request body once. The earlier string-array mapping
+was incorrect despite the schema interpretation used during initial development.
 The product catalogue names quantity `number` and page count `copies`: map the
 editable quantity to `number`, and the verified PDF page count to `copies`, never
 a client-supplied page count. `printside_back: 1` explicitly prints the back of
@@ -58,17 +60,19 @@ for recovery. Minimal receipt/reference state is retained for duplicate protecti
 
 ## Validation limits
 
-Automated tests and browser QA use fictional data and a local printer simulator;
-no customer PDFs, addresses, orders or credentials enter Git or CI. A real
-read-only price calculation was attempted with the documented article format
-and public documentation example address. The price service returned HTTP 500;
-the authentication check succeeded. Do not report live pricing or real order
-production as verified until Print&Bind resolves or explains that response.
-No live document upload or order was performed during development.
+Automated tests use fictional data and a local printer simulator. No customer
+PDFs, addresses, orders or credentials enter Git or CI.
 
+On 2026-10-22 a live price calculation through the code builder succeeded with
+HTTP 200: two magazines, 32 verified pages, A4, color, 100 g interior, 250 g
+cover, printed reverse cover and folding/stapling. The public vendor example
+address was used. Total including tax and shipping was EUR 27.52.
 
-On 2026-10-19 the corrected request (2 magazines, 32 verified pages, printed
-reverse cover) was retried using the code builder and the public documentation
-example address. The price endpoint still returned HTTP 500, Server Error,
-without field-level validation details. No quote was accepted and no PDF was
-uploaded or ordered. Keep this integration as a draft.
+Sending articles as objects exposed a second validation error: automatic `post`
+delivery rejects `delivery_option: standard`. Leave the delivery option unset
+for `post` and `international` so the printer selects the appropriate service.
+The same corrected request builder is used for calculation and final ordering.
+
+No live PDF upload or order has been tested. Pricing success does not verify
+production or payment. Keep this integration as a draft pending integration
+with current main and separate production approval.
