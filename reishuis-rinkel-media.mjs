@@ -13,7 +13,7 @@ export function createRinkelMedia({key=process.env.RINKEL_READ_API_KEY||'',allow
   // handles accounts whose endpoint has not adopted Bearer API-key auth yet.
   if([401,403,500].includes(r.status)){await r.body?.cancel();r=await fetcher('https://api.rinkel.com/v1'+path,options({'x-rinkel-api-key':key,Accept:'application/json'}));}
   if(!r.ok){const e=Error('Rinkel API request failed');e.rinkelStatus=r.status;throw e;}
-  const body=await r.text();if(body.length>1024*1024)throw Error('Ongeldig antwoord.');return JSON.parse(body).data;
+  const body=await r.text();if(body.length>1024*1024)throw Error('Ongeldig antwoord.');const parsed=JSON.parse(body);return parsed.data??parsed;
  }
  async function details(call){
   if(!configured||!valid(call?.id))throw Error('Rinkel-opnames zijn nog niet aangesloten.');
@@ -35,10 +35,10 @@ export function createRinkelMedia({key=process.env.RINKEL_READ_API_KEY||'',allow
   async audio(call){
    const data=await details(call),id=data.callRecording?.id;if(!valid(id))throw mediaError('Voor dit gesprek is geen opname beschikbaar in Rinkel.');
    const stream=await json('/call-recordings/'+encodeURIComponent(id)+'/stream');let url;
-   try{url=new URL(stream.url);}catch{throw Error('Ongeldige opnamebron.');}
-   if(url.origin!=='https://api.rinkel.com'||!url.pathname.startsWith('/audio/call-recording/')||url.username||url.password)throw Error('Onverwachte opnamebron.');
+   try{url=new URL(typeof stream==='string'?stream:stream?.url);}catch{throw mediaError('Rinkel geeft geen geldige tijdelijke opname-URL terug.');}
+   if(url.origin!=='https://api.rinkel.com'||!url.pathname.startsWith('/audio/call-recording/')||url.username||url.password)throw mediaError('De opnamebron van Rinkel wijkt af van de toegestane audio-route.');
    // The temporary URL already authenticates playback: never forward the API key.
-   url.searchParams.set('download','true');const r=await fetcher(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(60000)});if(!r.ok)throw mediaError('Rinkel levert de opname niet (HTTP '+r.status+'). Probeer opnieuw.');
+   url.searchParams.set('download','true');let r;try{r=await fetcher(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(60000)});}catch{throw mediaError('De verbinding met de tijdelijke Rinkel-opname is mislukt. Probeer opnieuw.');}if(!r.ok)throw mediaError('Rinkel levert de opname niet (HTTP '+r.status+'). Probeer opnieuw.');
    let size=0;const parts=[];for await(const part of r.body){size+=part.length;if(size>40*1024*1024)throw mediaError('Deze opname is groter dan 40 MB en kan hier nog niet worden afgespeeld.');parts.push(part);}const bytes=Buffer.concat(parts),type=audioType(r.headers.get('content-type'),bytes);if(!type||!bytes.length)throw mediaError('Rinkel levert geen herkenbaar audiobestand.');const range=r.headers.get('content-range');if(r.status===206&&range){const m=range.match(/^bytes (\d+)-(\d+)\/(\d+)$/);if(!m||Number(m[1])!==0||Number(m[2])+1!==Number(m[3])||bytes.length!==Number(m[3]))throw mediaError('Rinkel leverde een onvolledige opname. Probeer opnieuw.');}return {type,bytes};
   }
  };
