@@ -172,3 +172,35 @@ Bij een opslagconflict blijft handmatig koppelen beschikbaar; bestaande koppelin
 De gebruiker heeft de aparte accountbrede Rinkel-sleutel expliciet goedgekeurd nadat
 bleek dat het aanmaakvenster geen beperkte rechten ondersteunt. De applicatiegrens
 is GET-only en twee lijnen; de sleutel zelf biedt technisch bredere accounttoegang.
+
+
+## Herstel afspelen en selectie van meerdere gesprekken
+
+Herkenning koppelt bij exact één passend dossier automatisch het gesprek via een
+geautoriseerde POST. Meerdere matches blijven een keuze. Een nieuw extra nummer
+wordt uitsluitend op expliciete keuze onthouden; Sanity blijft ongewijzigd.
+
+Bij Eerdere gesprekken opzoeken kunnen maximaal 25 gesprekken op de huidige pagina
+worden geselecteerd. Na één bevestiging controleert de server alle IDs tegen de
+recent opgehaalde Rinkel-geschiedenis. Hij past de selectie op een kopie toe en doet
+één Postgres-commit met revisiecontrole. Een onbekend/verlopen gesprek of een gesprek
+bij een ander dossier blokkeert de hele selectie. Al gekoppelde gesprekken zijn niet
+opnieuw selecteerbaar. Nummer onthouden is optioneel; de historie bevat actor en
+gespreks-ID per koppeling. Geen productiegesprekken als test gekoppeld.
+
+De audio-opvraag gebruikt de gedocumenteerde download-optie van de tijdelijke URL,
+normaliseert audiomimetypes en herkent binaire WAV/MP3/MP4/Ogg-bestanden aan hun
+signatuur. HTML en onbekende binaire data worden geweigerd. Een onvolledige 206-
+respons wordt niet als complete opname teruggegeven. De privéproxy ondersteunt
+single byte ranges (206/416), waaronder de eerste twee bytes en seek/suffix ranges.
+API-key, tijdelijke URL, ruwe nummers en audio gaan niet in logs, tests of Postgres.
+De limiet blijft 40 MB per opname. Playbackfouten worden lokaal in Communicatie
+zichtbaar, met een knop om opnieuw te laden. Geen vormgevingswijziging of nieuwe
+opname-/AI-instelling. Browserproeven gebruiken uitsluitend een synthetische WAV.
+
+Bronnen: https://developers.rinkel.com/docs/api/get-a-temporary-url-to-stream-or-download-a-call-recording
+ en https://developers.rinkel.com/docs/api/play-or-download-audio
+
+Dezelfde beveiligde audio-route ondersteunt `check=1` voor een leescontrole zonder
+afspelen: alleen beschikbaarheid, gevalideerd audiotype en byte-aantal komen terug.
+De provider-URL en audiobytes blijven daarbij op de server.
