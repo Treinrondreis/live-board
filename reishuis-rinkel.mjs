@@ -70,7 +70,7 @@ export function createRinkelIncoming({secret=process.env.RINKEL_WEBHOOK_SECRET||
    }
    if(!existing&&Object.keys(state.rinkelCalls).length>=10000)fail();
    state.rinkelCalls[call.id]={id:call.id,at:call.at,booking:input.booking,linkedAt:new Date(clock()).toISOString()};
-   state.history.push({at:new Date(clock()).toISOString(),actor,action:'rinkel-link',booking:input.booking});state.history=state.history.slice(-500);return state;
+   state.history.push({at:new Date(clock()).toISOString(),actor,action:'rinkel-link',booking:input.booking,item:call.id});state.history=state.history.slice(-500);return state;
   },
   removeNumber(state,input,actor){
    const numbers=state.rinkelNumbers?.[input.booking];if(input.confirm!==true||!numbers?.some(n=>n.id===input.number)){const e=Error('Invalid number');e.status=400;throw e;}
