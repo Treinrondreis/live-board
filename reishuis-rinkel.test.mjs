@@ -57,6 +57,7 @@ test('manual conversation links persist separately from recognition, use server 
  service.linkCall(state,{...input,remember:true},bookings,'fixture');assert.equal(service.dossier(state,'fixture-one').numbers.length,1);assert.ok(!JSON.stringify(state).includes(caller));assert.ok(!JSON.stringify(service.dossier(state,'fixture-one')).includes('digest'));
  await assert.rejects(async()=>service.linkCall(state,{...input,call:'forged'},bookings,'fixture'));
  await assert.rejects(async()=>service.linkCall(state,{...input,confirm:false},bookings,'fixture'));
+ await service.poll({bookings,state});await tick();assert.equal((await service.poll({bookings,state})).events.find(e=>e.id==='fixture-call').linkedBooking,'fixture-one');
  const restored=JSON.parse(JSON.stringify(state));assert.equal(service.dossier(restored,'fixture-one').calls.length,1);
  const number=service.dossier(state,'fixture-one').numbers[0].id;service.removeNumber(state,{booking:'fixture-one',number,confirm:true},'fixture');assert.equal(service.dossier(state,'fixture-one').numbers.length,0);assert.equal(service.dossier(state,'fixture-one').calls.length,1);
 });

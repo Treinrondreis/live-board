@@ -204,3 +204,16 @@ Bronnen: https://developers.rinkel.com/docs/api/get-a-temporary-url-to-stream-or
 Dezelfde beveiligde audio-route ondersteunt `check=1` voor een leescontrole zonder
 afspelen: alleen beschikbaarheid, gevalideerd audiotype en byte-aantal komen terug.
 De provider-URL en audiobytes blijven daarbij op de server.
+
+## Automatische koppeling zichtbaar maken en opnieuw proberen
+
+Bij één exact dossier probeert de geopende Reishuis-browser zonder bevestigingsvenster
+het gesprek op te slaan. Een tijdelijk conflict of bezigmelding houdt de oproep in
+een beperkte wachtrij tot de melding verloopt (30 minuten); de volgende poll probeert
+opnieuw. Een geslaagde koppeling toont expliciet de opgeslagen status en verbergt
+de handmatige koppelkeuze. De server geeft bestaande dossierkoppelingen mee, zodat
+heropenen niet opnieuw opslaat of een bestaande koppeling stilzwijgend verplaatst.
+Meerdere matches en onbekende nummers blijven een bewuste handmatige keuze.
+Dit maakt de koppeling nog niet onafhankelijk van een geopende, actieve browser.
+De browserproef bootst een eerste HTTP 409 na, controleert automatisch herstel
+zonder bevestigingsdialoog en behoud van een onopgeslagen editor.
