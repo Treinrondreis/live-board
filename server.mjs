@@ -1,3 +1,4 @@
+import {chooseNextBoardStop,selectBoardStops} from './board-stop-selection.mjs';
 import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
 import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
@@ -347,13 +348,7 @@ function visibleOnBoard(row,now){
   if(row.cancelled){const p=Number(row.plannedTimestamp||0);return !p||now<=p+cancelledRetentionMs;}
   const e=Number(row.expectedTimestamp||row.plannedTimestamp||0);return !e||now<=e+normalRetentionMs;
 }
-function chooseBest(items){
-  const now=Date.now();return [...items].sort((a,b)=>{
-    const at=Number(a.expectedTimestamp||a.plannedTimestamp||0),bt=Number(b.expectedTimestamp||b.plannedTimestamp||0);
-    const ad=at?Math.abs(at-now):Number.MAX_SAFE_INTEGER,bd=bt?Math.abs(bt-now):Number.MAX_SAFE_INTEGER;
-    if(ad!==bd)return ad-bd;if(a.hasRealtime!==b.hasRealtime)return a.hasRealtime?-1:1;return Number(a.plannedTimestamp||0)-Number(b.plannedTimestamp||0);
-  })[0];
-}
+function chooseBest(items){return chooseNextBoardStop(items);}
 
 function naturalTrainNumberSort(a,b){
   const an=Number(a),bn=Number(b);
@@ -472,11 +467,10 @@ function screenBoardTrains(now=Date.now(),settings=null){
   const rows=dedupeRows([...extra,...dbState.trains.flatMap(r=>r.mergedServices||[r]),...Object.values(collectorState.byStation).flat(),...liveNl.map(r=>({...r,hasChangedTime:r.currentTime!==r.plannedTime}))],true);
   const groups=new Map();
   for(const r of rows){if((settings?!screenTrainMatches(r,settings):(!numbers.has(String(r.number))||(categories.size&&!categories.has(String(r.category).toUpperCase()))))||!visibleOnBoard(r,now)||r.departed)continue;
-    const night=nightRule(settings,r);
-    const key=(settings?screenTrainKey(r):String(r.number))+(night?'|'+(runDay(night,r)||'unknown-'+observedDay(r)):'');
+    const key=String(r.number).trim().replace(/^0+(?=\d)/,'');
     if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
   }
-  const selected=[...groups.values()].map(items=>{const realtime=items.filter(r=>r.hasRealtime);return chooseBest(realtime.length?realtime:items);});
+  const selected=[...groups.values()].flatMap(items=>selectBoardStops(items,now));
   return (settings?[...new Set(selected.map(r=>r.source||'DB'))].flatMap(source=>mergeEquivalentBoardTrains(selected.filter(r=>(r.source||'DB')===source))):mergeEquivalentBoardTrains(selected)).sort((a,b)=>Number(Number(b.delay)>=20)-Number(Number(a.delay)>=20)||(a.plannedTimestamp||0)-(b.plannedTimestamp||0));
 }
 async function performScan(){

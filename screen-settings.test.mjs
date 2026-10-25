@@ -1,3 +1,4 @@
+import {selectBoardStops} from './board-stop-selection.mjs';
 import test,{mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -25,13 +26,13 @@ test('same train can use four sources with separate station scopes and collector
  assert.throws(()=>validateScreenSettings({...settings,trains:[{...trains[1],stations:['Köln Hbf']}]}));
  const saved=await request({id:'0',action:'save',revision:0,settings:{...settings,trains:[...trains,{number:'123456',source:'NMBS',stations:[]}]}});assert.equal(saved.status,200);assert.equal(screenTrainNumbers().includes('123456'),false);
 });
-test('display keeps identical numbers and event IDs from different sources separate',()=>{
+test('display shows identical train numbers once across sources while respecting source filters',()=>{
  const src=readFileSync(new URL('./server.mjs',import.meta.url),'utf8');
  const rows=['DB','NDOV','OJP','NMBS'].map((source,i)=>({source,id:'same',number:'225',observedAt:'Station',plannedTimestamp:Date.now(),delay:i,hasRealtime:true}));
- const ctx=vm.createContext({config:{stations:[]},ndovStatus:()=>({fresh:true}),ndovRows:new Map([['x',rows[1]]]),dbState:{trains:[rows[0]]},collectorState:{byStation:{}},swissStations:{z:{}},swissPayload:()=>[rows[2]],belgianScreenRows:()=>[rows[3]],nightRule,runDay,observedDay,screenHasSource,screenTrainMatches,screenTrainKey,visibleOnBoard:()=>true,chooseBest:r=>r[0],mergeEquivalentBoardTrains:r=>r});
+ const ctx=vm.createContext({selectBoardStops,config:{stations:[]},ndovStatus:()=>({fresh:true}),ndovRows:new Map([['x',rows[1]]]),dbState:{trains:[rows[0]]},collectorState:{byStation:{}},swissStations:{z:{}},swissPayload:()=>[rows[2]],belgianScreenRows:()=>[rows[3]],nightRule,runDay,observedDay,screenHasSource,screenTrainMatches,screenTrainKey,visibleOnBoard:()=>true,chooseBest:r=>r[0],mergeEquivalentBoardTrains:r=>r});
  vm.runInContext(src.slice(src.indexOf('function dedupeRows('),src.indexOf('// Passenger displays')),ctx);
  vm.runInContext(src.slice(src.indexOf('function screenBoardTrains('),src.indexOf('async function performScan()')),ctx);
- ctx.settings={trains:rows.map(r=>({number:r.number,source:r.source,stations:[]}))};assert.equal(vm.runInContext('screenBoardTrains(Date.now(),settings).length',ctx),4);
+ ctx.settings={trains:rows.map(r=>({number:r.number,source:r.source,stations:[]}))};assert.equal(vm.runInContext('screenBoardTrains(Date.now(),settings).length',ctx),1);
  ctx.settings.trains=ctx.settings.trains.slice(0,1);assert.equal(vm.runInContext('screenBoardTrains(Date.now(),settings)[0].source',ctx),'DB');
 });
 
