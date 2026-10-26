@@ -31,22 +31,19 @@ export function observationFromPlans(leg,plans){
  return candidates[0];
 }
 export async function enrichChanges(rows,lookup){
- const cache=new Map();
- const result=[];
- for(const row of rows){
-  const number=String(row.train_number||'').match(/\d+[a-z]?$/i)?.[0];
-  const key=number+'|'+row.travel_date;
+ // Read each train/day once, with bounded concurrency instead of serial database calls.
+ const requests=new Map();
+ for(const row of rows){const number=String(row.train_number||'').match(/\d+[a-z]?$/i)?.[0];if(number)requests.set(number+'|'+row.travel_date,{number,date:row.travel_date});}
+ const entries=[...requests],cache=new Map();let cursor=0;
+ await Promise.all(Array.from({length:Math.min(8,entries.length)},async()=>{
+  while(cursor<entries.length){const [key,{number,date}]=entries[cursor++];try{cache.set(key,await lookup(number,date));}catch{cache.set(key,null);}}
+ }));
+ const result=rows.map(row=>{
+  const number=String(row.train_number||'').match(/\d+[a-z]?$/i)?.[0],plans=cache.get(number+'|'+row.travel_date);
   let observation=row.observation||null,archiveAvailable=false;
-  if(number){
-   if(!cache.has(key))cache.set(key,Promise.resolve().then(()=>lookup(number,row.travel_date)).catch(()=>null));
-   const plans=await cache.get(key);
-   if(plans){
-    const candidate=observationFromPlans(row,plans);archiveAvailable=!!candidate;
-    if(candidate&&(!observation||Date.parse(candidate.observed_at)>Date.parse(observation.observed_at)))observation=candidate;
-   }
-  }
-  result.push({...row,observation,archive_available:archiveAvailable});
- }
+  if(plans){const candidate=observationFromPlans(row,plans);archiveAvailable=!!candidate;if(candidate&&(!observation||Date.parse(candidate.observed_at)>Date.parse(observation.observed_at)))observation=candidate;}
+  return {...row,observation,archive_available:archiveAvailable};
+ });
  // Only prove a missed connection when the onward departure is already reached.
  for(const row of result){
   const next=result.filter(r=>r.version_id===row.version_id&&r.role!=='backup'&&row.role!=='backup'&&Number(r.sequence)>Number(row.sequence)).sort((a,b)=>a.sequence-b.sequence)[0];

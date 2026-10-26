@@ -34,3 +34,10 @@ test('communication hash is deterministic and changes with every timing or conne
  assert.notEqual(changeKey('fictional',o),changeKey('fictional',{...o,departure_time:'09:56'}));
  assert.notEqual(changeKey('fictional',o),changeKey('fictional',{...o,connection_broken:true}));
 });
+
+test('archive reads overlap but stay bounded and duplicate train-days are read once',async()=>{
+ const rows=Array.from({length:20},(_,i)=>leg({leg_id:'fictional-'+i,version_id:'version-'+i,train_number:'TEST '+(700+i)}));
+ rows.push({...rows[0],leg_id:'duplicate'});let active=0,peak=0,calls=0;
+ const result=await enrichChanges(rows,async()=>{calls++;active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,2));active--;return [];});
+ assert.equal(calls,20);assert(peak>1);assert(peak<=8);assert.deepEqual(result.map(r=>r.leg_id),rows.map(r=>r.leg_id));
+});
