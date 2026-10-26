@@ -38,3 +38,10 @@ test('favicon is linked and allowed by the page image policy',async()=>{
  assert.match(page.body,/rel="icon"[^>]+reisschemas\.svg/);
  assert.match(page.body,/rel="icon"[^>]+reisschemas\.ico/);
 });
+
+test('primary controls stay compact and settings are collapsed',async()=>{
+ const page=await call({path:'/seinhuis/reisschemas/'});
+ assert.match(page.body,/<nav[^>]*>[\s\S]*id="mode-bookings"[\s\S]*id="run-controls"[\s\S]*<\/nav>/);
+ assert.match(page.body,/<details class="control-settings"><summary>Controle-instellingen<\/summary>[\s\S]*id="toggle-controls"[\s\S]*id="connect-drafts"[\s\S]*<\/details>/);
+ assert.doesNotMatch(page.body,/Dagelijks om 00:30|id="punctuality-status"|id="control-source-status"/);
+});
