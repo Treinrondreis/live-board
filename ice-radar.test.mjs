@@ -5,7 +5,7 @@ assert.equal(iceRadar([row,{...row,messageTimestamp:now-1000,delay:99}],now).tra
 assert.equal(iceRadar([{...row,messageTimestamp:now-16*60000}],now).trains[0].delay,null);
 assert.equal(iceRadar([{...row,hasRealtime:false}],now).trains[0].delay,null);
 assert.equal(iceRadar([row,{...row,stationShortCode:'AH',observedAt:'Arnhem Centraal',plannedTimestamp:now+3600000}],now).trains.length,1);
-assert.equal(iceRadar(Array.from({length:12},(_,i)=>({...row,number:String(99900+i),rideId:`fixture-${i}`})),now).trains.length,8);
+assert.equal(iceRadar(Array.from({length:12},(_,i)=>({...row,number:String(99900+i),rideId:`fixture-${i}`})),now).trains.length,12);
 assert.equal(iceRadar([{...row,source:'DB'},{...row,category:'IC'}],now).trains.length,0);
 const before={...row,stationShortCode:'ASD',observedAt:'Amsterdam Centraal',plannedTimestamp:now-600000,expectedTimestamp:now-600000,departed:true};
 const after={...row,expectedTimestamp:now+600000};
@@ -34,4 +34,14 @@ const historical={...row,departed:true,messageTimestamp:now-40*60000,plannedTime
 const history=iceRadar([historical],now).trains[0];
 assert.equal(history.delay,1);assert.equal(history.delayKind,'historical');assert.equal(history.evidence.current,false);
 const forecast=iceRadar([{...historical,departed:false}],now).trains[0];assert.equal(forecast.delay,null);
-const pages=iceRadar(Array.from({length:12},(_,i)=>({...row,number:String(99900+i)})),now,{page:1});assert.equal(pages.trains.length,4);assert.equal(pages.total,12);
+const pages=iceRadar(Array.from({length:17},(_,i)=>({...row,number:String(99900+i)})),now,{page:1});assert.equal(pages.trains.length,5);assert.equal(pages.total,17);
+
+const mapJourneys=Array.from({length:14},(_,i)=>journey(String(99200+i),now-600000,now+(14-i)*60000));
+const mapRows=mapJourneys.flatMap(j=>[{...row,number:j.number,stationShortCode:'ASD',observedAt:'Amsterdam Centraal',plannedTimestamp:now-600000,expectedTimestamp:now-600000,departed:true,delay:0,messageTimestamp:now-1000},{...row,number:j.number,stationShortCode:'UT',observedAt:'Utrecht Centraal',plannedTimestamp:j.stops[1].arrival,expectedTimestamp:j.stops[1].arrival,delay:0,messageTimestamp:now}]);
+const allMap=iceRadar(mapRows,now,{journeys:mapJourneys});
+assert.equal(allMap.trains.length,12);assert.equal(allMap.mapTrains.length,14);assert.equal(allMap.trains[0].number,'99213');
+const target=allMap.mapTrains.at(-1).id;
+const focused=iceRadar(mapRows,now,{journeys:mapJourneys,focus:target});assert.equal(focused.page,1);assert.ok(focused.trains.some(t=>t.id===target));
+const delayed=iceRadar(mapRows.map(r=>r.stationShortCode==='UT'?{...r,delay:Number(r.number.slice(-2)),hasRealtime:r.number!=='99200'}:r),now,{journeys:mapJourneys,sort:'delay'});
+assert.equal(delayed.trains[0].number,'99213');assert.equal(delayed.sort,'delay');
+const lastPage=iceRadar(mapRows.map(r=>r.stationShortCode==='UT'?{...r,delay:Number(r.number.slice(-2)),hasRealtime:r.number!=='99200'}:r),now,{journeys:mapJourneys,sort:'delay',page:1});assert.equal(lastPage.trains.at(-1).number,'99200');assert.equal(lastPage.trains.at(-1).delay,null);
