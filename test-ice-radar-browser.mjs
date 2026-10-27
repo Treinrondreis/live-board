@@ -7,7 +7,7 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});
  const now=new Date().toISOString();
  let failed=false;
- const train={number:'99901',from:'Voorbeeld A',to:'Voorbeeld B',station:'Utrecht Centraal',delay:7,delayKind:'current',phaseLabel:'In Nederland (verwacht)',evidence:{kind:'forecast',station:'Voorbeeld halte',timestamp:now,ageMinutes:0,current:true},messageAt:now,stops:[],position:{kind:'estimated',coordinates:[5.1,52.1],label:'Geschatte positie',basis:'Rechte lijn tussen vertrekverwachtingen'}};
+ const train={number:'99901',from:'Voorbeeld A',to:'Voorbeeld B',station:'Utrecht Centraal',delay:7,delayKind:'current',phaseLabel:'In Nederland (verwacht)',departure:{station:'Voorbeeld A',planned:Date.now()-1800000},arrival:{station:'Voorbeeld B',planned:Date.now()+3600000},evidence:{kind:'forecast',station:'Voorbeeld halte',timestamp:now,ageMinutes:0,current:true},messageAt:now,stops:[],position:{kind:'estimated',coordinates:[5.1,52.1],label:'Geschatte positie',basis:'Rechte lijn tussen vertrekverwachtingen'}};
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.hostname==='tile.openstreetmap.org')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#d9e5df"/></svg>'});
@@ -21,6 +21,8 @@ try{
  assert.equal(await page.locator('.train').count(),2);
  assert.equal(await page.locator('.station-report').count(),0);
  assert.match(await page.locator('.evidence').first().textContent(),/Vertrekverwachting Voorbeeld halte/);
+ assert.match(await page.locator('.endpoints').first().textContent(),/Vertrek Voorbeeld A/);
+ assert.match(await page.locator('.endpoints').first().textContent(),/Aankomst Voorbeeld B/);
  await page.locator('.ice-marker.estimated').click();
  assert.match(await page.locator('.leaflet-popup-content').textContent(),/Geschatte positie/);
  await page.locator('.train').first().click();

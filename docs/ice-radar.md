@@ -25,3 +25,11 @@ The selected window runs from sixty minutes before the first Dutch arrival/depar
 Every row identifies the exact station, forecast versus reported departure, source timestamp and age. Old forecasts are unknown. A reported historical departure delay remains historical evidence with its age, never current data. The last global feed receipt is shown separately from row timestamps and page refresh time.
 
 Only supported estimated vehicle positions appear on the map, as small dots with hover labels and popups; historical station boxes are removed. A completed departure event can support a bounded estimate with a fresh next-stop forecast; it does not expire merely because the event was over fifteen minutes ago. No arrival or precise railway geometry is inferred. When no position can be supported, the map says so and the evidence remains visible in the list.
+
+## Complete journey endpoints and DB evidence
+
+Each row shows planned departure at the full journey origin and planned arrival at its destination, with dates. A direct recent matching forecast at that endpoint may add an expected time; a delay at another station is not presented as the endpoint arrival. If the live destination differs from the timetable destination, its arrival is unknown rather than borrowing the old terminal time. Dutch endpoint realtime remains NDOV-based.
+
+The existing DB station collection additionally retains ICE rows at already monitored stations. This adds no station calls. Retrieval timestamps are saved per row and restored from the station cache receipt time; API refreshes never renew them. DB evidence is explicitly a forecast fetched at that time, not a source event timestamp or confirmed realization.
+
+Odd train numbers may use matching DB observations beyond Arnhem/Hengelo only after a reported NDOV departure at that gateway. Even numbers may use DB up to and including Bad Bentheim or Düsseldorf, until a Dutch entry-station departure is reported. Selection requires the same number, service date, route station and event mode/planned time within five minutes, realtime and receipt no older than fifteen minutes. A nearby upcoming event is preferred over an older past event. No matching recent DB observation falls back to NDOV and exposes the reason in details. Stored source rows are not customer/booking data and Sanity is untouched.

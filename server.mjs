@@ -436,7 +436,7 @@ async function restoreDbBoards(){
   await Promise.all(monitoredStationNames().map(async name=>{
     const station=await loadBoardCache('DB:station:'+name);
     if(!Array.isArray(station?.rows))return;
-    collectorState.byStation[name]=station.rows.filter(r=>Number(r.expectedTimestamp||r.plannedTimestamp)>=now-600000);
+    collectorState.byStation[name]=station.rows.filter(r=>Number(r.expectedTimestamp||r.plannedTimestamp)>=now-600000).map(r=>({...r,retrievedAt:r.retrievedAt||station.at}));
     if(station.at&&(!latest||station.at>latest))latest=station.at;
   }));
   collectorState.lastScanAt=latest;
@@ -498,7 +498,7 @@ async function performScan(){
         const selectedRows=rowsForSelector(fetched.stops,fetched.station,boardSelectors[0]?{...boardSelectors[0],trainNumbers:globalSelector.trainNumbers}:globalSelector);
         boardRows.push(...selectedRows);
 
-        const cRows=[...selectedRows,...rowsForSelector(fetched.stops,fetched.station,{trainNumbers:screenCollectAllAtStation(name)?[]:screenTrainNumbers(),allEvents:true})];
+        const cRows=[...selectedRows,...rowsForSelector(fetched.stops,fetched.station,{trainNumbers:screenCollectAllAtStation(name)?[]:screenTrainNumbers(),allEvents:true}),...rowsForSelector(fetched.stops,fetched.station,{allEvents:true,categories:["ICE"]})];
         const connectionArrivals=connectionArrivalSelector(name,fetched.stops);
         if(connectionArrivals)collectorRows.push(...rowsForSelector(fetched.stops,fetched.station,connectionArrivals));
         for(const cfg of collectorSelectors){
@@ -515,7 +515,7 @@ async function performScan(){
         };
         cRows.push(...rowsForSelector(fetched.stops,fetched.station,nightjetRealtimeSelector));
 
-        collectorByStation[name]=dedupeRows(cRows)
+        collectorByStation[name]=dedupeRows(cRows).map(r=>({...r,retrievedAt:new Date().toISOString()}))
           .sort((a,b)=>(a.plannedTimestamp||0)-(b.plannedTimestamp||0));
         collectorRows.push(...collectorByStation[name]);
         collectorState.byStation[name]=collectorByStation[name];
@@ -1139,7 +1139,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(url.pathname==="/api/health")return sendJson(res,200,{ok:true,credentialsConfigured:Boolean(CLIENT_ID&&API_KEY),api:BASE,storage:getStorageInfo(),config,dbState,collectorState:{lastScanAt:collectorState.lastScanAt,stations:Object.keys(collectorState.byStation)},italyState,nightjetPlanState:{dateKey:nightjetPlanState.dateKey,scanning:nightjetPlanState.scanning,lastUpdatedAt:nightjetPlanState.lastUpdatedAt,count:nightjetPlanState.rows.length,warnings:nightjetPlanState.warnings}});
     if(["/maurits","/maurits/","/ice-radar","/ice-radar/"].includes(url.pathname)){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(await fs.promises.readFile(path.join(publicDir,'ice-radar.html'),'utf8'));}
-    if(url.pathname==="/api/ice-radar"){res.setHeader('Cache-Control','no-store');return sendJson(res,200,iceRadar([...ndovRows.values()],Date.now(),{journeys:dutchIceJourneys(),feedFresh:ndovStatus().fresh,lastMessageAt:ndovState.lastMessageAt,page:Number(url.searchParams.get("page")||0)}));}
+    if(url.pathname==="/api/ice-radar"){res.setHeader('Cache-Control','no-store');return sendJson(res,200,iceRadar([...ndovRows.values()],Date.now(),{journeys:dutchIceJourneys(),feedFresh:ndovStatus().fresh,lastMessageAt:ndovState.lastMessageAt,dbRows:Object.values(collectorState.byStation).flat().map(({rawStop,...r})=>({...r,source:"DB"})),page:Number(url.searchParams.get("page")||0)}));}
     if(url.pathname==="/api/ndov/status")return sendJson(res,200,{access:ndovAccessProbe,receiver:ndovStatus(),planning:nlPlanningState});
     const ndovPage=url.pathname.match(/^\/api\/ndov\/([a-z0-9-]+)\/?$/)?.[1];
     if(ndovPage){

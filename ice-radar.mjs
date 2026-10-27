@@ -1,4 +1,5 @@
-// Public NDOV station observations only; no customer or booking information.
+import {iceDbEvidence,iceEndpoint,sameIceStation} from './ice-db.mjs';
+// Public train observations only; no customer or booking information.
 const coordinates={ASD:[4.9003,52.378],UT:[5.1103,52.0894],AH:[5.9008,51.985],AMF:[5.374,52.154],DV:[6.161,52.257],HGL:[6.794,52.262],SHL:[4.762,52.309],RTD:[4.469,51.925],BD:[4.78,51.595],EHV:[5.481,51.443],ZL:[6.091,52.505]};
 const fresh=(row,now)=>Number.isFinite(row.messageTimestamp)&&now-row.messageTimestamp>=-60000&&now-row.messageTimestamp<=15*60000;
 
@@ -55,14 +56,19 @@ export function iceRadar(rows,now=Date.now(),options={}){
   const completed=end<now;
   const phase=completed?'recent':start>now?(j.stops[0].country==='NL'?'departing':'approaching'):'in-nl';
   const phaseLabel={recent:'NL-traject afgelopen (verwacht)',departing:'Vertrekt binnen 60 minuten',approaching:'Nadert Nederland (verwacht)', 'in-nl':'In Nederland (verwacht)'}[phase];
-  const chosen=latestFresh||lastReport;
-  const current=Boolean(chosen&&fresh(chosen,now)&&options.feedFresh!==false);
+  const dbRows=(options.dbRows||[]).filter(r=>String(r.number)===j.number&&r.serviceDate===j.serviceDate);
+  const db=iceDbEvidence(j,reports,dbRows,now);
+  const chosen=db.row||latestFresh||lastReport;
+  const current=Boolean(chosen&&fresh(chosen,now)&&(chosen.source==='DB'||options.feedFresh!==false));
   const measured=Boolean(chosen?.hasRealtime&&!chosen.cancelled&&Number.isFinite(chosen.delay));
-  const evidence=chosen?{station:chosen.observedAt,mode:'departure',kind:chosen.cancelled?'cancelled-stop':chosen.departed?'reported-departure':'forecast',timestamp:new Date(chosen.messageTimestamp).toISOString(),ageMinutes:Math.max(0,Math.floor((now-chosen.messageTimestamp)/60000)),current,delay:measured?chosen.delay:null}:null;
+  const evidence=chosen?{source:chosen.source||'NDOV',timestampKind:chosen.timestampKind||'message',station:chosen.observedAt,mode:chosen.eventMode||'departure',kind:chosen.cancelled?'cancelled-stop':chosen.departed?'reported-departure':'forecast',timestamp:new Date(chosen.messageTimestamp).toISOString(),ageMinutes:Math.max(0,Math.floor((now-chosen.messageTimestamp)/60000)),current,delay:measured?chosen.delay:null}:null;
   const estimate=estimateIcePosition(reports.sort((a,b)=>a.plannedTimestamp-b.plannedTimestamp),now);
   const position=!completed&&current&&estimate.kind==='estimated'?estimate:{kind:'unavailable',coordinates:null,label:'Geen betrouwbare voertuigpositie',basis:'Zie de bronmelding in de rittenlijst'};
   const delay=measured&&(current||chosen.departed)?chosen.delay:null;
-  trains.push({id,number:j.number,from:j.from||first.name,to:latestFresh?.to||j.to||last.name,routeLabel:j.incomplete?'Alleen bekende Nederlandse haltes':'Volledig traject volgens NDOV-dienstregeling',phase,phaseLabel,phaseBasis:'Trajectstatus berekend uit dienstregeling en beschikbare vertraging; geen bevestigde grenspassage of aankomst',nlStart:{station:first.name,planned:startPlanned,expected:start,basis:timeBasis(startBasis)},nlEnd:{station:last.name,planned:endPlanned,expected:end,basis:timeBasis(endBasis),mode:last.departure?'departure':'arrival'},incomplete:Boolean(j.incomplete),station:chosen?.observedAt||'',delay,delayKind:current?'current':chosen?.departed?'historical':'unknown',stale:!current,messageAt:chosen?new Date(chosen.messageTimestamp).toISOString():null,evidence,position,plannedTimestamp:startPlanned,stops:nl.map(s=>({station:s.name,plannedTimestamp:s.departure??s.arrival,mode:s.departure?'departure':'arrival',delay:null})),sortTime:phase==='recent'?-end:start});
+  const destination=latestFresh?.to||j.to||last.name;
+  const departure=iceEndpoint(j.stops[0],'departure',reports,dbRows,now);
+  const arrival=iceEndpoint(sameIceStation(destination,j.stops.at(-1).name)?j.stops.at(-1):null,'arrival',reports,dbRows,now,destination);
+  trains.push({id,number:j.number,from:j.from||first.name,to:destination,departure,arrival,dbStatus:db.reason,routeLabel:j.incomplete?'Alleen bekende Nederlandse haltes':'Volledig traject volgens NDOV-dienstregeling',phase,phaseLabel,phaseBasis:'Trajectstatus berekend uit dienstregeling en beschikbare vertraging; geen bevestigde grenspassage of aankomst',nlStart:{station:first.name,planned:startPlanned,expected:start,basis:timeBasis(startBasis)},nlEnd:{station:last.name,planned:endPlanned,expected:end,basis:timeBasis(endBasis),mode:last.departure?'departure':'arrival'},incomplete:Boolean(j.incomplete),station:chosen?.observedAt||'',delay,delayKind:current?'current':chosen?.departed?'historical':'unknown',stale:!current,messageAt:chosen?new Date(chosen.messageTimestamp).toISOString():null,evidence,position,plannedTimestamp:startPlanned,stops:nl.map(s=>({station:s.name,plannedTimestamp:s.departure??s.arrival,mode:s.departure?'departure':'arrival',delay:null})),sortTime:phase==='recent'?-end:start});
  }
  const rank={'in-nl':0,approaching:1,departing:1,recent:2};
  trains.sort((a,b)=>rank[a.phase]-rank[b.phase]||a.sortTime-b.sortTime||a.number.localeCompare(b.number));
