@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {iceRadar} from './ice-radar.mjs';
+const now=Date.UTC(2026,9,27,12),row={source:'NDOV',category:'ICE',number:'99901',rideId:'fixture',serviceDate:'2026-10-27',stationShortCode:'UT',observedAt:'Utrecht Centraal',to:'Voorbeeldstad',plannedTimestamp:now+60000,expectedTimestamp:now+120000,messageTimestamp:now,hasRealtime:true,delay:1};
+assert.equal(iceRadar([row,{...row,messageTimestamp:now-1000,delay:99}],now).trains[0].delay,1);
+assert.equal(iceRadar([{...row,messageTimestamp:now-16*60000}],now).trains[0].delay,null);
+assert.equal(iceRadar([{...row,hasRealtime:false}],now).trains[0].delay,null);
+assert.equal(iceRadar([row,{...row,stationShortCode:'AH',observedAt:'Arnhem Centraal',plannedTimestamp:now+3600000}],now).trains.length,1);
+assert.equal(iceRadar(Array.from({length:12},(_,i)=>({...row,rideId:`fixture-${i}`})),now).trains.length,8);
+assert.equal(iceRadar([{...row,source:'DB'},{...row,category:'IC'}],now).trains.length,0);
+console.log('ICE radar: deduplication, freshness, unknown delay, limit and source filtering passed');

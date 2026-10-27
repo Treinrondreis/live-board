@@ -1,0 +1,13 @@
+const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const delay=t=>t.cancelled?'Uitval':t.delay===null?'?':t.delay>0?`+${t.delay}`:String(t.delay);
+const clock=value=>new Date(value).toLocaleTimeString('nl-NL',{timeZone:'Europe/Amsterdam',hour:'2-digit',minute:'2-digit'});
+function render(data){
+ $('count').textContent=`${data.trains.length} van ${data.total} ritten`;
+ $('trains').innerHTML=data.trains.length?data.trains.map(t=>`<button class="train" aria-expanded="false" aria-label="ICE ${escape(t.number)}, ${escape(t.from)} naar ${escape(t.to)}, ${escape(t.station)}"><span class="number">ICE ${escape(t.number)}</span><span class="route" title="${escape(t.routeLabel)}">${escape(t.from)} → ${escape(t.to)}</span><span class="delay ${t.delay>0||t.cancelled?'late':''}">${escape(delay(t))}</span><span class="station">vertrek ${escape(t.station)}${t.stale?' · oud':''}</span></button><div class="stops" hidden>${t.stops.map(s=>`${escape(s.station)} · ${clock(s.plannedTimestamp)} · ${escape(delay(s))}${s.departed?' · vertrokken':''}`).join('<br>')}</div>`).join(''):'<p>Geen ICE-ritten beschikbaar in de aangesloten stationsmeldingen.</p>';
+ document.querySelectorAll('.train').forEach(b=>b.onclick=()=>{const open=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',String(open));b.nextElementSibling.hidden=!open;});
+ const stations=new Map();for(const t of data.trains){if(!t.coordinates)continue;const key=t.station;const group=stations.get(key)||[];group.push(t);stations.set(key,group);}
+ $('markers').innerHTML=[...stations.values()].map(group=>{const [lon,lat]=group[0].coordinates,x=75+(lon-3.4)*110,y=560-(lat-50.7)*175;return `<g><circle class="pin" cx="${x}" cy="${y}" r="7"/><text class="marker-station" x="${x+12}" y="${y-14}">${escape(group[0].station)}</text>${group.map((t,i)=>`<text class="marker-label" x="${x+12}" y="${y+4+i*17}">ICE ${escape(t.number)} · ${escape(delay(t))}</text>`).join('')}</g>`;}).join('');
+ $('status').textContent=`Bijgewerkt ${clock(data.generatedAt)} · NDOV vertrekverwachtingen · ? = onbekend`;
+}
+async function refresh(){try{const r=await fetch('/api/ice-radar',{signal:AbortSignal.timeout(15000),cache:'no-store'});if(!r.ok)throw Error();render(await r.json());}catch{$('trains').replaceChildren();$('markers').replaceChildren();$('count').textContent='Niet beschikbaar';$('status').textContent='Geen actuele gegevens bereikbaar. Er wordt automatisch opnieuw geprobeerd.';}finally{setTimeout(refresh,30000);}}
+setInterval(()=>$('clock').textContent=clock(Date.now()),1000);refresh();

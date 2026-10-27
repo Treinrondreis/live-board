@@ -1,3 +1,4 @@
+import {iceRadar} from './ice-radar.mjs';
 import {chooseNextBoardStop,selectBoardStops} from './board-stop-selection.mjs';
 import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
 import {rinkelIncoming} from './reishuis-rinkel.mjs';
@@ -1137,6 +1138,8 @@ const server=http.createServer(async(req,res)=>{
       return sendJson(res,layout?200:404,layout||{error:"Geen perronindeling opgeslagen voor dit station"});
     }
     if(url.pathname==="/api/health")return sendJson(res,200,{ok:true,credentialsConfigured:Boolean(CLIENT_ID&&API_KEY),api:BASE,storage:getStorageInfo(),config,dbState,collectorState:{lastScanAt:collectorState.lastScanAt,stations:Object.keys(collectorState.byStation)},italyState,nightjetPlanState:{dateKey:nightjetPlanState.dateKey,scanning:nightjetPlanState.scanning,lastUpdatedAt:nightjetPlanState.lastUpdatedAt,count:nightjetPlanState.rows.length,warnings:nightjetPlanState.warnings}});
+    if(url.pathname==="/ice-radar"||url.pathname==="/ice-radar/"){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(await fs.promises.readFile(path.join(publicDir,'ice-radar.html'),'utf8'));}
+    if(url.pathname==="/api/ice-radar"){res.setHeader('Cache-Control','no-store');return sendJson(res,200,iceRadar([...ndovRows.values()]));}
     if(url.pathname==="/api/ndov/status")return sendJson(res,200,{access:ndovAccessProbe,receiver:ndovStatus(),planning:nlPlanningState});
     const ndovPage=url.pathname.match(/^\/api\/ndov\/([a-z0-9-]+)\/?$/)?.[1];
     if(ndovPage){
