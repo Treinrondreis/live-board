@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {iceDbEvidence,iceEndpoint} from './ice-db.mjs';
+import {iceDbEvidence,iceEndpoint,sameIceStation} from './ice-db.mjs';
 const now=Date.UTC(2026,9,27,14),time=now+600000;
 const nl={code:'AH',name:'Arnhem Centraal',country:'NL',departure:now-600000};
 const de={code:'DU',name:'Düsseldorf Hbf',country:'D',departure:time,arrival:time-120000};
@@ -23,3 +23,6 @@ const hgl={code:'HGL',name:'Hengelo',country:'NL',departure:now-600000},bent={co
 assert.ok(iceDbEvidence({...odd,stops:[hgl,bent,end]},[{...report,stationShortCode:'HGL'}],[{...row,observedAt:bent.name}],now).row);
 assert.ok(iceDbEvidence({...even,stops:[end,bent,hgl]},[],[{...evenRow,observedAt:bent.name}],now).row);
 console.log('ICE DB handoff: direction, boundary passage, date, station, event, freshness and endpoint modes passed');
+
+assert.equal(sameIceStation("Frankfurt Flughafen","Frankfurt(M) Flughafen Fernbf"),true);
+assert.equal(sameIceStation("Frankfurt Flughafen","Frankfurt(Main)Hbf"),false);

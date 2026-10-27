@@ -1,4 +1,4 @@
-const stationKey=name=>String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace('duesseldorf','dusseldorf').replace(/\(main\)|\(m\)/g,'').replace(/fernbf|fernb/g,'fern').replace(/[^a-z0-9]/g,'');
+const stationKey=name=>String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace('duesseldorf','dusseldorf').replace(/\(main\)|\(m\)/g,'').replace(/fernbf|fernb/g,'fern').replace(/[^a-z0-9]/g,'').replace(/^frankfurtflughafen(?:fern)?$/,'frankfurtflughafenfern');
 export const sameIceStation=(a,b)=>stationKey(a)===stationKey(b);
 
 // Reuse existing station collection only. Retrieval time is not event realization.
