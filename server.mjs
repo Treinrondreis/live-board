@@ -39,7 +39,7 @@ import {handleKKTest} from './kk-test-handler.mjs';
 import {rfiStations,rfiState,rfiPayload,restoreRfi,startRfi} from './rfi.mjs';
 import {frenchStations,franceState,frenchPayload,restoreFrance,startFrance} from './france.mjs';
 import {spanishStations,internationalState,internationalPayload,restoreInternational,startInternational} from './international.mjs';
-import {restoreDutchPlan,startDutchPlan,dutchPlannedRows,combineDutchRows,nlPlanningState} from './nl-planning.mjs';
+import {restoreDutchPlan,startDutchPlan,dutchPlannedRows,dutchIceJourneys,combineDutchRows,nlPlanningState} from './nl-planning.mjs';
 import {loadBoardCache,saveBoardCache} from './board-cache.mjs';
 import {swissStations,swissState,startSwiss,restoreSwiss,swissPayload} from './swiss.mjs';
 import {norwegianStations,enturState,startEntur,restoreEntur,norwegianPayload} from './entur.mjs';
@@ -1139,7 +1139,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(url.pathname==="/api/health")return sendJson(res,200,{ok:true,credentialsConfigured:Boolean(CLIENT_ID&&API_KEY),api:BASE,storage:getStorageInfo(),config,dbState,collectorState:{lastScanAt:collectorState.lastScanAt,stations:Object.keys(collectorState.byStation)},italyState,nightjetPlanState:{dateKey:nightjetPlanState.dateKey,scanning:nightjetPlanState.scanning,lastUpdatedAt:nightjetPlanState.lastUpdatedAt,count:nightjetPlanState.rows.length,warnings:nightjetPlanState.warnings}});
     if(["/maurits","/maurits/","/ice-radar","/ice-radar/"].includes(url.pathname)){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(await fs.promises.readFile(path.join(publicDir,'ice-radar.html'),'utf8'));}
-    if(url.pathname==="/api/ice-radar"){res.setHeader('Cache-Control','no-store');return sendJson(res,200,iceRadar([...ndovRows.values()]));}
+    if(url.pathname==="/api/ice-radar"){res.setHeader('Cache-Control','no-store');return sendJson(res,200,iceRadar([...ndovRows.values()],Date.now(),{journeys:dutchIceJourneys(),feedFresh:ndovStatus().fresh,lastMessageAt:ndovState.lastMessageAt,page:Number(url.searchParams.get("page")||0)}));}
     if(url.pathname==="/api/ndov/status")return sendJson(res,200,{access:ndovAccessProbe,receiver:ndovStatus(),planning:nlPlanningState});
     const ndovPage=url.pathname.match(/^\/api\/ndov\/([a-z0-9-]+)\/?$/)?.[1];
     if(ndovPage){

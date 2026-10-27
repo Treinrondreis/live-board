@@ -15,7 +15,8 @@ export function parseDutchPlan(bytes,stations,now=Date.now()){
  const fields=read('delivery.dat').trim().split(','),date=s=>s.slice(4,8)+'-'+s.slice(2,4)+'-'+s.slice(0,2),start=date(fields[1]),end=date(fields[2]);
  const notes=new Map(read('footnote.dat').split('#').slice(1).map(b=>{const l=b.split(/[\r\n]+/).filter(Boolean);return [l[0].trim(),l.slice(1).join('').trim()];}));
  const names=new Map(read('stations.dat').split(/[\r\n]+/).filter(l=>l&&!l.startsWith('@')).map(l=>{const f=l.split(',');return [f[1].trim().toUpperCase(),f.at(-1).trim()];}));
- const selected=new Map(stations.map(s=>[s.code.toUpperCase(),s.name])),rows=[];
+ const countries=new Map(read('stations.dat').split(/[\r\n]+/).filter(l=>l&&!l.startsWith('@')).map(l=>{const f=l.split(',');return [f[1].trim().toUpperCase(),f[4].trim()];}));
+ const selected=new Map(stations.map(s=>[s.code.toUpperCase(),s.name])),rows=[],iceJourneys=[];
  const firstDate=dayKey(now-86400000),lastDate=dayKey(now+2*86400000);
  for(const block of read('timetbls.dat').split('#').slice(1)){
   const lines=block.split(/[\r\n]+/).filter(Boolean),records=prefix=>lines.filter(l=>l[0]===prefix).map(l=>l.slice(1).split(',').map(s=>s.trim()));
@@ -34,6 +35,13 @@ export function parseDutchPlan(bytes,stations,now=Date.now()){
      current={code:code.toUpperCase(),arrival,departure,track:''};stops.push(current);
     }else if(line[0]==='?'&&current){const [,track,note]=line.slice(1).split(',').map(s=>s.trim());if(active(note))current.track=track;}
    }
+   for(const service of services){
+    const first=Number(service[3])-1,last=Number(service[4])-1;
+    if(!categories.some(c=>c[0]==='ICE'&&Number(c[1])<=last+1&&Number(c[2])>=first+1))continue;
+    const journeyStops=stops.slice(first,last+1).map((s,i)=>({...s,name:names.get(s.code)||s.code,country:countries.get(s.code)||'',ordinal:first+i+1}));
+    if(!journeyStops.some(s=>s.country==='NL')||!running.some(r=>active(r[0])&&Number(r[1])<=last+1&&Number(r[2])>=first+1))continue;
+    iceJourneys.push({id:`${serviceDate}|${Number(service[1])}`,number:String(Number(service[1])),serviceDate,from:journeyStops[0]?.name,to:journeyStops.at(-1)?.name,stops:journeyStops});
+   }
    for(let i=0;i<stops.length;i++){
     const stop=stops[i],ordinal=i+1;
     if(!selected.has(stop.code)||!stop.departure||!running.some(r=>active(r[0])&&ordinal>=+r[1]&&ordinal<=+r[2]))continue;
@@ -45,7 +53,7 @@ export function parseDutchPlan(bytes,stations,now=Date.now()){
    }
   }
  }
- return {rows,validThrough:lastDate,loadedAt:now};
+ return {rows,iceJourneys,validThrough:lastDate,loadedAt:now};
 }
 let plan=null,busy=false;
 export const nlPlanningState={status:'starting',count:0,lastSuccessAt:null,error:null};
@@ -60,6 +68,7 @@ export async function refreshDutchPlan(stations){
 }
 export function startDutchPlan(stations){void refreshDutchPlan(stations);setInterval(()=>void refreshDutchPlan(stations),6*3600000).unref();}
 export function dutchPlannedRows(station,now=Date.now()){return (plan?.rows||[]).filter(r=>r.observedAt===station&&r.plannedTimestamp>=now-600000&&r.plannedTimestamp<now+86400000);}
+export function dutchIceJourneys(){return plan?.iceJourneys||[];}
 export function combineDutchRows(planned,realtime,now=Date.now()){
  const same=(a,b)=>String(a.number)===String(b.number)&&a.serviceDate===b.serviceDate&&Math.abs(a.plannedTimestamp-b.plannedTimestamp)<3*3600000;
  return [...planned.filter(p=>!realtime.some(r=>same(p,r))),...realtime.filter(r=>!r.departed&&!r.notBoardable&&(r.cancelled?r.plannedTimestamp:r.expectedTimestamp)>=now-600000).map(r=>{const base=planned.find(p=>same(p,r));return base?{...base,...r,futureRoute:r.futureRoute?.length?r.futureRoute:base.futureRoute}:r;})];
