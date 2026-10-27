@@ -68,10 +68,18 @@ export function iceRadar(rows,now=Date.now(),options={}){
   const destination=latestFresh?.to||j.to||last.name;
   const departure=iceEndpoint(j.stops[0],'departure',reports,dbRows,now);
   const arrival=iceEndpoint(sameIceStation(destination,j.stops.at(-1).name)?j.stops.at(-1):null,'arrival',reports,dbRows,now,destination);
-  trains.push({id,number:j.number,from:j.from||first.name,to:destination,departure,arrival,dbStatus:db.reason,routeLabel:j.incomplete?'Alleen bekende Nederlandse haltes':'Volledig traject volgens NDOV-dienstregeling',phase,phaseLabel,phaseBasis:'Trajectstatus berekend uit dienstregeling en beschikbare vertraging; geen bevestigde grenspassage of aankomst',nlStart:{station:first.name,planned:startPlanned,expected:start,basis:timeBasis(startBasis)},nlEnd:{station:last.name,planned:endPlanned,expected:end,basis:timeBasis(endBasis),mode:last.departure?'departure':'arrival'},incomplete:Boolean(j.incomplete),station:chosen?.observedAt||'',delay,delayKind:current?'current':chosen?.departed?'historical':'unknown',stale:!current,messageAt:chosen?new Date(chosen.messageTimestamp).toISOString():null,evidence,position,plannedTimestamp:startPlanned,stops:nl.map(s=>({station:s.name,plannedTimestamp:s.departure??s.arrival,mode:s.departure?'departure':'arrival',delay:null})),sortTime:phase==='recent'?-end:start});
+  const nextNlTime=nl.map(s=>{
+   const planned=s.departure??s.arrival,report=reports.find(r=>r.stationShortCode===s.code);
+   return planned+(usable(report)?report.delay*60000:0);
+  }).filter(time=>Number.isFinite(time)&&time>=now).sort((a,b)=>a-b)[0]??end;
+  trains.push({id,number:j.number,from:j.from||first.name,to:destination,departure,arrival,dbStatus:db.reason,routeLabel:j.incomplete?'Alleen bekende Nederlandse haltes':'Volledig traject volgens NDOV-dienstregeling',phase,phaseLabel,phaseBasis:'Trajectstatus berekend uit dienstregeling en beschikbare vertraging; geen bevestigde grenspassage of aankomst',nlStart:{station:first.name,planned:startPlanned,expected:start,basis:timeBasis(startBasis)},nlEnd:{station:last.name,planned:endPlanned,expected:end,basis:timeBasis(endBasis),mode:last.departure?'departure':'arrival'},incomplete:Boolean(j.incomplete),station:chosen?.observedAt||'',delay,delayKind:current?'current':chosen?.departed?'historical':'unknown',stale:!current,messageAt:chosen?new Date(chosen.messageTimestamp).toISOString():null,evidence,position,plannedTimestamp:startPlanned,stops:nl.map(s=>({station:s.name,plannedTimestamp:s.departure??s.arrival,mode:s.departure?'departure':'arrival',delay:null})),sortTime:phase==='recent'?-end:phase==='in-nl'?nextNlTime:start});
  }
  const rank={'in-nl':0,approaching:1,departing:1,recent:2};
- trains.sort((a,b)=>rank[a.phase]-rank[b.phase]||a.sortTime-b.sortTime||a.number.localeCompare(b.number));
- const page=Math.min(Math.max(0,Number.isInteger(options.page)?options.page:0),Math.max(0,Math.ceil(trains.length/8)-1));
- return {source:'NDOV InfoPlus + IFF-dienstregeling',generatedAt:new Date(now).toISOString(),feedFresh:options.feedFresh!==false,lastMessageAt:options.lastMessageAt||null,coverage:journeys.length?'full-schedule':'partial-observations',total:trains.length,page,pages:Math.ceil(trains.length/8),trains:trains.slice(page*8,page*8+8)};
+ const chronological=(a,b)=>rank[a.phase]-rank[b.phase]||a.sortTime-b.sortTime||a.number.localeCompare(b.number);
+ const sort=options.sort==='delay'?'delay':'route';
+ trains.sort(sort==='delay'?(a,b)=>Number(!Number.isFinite(a.delay))-Number(!Number.isFinite(b.delay))||(Number.isFinite(a.delay)&&Number.isFinite(b.delay)?b.delay-a.delay:0)||chronological(a,b):chronological);
+ const focused=options.focus?trains.findIndex(t=>t.id===options.focus):-1;
+ const requested=focused>=0?Math.floor(focused/12):options.page;
+ const page=Math.min(Math.max(0,Number.isInteger(requested)?requested:0),Math.max(0,Math.ceil(trains.length/12)-1));
+ return {source:'NDOV InfoPlus + IFF-dienstregeling',generatedAt:new Date(now).toISOString(),feedFresh:options.feedFresh!==false,lastMessageAt:options.lastMessageAt||null,coverage:journeys.length?'full-schedule':'partial-observations',total:trains.length,page,pageSize:12,sort,pages:Math.ceil(trains.length/12),mapTrains:trains.filter(t=>t.position.kind==='estimated'),trains:trains.slice(page*12,page*12+12)};
 }

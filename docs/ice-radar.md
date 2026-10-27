@@ -2,7 +2,7 @@
 
 `/maurits` is a separate public page; `/ice-radar` remains an alias. `/api/ice-radar` reads only the existing in-memory NDOV InfoPlus receiver. It neither queries nor writes bookings, customer records or Sanity. No extra NDOV subscription or production configuration is introduced.
 
-The response groups ICE departures by service date and NDOV ride identity, keeps the newest observation per station, selects the next known departure, and returns at most eight journeys chronologically. The window is three hours behind to twelve hours ahead. The first available Dutch station is the displayed origin, not a complete international itinerary. Coverage depends on stations already subscribed to by the receiver.
+The response groups ICE departures by service date and NDOV ride identity, keeps the newest observation per station, selects the next known departure, and returns at most twelve journeys chronologically. The window is three hours behind to twelve hours ahead. The first available Dutch station is the displayed origin, not a complete international itinerary. Coverage depends on stations already subscribed to by the receiver.
 
 ## Estimated location
 
@@ -14,13 +14,13 @@ Fallback markers explicitly represent a station report, not a train location. Un
 
 Leaflet 1.9.4 is vendored under public/vendor/leaflet with its BSD licence. The browser requests only visible OpenStreetMap tiles using normal browser caching and referrer policy, with visible attribution; no prefetch, offline download or tile proxy. OSM receives ordinary browser connection information, but no dossiers, bookings or customer data. Tiles are best effort. Tile policy: https://operations.osmfoundation.org/policies/tiles/
 
-Tests use fictional train identifiers and intercepted synthetic tiles. They verify interpolation, stale/cancelled/missing-data fallback, deduplication, eight-row limit, map labels, mobile layout and fetch failure. They do not prove complete live national coverage. Public NDOV category ICE was checked at Amsterdam, Utrecht and Arnhem before the initial PR.
+Tests use fictional train identifiers and intercepted synthetic tiles. They verify interpolation, stale/cancelled/missing-data fallback, deduplication, twelve-row limit, map labels, mobile layout and fetch failure. They do not prove complete live national coverage. Public NDOV category ICE was checked at Amsterdam, Utrecht and Arnhem before the initial PR.
 
 ## Selection and source transparency
 
 The IFF parser now retains complete ICE journeys, including foreign stops, country codes and arrival-only Dutch terminal stops. Existing station departure output is unchanged. The radar matches NDOV observations only by train, service day, station and planned departure within five minutes. No match means no realtime evidence; a loaded schedule never implies punctuality.
 
-The selected window runs from sixty minutes before the first Dutch arrival/departure to sixty minutes after the last Dutch departure/arrival. These are station boundaries, not measured border crossings. Direct usable departure delay is applied to station times; for a downstream end without its own report, the latest recent delay is extrapolated and labelled as calculated. Otherwise the schedule remains explicitly the basis. A terminal arrival is never presented as confirmed from a departure report elsewhere. Statuses distinguish expected in-NL, approaching, departing soon and recently finished. In-NL comes first, upcoming services next and recently finished last. Pagination keeps every eligible service accessible with at most eight visible.
+The selected window runs from sixty minutes before the first Dutch arrival/departure to sixty minutes after the last Dutch departure/arrival. These are station boundaries, not measured border crossings. Direct usable departure delay is applied to station times; for a downstream end without its own report, the latest recent delay is extrapolated and labelled as calculated. Otherwise the schedule remains explicitly the basis. A terminal arrival is never presented as confirmed from a departure report elsewhere. Statuses distinguish expected in-NL, approaching, departing soon and recently finished. In-NL comes first, upcoming services next and recently finished last. Pagination keeps every eligible service accessible with at most twelve visible.
 
 Every row identifies the exact station, forecast versus reported departure, source timestamp and age. Old forecasts are unknown. A reported historical departure delay remains historical evidence with its age, never current data. The last global feed receipt is shown separately from row timestamps and page refresh time.
 
@@ -33,3 +33,9 @@ Each row shows planned departure at the full journey origin and planned arrival 
 The existing DB station collection additionally retains ICE rows at already monitored stations. This adds no station calls. Retrieval timestamps are saved per row and restored from the station cache receipt time; API refreshes never renew them. DB evidence is explicitly a forecast fetched at that time, not a source event timestamp or confirmed realization.
 
 Odd train numbers may use matching DB observations beyond Arnhem/Hengelo only after a reported NDOV departure at that gateway. Even numbers may use DB up to and including Bad Bentheim or Düsseldorf, until a Dutch entry-station departure is reported. Selection requires the same number, service date, route station and event mode/planned time within five minutes, realtime and receipt no older than fifteen minutes. A nearby upcoming event is preferred over an older past event. No matching recent DB observation falls back to NDOV and exposes the reason in details. Stored source rows are not customer/booking data and Sanity is untouched.
+
+## Twelve-row list, complete map and sorting
+
+The list page size is twelve. Map data contains every supported estimated position in the selected time window, independently of list pagination. Default ordering puts expected in-NL journeys first by their next Dutch stop time, approaching/departing journeys by expected entry/departure, then recently finished journeys by newest end first. Optional delay ordering sorts known reported delays descending, with unknown delays last and chronological order as tie-breaker. Historical delays retain their visible historical evidence label.
+
+A marker selects the corresponding journey, requests its page in the current sort order and expands/highlights that row. Collocated markers provide individual journey buttons. The API resolves focus from the sorted journey ID list, avoiding client assumptions about page positions. Stale network responses cannot overwrite a newer sort/page selection. Browser tests use more positions than fit in the visible list and verify cross-page selection and sort changes; no real tiles or customer data are used.
