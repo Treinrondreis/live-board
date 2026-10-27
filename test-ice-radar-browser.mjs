@@ -21,8 +21,8 @@ try{
  assert.equal(await page.locator('.train').count(),2);
  assert.equal(await page.locator('.station-report').count(),0);
  assert.match(await page.locator('.evidence').first().textContent(),/Vertrekverwachting Voorbeeld halte/);
- assert.match(await page.locator('.endpoints').first().textContent(),/Vertrek Voorbeeld A/);
- assert.match(await page.locator('.endpoints').first().textContent(),/Aankomst Voorbeeld B/);
+ assert.match(await page.locator('.journey-line').first().textContent(),/Voorbeeld A – Voorbeeld B/);
+ assert.match(await page.locator('.journey-line').first().textContent(),/\+7/);
  await page.locator('.ice-marker.estimated').click();
  assert.match(await page.locator('.leaflet-popup-content').textContent(),/Geschatte positie/);
  await page.locator('.train').first().click();
