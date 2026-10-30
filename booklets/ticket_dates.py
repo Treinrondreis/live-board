@@ -3,7 +3,7 @@ import re,time
 from datetime import date
 from pypdf import PdfReader
 
-PROVIDERS=('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','voucher')
+PROVIDERS=('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','finnlines','fjordline','entur','sanity','voucher')
 DATE=r'(?:20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2}[.\-/]20\d{2})'
 MONTHS={name:n for n,names in enumerate(('januari january','februari february','maart march','april','mei may','juni june','juli july','augustus august','september','oktober october','november','december'),1) for name in names.split()}
 MONTHS.update({name:n for n,name in enumerate(('jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'),1)})
@@ -28,16 +28,18 @@ def labelled_date(text,provider,allowed=()):
     text=text[:100000]
     if provider=='voucher':labels=r'check[ -]?in|incheck(?:datum|en)?|arrival(?: date)?|aankomst(?:datum)?'
     else:labels=r'date of travel|fecha(?: de viaje)?|vertrek(?:datum)?|departure(?: date)?|abfahrt(?: am)?|d[eé]part(?: le)?|travel date|reisdatum|odjezd'
-    printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider in ('voucher','trainline','raileurope','sbb') else DATE
+    printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider in ('voucher','trainline','raileurope','sbb','sanity') else DATE
     patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({printed_date})']
-    if provider=='trainline':
+    if provider in ('trainline','sanity'):
         # UK PDFs join the date's words; only normalize alongside CRS route codes.
         text=re.sub(r'(\d{1,2})(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(20\d{2})(?=\s+[A-Z]{3}\s*[-–]\s*[A-Z]{3}\b)',r'\1 \2 \3',text,flags=re.I)
         patterns[:0]=[rf'(?m)^\s*Origen:\s*[^\n]{{1,100}}?\s+({DATE})\s+\d{{1,2}}:\d{{2}}',rf'(?m)^\s*({DATE})[ \t]*\r?\n[ \t]*Origen:[^\n]{{1,100}}\r?\n[ \t]*Destino:',rf'(?m)^\s*({WRITTEN_DATE})\s+[A-Z]{{3}}\s*[-–]\s*[A-Z]{{3}}\b']
+    if provider=='finnlines' or provider=='sanity' and re.search(r'Finnlines',text,re.I):patterns[:0]=[rf'(?m)^[^\d\n]{{2,80}}[-–][^\d\n]{{2,80}}\s*({DATE})\s*\d{{1,2}}[:.]\d{{2}}\s*{DATE}\s*\d{{1,2}}[:.]\d{{2}}']
+    if provider=='fjordline' or provider=='sanity' and re.search(r'Fjord\s*Line',text,re.I):patterns[:0]=[rf'Travel\s*details\s*(?:Name\s*of\s*passengers\s*)?({DATE})\b']
     if provider=='mav':patterns.insert(0,rf'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*({DATE})')
-    if provider in ('trainline','raileurope','sbb'):patterns.append(rf'(?m)^\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|tu|we|th|fr|sa|su),?\s+({printed_date})')
+    if provider in ('trainline','raileurope','sbb','sanity'):patterns.append(rf'(?m)^\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|tu|we|th|fr|sa|su),?\s+({printed_date})')
     for pattern in patterns:
-        values={(voucher_iso(m[1]) if provider in ('voucher','trainline','raileurope','sbb') else iso(m[1])) for m in re.finditer(pattern,text,re.I)}-{''}
+        values={(voucher_iso(m[1]) if provider in ('voucher','trainline','raileurope','sbb','sanity') else iso(m[1])) for m in re.finditer(pattern,text,re.I)}-{''}
         if values:return (next(iter(values)),'pdf',False) if len(values)==1 else ('','ambiguous',True)
     if provider!='voucher':
         # Validity is an anchor, not a birthday or the date the ticket was issued.
@@ -70,7 +72,7 @@ def moment_dates(body,slot,candidate):
     if slot.get('documentKind')!='voucher' and slot.get('ticketDateBasis','booking')=='booking':
         dates.update((body.get('sanityBooking') or {}).get('journeyDates',[]))
         for other in body.get('sections',[]):
-            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','trainlineTickets','raileuropeTickets','sbbTickets'):continue
+            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','trainlineTickets','raileuropeTickets','sbbTickets','finnlinesTickets','fjordlineTickets','enturTickets','sanityTickets'):continue
             source=other.get('selected') or {}
             dates.update(p['travelDate'] for p in source.get('originalPages',source.get('pageSources',[])) if iso(p.get('travelDate')))
     return sorted(d for d in dates if iso(d))
@@ -89,8 +91,9 @@ def inspect(s,payload):
         if time.monotonic()>deadline:raise ValueError('Datumcontrole duurt te lang. Upload minder pagina’s tegelijk.')
         text=page.extract_text() or ''
         if provider=='ns' and omit_gate_pass and is_gate_pass(text):continue
+        if provider in ('sanity','entur') and re.search(r'not valid as (?:a )?ticket|electronic sales receipt|kvittering.*ikke.*billett',text,re.I):raise ValueError('Dit document is een betalingsbewijs en geen ticket. Kies de echte ticket-PDF.')
         value,source,review=labelled_date(text,provider,allowed)
-        if provider not in ('dfds','trainline','raileurope','sbb') and not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
+        if provider not in ('dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur') and not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
         pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text),**ticket_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.

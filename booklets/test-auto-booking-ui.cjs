@@ -3,7 +3,7 @@ const source=fs.readFileSync(__dirname+'/index.html','utf8').split('<script>')[2
 function fixture(options={}){
  const nodes=new Map(),calls=[],composed=[];
  const node=s=>{if(!nodes.has(s))nodes.set(s,{innerHTML:'',open:false,checked:true,showModal(){this.open=true},close(){this.open=false}});return nodes.get(s);};
- const ctx=vm.createContext({document:{querySelector:node},window:{addEventListener(){}},structuredClone,console,clearTimeout,setTimeout,confirm:()=>true,AbortSignal});
+ const ctx=vm.createContext({document:{querySelector:node},window:{addEventListener(){}},structuredClone,console,clearTimeout,setTimeout,confirm:()=>true,crypto:require('node:crypto').webcrypto,AbortSignal});
  vm.runInContext(source,ctx);
  ctx.api=async(path,b)=>{calls.push({path,b:structuredClone(b)});if(options.api){const r=await options.api(path,b);if(r!==undefined)return r;}
   if(path==='/api/booking-data/documents')return {booking:{todos:options.todos||[]},items:options.items||[{id:'letter',kind:'letter'},{id:'voucher1',kind:'voucher',approved:true},{id:'voucher2',kind:'voucher',approved:true}]};
@@ -17,7 +17,7 @@ function fixture(options={}){
   if(path==='/api/tickets/compose'){composed.push(structuredClone(b));return {asset:'composed-'+composed.length,pages:b.pages.length,format:b.format};}
   throw Error('Unexpected API '+path);
  };
- ctx.fetch=async(path,request)=>{const ticket=JSON.parse(request.body).ticket;calls.push({path,ticket});if(ticket===options.failTicket)throw Error('Ticket unavailable');return {ok:true,arrayBuffer:async()=>ticket};};
+ ctx.fetch=async(path,request)=>{const ticket=JSON.parse(request.body).ticket;calls.push({path,ticket});if(ticket===options.failTicket)throw Error('Ticket unavailable');return {ok:true,arrayBuffer:async()=>Buffer.from(ticket)};};
  ctx.run=fn=>{ctx.lastRun=Promise.resolve().then(fn);return ctx.lastRun;};
  vm.runInContext(`state={objects:[],exports:[]};draft={kind:'book',title:'',body:{format:'A4',values:{},sections:['letter','schedule','nsTickets','voucher'].map(k=>({choice:'document',documentKind:k,title:documentNames[k],options:[],selected:null})),sanityBooking:{id:'exact-customer',number:'1234A',name:'Test Reiziger',sameNumberBookings:1}}}`,ctx);
  return {ctx,node,calls,composed,exec:code=>vm.runInContext(code,ctx),slots:()=>vm.runInContext('draft.body.sections',ctx)};

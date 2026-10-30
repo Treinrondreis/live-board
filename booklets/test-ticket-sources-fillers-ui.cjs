@@ -13,10 +13,31 @@ function fixture(options={}){
   if(path==='/api/tickets/compose')return {asset:'composed',pages:b.pages.length,format:'A4'};
   throw Error('Unexpected '+path);
  };
- ctx.fetch=async(path,r)=>{const ticket=JSON.parse(r.body).ticket;calls.push({ticket});if(ticket===options.fail)throw Error('PDF niet beschikbaar');return {ok:true,arrayBuffer:async()=>ticket};};
+ ctx.fetch=async(path,r)=>{const ticket=JSON.parse(r.body).ticket;calls.push({ticket});if(ticket===options.fail)throw Error('PDF niet beschikbaar');return {ok:true,arrayBuffer:async()=>Buffer.from(ticket)};};
  ctx.run=fn=>{ctx.lastRun=Promise.resolve().then(fn);return ctx.lastRun;};ctx.renderDraft=()=>{};ctx.bookingDocumentsOverview=()=>{};ctx.toast=m=>ctx.message=m;
  return {ctx,exec,node,calls,check:v=>checked=v,slot:()=>exec('draft.body.sections[0]')};
 }
+test('Sanity ticket uploads keep their booking source for export revalidation',async()=>{
+ const f=fixture({api:async(path,b)=>{
+  if(path==='/api/mail-tickets/search')return {references:['1234'],messages:[{id:'sanity:customer',reference:'1234',latest:true,automatic:true,tickets:[{id:'asset-id',title:'Ticket.pdf',sanity:{bookingId:'customer',documentId:'asset-id',kind:'ticket'}}]}]};
+  if(path==='/api/booking-data/attachment')return {bookingId:b.bookingId,documentId:b.documentId,kind:'ticket',attachment:true};
+  if(path==='/api/booking-documents/render')return {asset:'source',pages:2,sourceDigest:'a'.repeat(64),bookingDocument:{...b.document,digest:'fictional-digest'}};
+ }});f.exec("draft.body.sections[0].ticketSources=['sanity']");await f.exec('autoFillBookingDocuments()');
+ assert.equal(f.slot().selected.pages,1);assert.equal(f.slot().selected.bookingDocuments[0].bookingId,'customer');assert.equal(f.slot().selected.bookingDocuments[0].kind,'ticket');
+ assert(f.calls.some(c=>c.path==='/api/booking-data/attachment'&&c.b.kind==='ticket'));assert(!f.calls.some(c=>c.ticket));
+});
+
+test('an unclassified Sanity upload stops automatic use but remains available for manual choice',async()=>{
+ const f=fixture({api:async(path)=>path==='/api/mail-tickets/search'?{references:['1234'],messages:[{id:'sanity:customer',reference:'1234',latest:true,automatic:false,diagnostic:'Kies de juiste Sanity-bijlagen handmatig.',tickets:[{id:'unknown'}]}]}:undefined});
+ f.exec("draft.body.sections[0].ticketSources=['sanity']");await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected,null);assert.match(f.slot().issue,/Kies/);assert(!f.calls.some(c=>c.ticket));
+});
+
+test('the same original PDF from another source cannot reintroduce an omitted gate page',async()=>{
+ const f=fixture({api:async(path,b)=>path==='/api/tickets/inspect'?{pages:(b.provider==='ns'?[0,2]:[0,1,2]).map(page=>({asset:b.asset,page,travelDate:'2028-06-06',dateNeedsReview:false}))}:undefined});
+ f.ctx.fetch=async()=>({ok:true,arrayBuffer:async()=>Buffer.from('same-original-pdf')});f.exec("draft.body.sections[0].ticketSources=['ns','db']");await f.exec('autoFillBookingDocuments()');
+ assert.deepEqual(Array.from(f.slot().selected.pageSources,p=>p.page),[0,2]);assert(f.slot().selected.importNotices.some(n=>/dezelfde PDF/.test(n)));
+});
+
 test('combines NS and another provider, sorts by journey date and preserves both origins',async()=>{
  const f=fixture();f.exec("draft.body.sections[0].ticketSources=['ns','db']");await f.exec('autoFillBookingDocuments()');
  const selected=f.slot().selected;assert.equal(selected.pages,2);assert.deepEqual(Array.from(selected.pageSources,p=>p.providerKey),['db','ns']);assert.equal(selected.ticketImport.providers.length,2);assert.equal(selected.reviewRequired,undefined);
@@ -88,7 +109,7 @@ test('export fill toggle rechecks optional fields and preserves an unchecked cho
 test('one dead NS PDF button keeps the other tickets as an informational note; no older mail is downloaded',async()=>{
  const f=fixture();f.exec("draft.body.sections[0].ticketSources=['ns'];draft.body.sections.push(structuredClone(draft.body.sections[0]))");
  f.ctx.api=async(path,b)=>{if(path==='/api/mail-tickets/search')return {references:['ABCDEF'],messages:[{id:'new',reference:'ABCDEF',latest:true,tickets:[{id:'valid',title:'Valid'},{id:'dead',title:'Expired'},{id:'valid2',title:'Valid 2'}]},{id:'old',reference:'ABCDEF',latest:false,tickets:[{id:'old',title:'Old'}]}]};if(path.startsWith('/api/upload'))return {id:'pdf-'+b,pages:1};if(path==='/api/tickets/inspect')return {pages:[{asset:b.asset,page:0,mail:'new',reference:'ABCDEF',travelDate:'2026-10-14',dateNeedsReview:false}]};if(path==='/api/tickets/compose')return {asset:'combined',pages:b.pages.length};throw Error(path);};
- const downloads=[];f.ctx.fetch=async(path,r)=>{const id=JSON.parse(r.body).ticket;downloads.push(id);return id==='dead'?{ok:false,json:async()=>({error:'No PDF',code:'TICKET_NOT_PDF'})}:{ok:true,arrayBuffer:async()=>id};};
+ const downloads=[];f.ctx.fetch=async(path,r)=>{const id=JSON.parse(r.body).ticket;downloads.push(id);return id==='dead'?{ok:false,json:async()=>({error:'No PDF',code:'TICKET_NOT_PDF'})}:{ok:true,arrayBuffer:async()=>Buffer.from(id)};};
  await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.pages,2);assert(!f.slot().selected.reviewRequired);assert.match(f.slot().selected.importNotices.join(' '),/Expired.*overgeslagen/);assert.deepEqual(downloads,['valid','dead','valid2']);assert.equal(f.exec('draft.body.sections[1].selected.pages'),2);assert(!f.exec('draft.body.sections[1].selected.reviewRequired'));
 });
 
@@ -109,7 +130,7 @@ test('a portal link from the previous customer is never rendered after changing 
 });
 
 test('manual PDF picking also keeps surviving downloads and shows the skipped link before insertion',async()=>{
- const f=fixture();f.ctx.document.querySelectorAll=()=>[{value:'0'}];f.exec("ticketPick={book:draft,bookingId:draft.body.sanityBooking.id,provider:'ns',result:{messages:[{id:'new',reference:'ABCDEF',tickets:[{id:'good',title:'Good'},{id:'dead',title:'Dead'}]}]}};");f.ctx.fetch=async(path,r)=>JSON.parse(r.body).ticket==='dead'?{ok:false,json:async()=>({error:'No PDF',code:'TICKET_NOT_PDF'})}:{ok:true,arrayBuffer:async()=>'good'};f.ctx.ticketPagesDraw=()=>{};f.exec('ticketFetchPDFs({disabled:false})');await f.ctx.lastRun;assert.equal(f.exec('ticketPick.pages.length'),1);assert.match(f.node('#modal').innerHTML,/ABCDEF.*Dead.*overgeslagen/);
+ const f=fixture();f.ctx.document.querySelectorAll=()=>[{value:'0'}];f.exec("ticketPick={book:draft,bookingId:draft.body.sanityBooking.id,provider:'ns',result:{messages:[{id:'new',reference:'ABCDEF',tickets:[{id:'good',title:'Good'},{id:'dead',title:'Dead'}]}]}};");f.ctx.fetch=async(path,r)=>JSON.parse(r.body).ticket==='dead'?{ok:false,json:async()=>({error:'No PDF',code:'TICKET_NOT_PDF'})}:{ok:true,arrayBuffer:async()=>Buffer.from('good')};f.ctx.ticketPagesDraw=()=>{};f.exec('ticketFetchPDFs({disabled:false})');await f.ctx.lastRun;assert.equal(f.exec('ticketPick.pages.length'),1);assert.match(f.node('#modal').innerHTML,/ABCDEF.*Dead.*overgeslagen/);
 });
 
 test('ticket summary groups routes and passengers, deduplicates continuation pages, and never invents unknown counts',()=>{const f=fixture();const selected={ticketImport:{},pageSources:[{asset:'a',page:0,originStation:'Utrecht',destinationStation:'Wien',passengerCount:2,travelDate:'2027-03-01',documentRole:'ticket'},{asset:'a',page:1,originStation:'Utrecht',destinationStation:'Wien',passengerCount:2,travelDate:'2027-03-01',documentRole:'ticket'},{asset:'b',page:0,originStation:'Leiden',destinationStation:'Utrecht',passengerCount:1,documentRole:'ticket'},{asset:'c',page:0,originStation:'Leiden',destinationStation:'Utrecht',passengerCount:1,documentRole:'ticket'},{asset:'d',page:0,documentRole:'unknown'}]};const rows=f.ctx.ticketSummaryRows(selected);assert.equal(rows.length,3);assert.equal(rows[0].count,1);assert.equal(rows[0].persons,2);assert.equal(rows[1].count,2);assert.match(f.ctx.ticketSummary(selected),/aantal personen niet herkend/);assert.match(f.ctx.ticketSummary(selected),/2× Leiden/);});
