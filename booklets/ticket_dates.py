@@ -3,7 +3,7 @@ import re,time
 from datetime import date
 from pypdf import PdfReader
 
-PROVIDERS=('ns','mav','db','obb','cd','voucher')
+PROVIDERS=('ns','mav','db','obb','cd','dfds','voucher')
 DATE=r'(?:20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2}[.\-/]20\d{2})'
 MONTHS={name:n for n,names in enumerate(('januari january','februari february','maart march','april','mei may','juni june','juli july','augustus august','september','oktober october','november','december'),1) for name in names.split()}
 WRITTEN_DATE=r'\d{1,2}\s+(?:'+'|'.join(MONTHS)+r')\s+20\d{2}'
@@ -64,7 +64,7 @@ def moment_dates(body,slot,candidate):
     if slot.get('documentKind')!='voucher' and slot.get('ticketDateBasis','booking')=='booking':
         dates.update((body.get('sanityBooking') or {}).get('journeyDates',[]))
         for other in body.get('sections',[]):
-            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets'):continue
+            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets'):continue
             source=other.get('selected') or {}
             dates.update(p['travelDate'] for p in source.get('originalPages',source.get('pageSources',[])) if iso(p.get('travelDate')))
     return sorted(d for d in dates if iso(d))
@@ -84,7 +84,7 @@ def inspect(s,payload):
         text=page.extract_text() or ''
         if provider=='ns' and omit_gate_pass and is_gate_pass(text):continue
         value,source,review=labelled_date(text,provider,allowed)
-        if not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
+        if provider!='dfds' and not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
         pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text),**ticket_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.
