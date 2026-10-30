@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 import google_connection as connection
 import google_layout,sanity_sources,ticket_import,booking_letter_layout
 
-TICKET_KINDS=('nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','combinedTickets')
+TICKET_KINDS=('nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','combinedTickets')
 KINDS=('schedule',*TICKET_KINDS,'voucher','letter')
 
 def store(s,raw,title):

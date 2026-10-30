@@ -1,5 +1,19 @@
 # Boekjesmaker in Seinhuis
 
+## DFDS-bevestigingen
+
+DFDS is beschikbaar als losse documentbron en als bron bij meerdere tickets.
+De ophaler zoekt bij DFDS op de referentie uit de bijbehorende ToDo en gebruikt
+alleen de expliciete klantbevestiging. Agentbevestigingen, facturen en
+boekingsbeheer- of betaallinks worden niet geïmporteerd. Een nieuwere annulering
+of gewijzigde boeking zonder bruikbare klantbevestiging vervangt geen document
+door een oudere bevestiging. De gebruiker kan dan de mail openen of een PDF uploaden.
+
+Alle pagina’s blijven behouden. Een onduidelijke heen-/terugreisdatum moet
+worden nagekeken; één ToDo-datum wordt niet op de hele bevestiging toegepast.
+Drive-bestanden moeten DFDS, de referentie en klant/customer/passenger in hun
+naam bevatten. Bestaande sjablonen behouden hun bronkeuze; voeg DFDS daar zelf toe.
+
 ## Korte route voor één boekje
 
 **Boekje maken** opent de sjabloonkeuze; daarna zoek en selecteer je de juiste

@@ -252,7 +252,7 @@ def validate_body(kind,b,prepared=False):
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
                     if 'ticketSources' in slot:
                         sources=slot['ticketSources']
-                        if not isinstance(sources,list) or not 1<=len(sources)<=5 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot vijf verschillende ticketbronnen.')
+                        if not isinstance(sources,list) or not 1<=len(sources)<=6 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd','dfds') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot zes verschillende ticketbronnen.')
                     if slot.get('documentKind')=='combinedTickets' and not slot.get('ticketSources'):raise ValueError('Kies minstens één ticketbron.')
                     if slot.get('ticketSourceMode','all') not in ('all','fallback'):raise ValueError('Kies combineren of de eerste beschikbare ticketbron.')
                     if slot.get('ticketDateBasis','booking') not in ('booking','source'):raise ValueError('Kies gezamenlijke reisdatums of datums binnen de ticketbron.')

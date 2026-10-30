@@ -5,6 +5,7 @@ import google_connection as connection
 import booking_documents
 
 PROVIDERS={
+    'dfds':(r'DFDS',r'\d{6,10}'),
     'ns':(r'NS(?: International)?',r'[A-Z0-9]{6,8}'),
     'mav':(r'M[AÁ]V',r'\d{10}'),
     'db':(r'DB',r'(?:\d{12}|[A-Z0-9]{6})'),
@@ -29,6 +30,7 @@ def matches(name,term):
 
 def ticket_name(name,provider):
     if not name.lower().endswith('.pdf') or re.search(r'invoice|rechnung|factuur|sz[aá]mla|receipt|bescheinigung|refund|gutschrift|proof',name,re.I):return False
+    if provider=='dfds':return bool(re.search(r'\bDFDS\b',name.replace('_',' '),re.I) and re.search(r'\b(klant|customer|passenger)\b',name.replace('_',' '),re.I) and not re.search(r'agent',name,re.I))
     return bool(re.search(r'(?<!\w)'+PROVIDERS[provider][0]+r'(?!\w)|^OEBB[-_ ]?Ticket',name,re.I) and re.search(r'ticket|fahrkarte|j[ií]zdenka|reservierung',name,re.I))
 
 def search(s,payload):
