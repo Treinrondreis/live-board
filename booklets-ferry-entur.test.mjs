@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createBookletsMail} from './booklets-mail.mjs';
-import {carrierReferences} from './booklets-carrier-mail.mjs';
+import {carrierReferences,referenceDates} from './booklets-carrier-mail.mjs';
 import {ferryEnturAttachment} from './booklets-ferry-entur.mjs';
 const domains={finnlines:'staff@finnlines.com',fjordline:'noreply@fjordline.com',entur:'no-reply@entur.org'};
 function mail(p,subject,body,files=[],id='current',time='2000'){return {id,internalDate:time,payload:{headers:[{name:'From',value:domains[p]},{name:'Subject',value:subject}],parts:[{mimeType:'text/plain',body:{data:Buffer.from(body).toString('base64url')}},...files.map(filename=>({mimeType:'application/pdf',filename,body:{data:Buffer.from('%PDF-fictional').toString('base64url')}}))]}};}
@@ -38,3 +38,5 @@ test('supplier-specific reference patterns and sender domains prevent unrelated 
 test('Entur can verify a reference inside a generically named ticket PDF',async()=>{
  const m=mail('entur','Your tickets','Tickets attached',['ticket.pdf']);const r=await fixture('entur',[m]).search('ABCD1234');assert(r.messages[0].selected);assert.equal(r.messages[0].tickets.length,1);
 });
+
+test('Finnlines allows the boarding day and the following printed departure, without guessing a PDF date',()=>{const booking={todos:[{title:'Finnlines overtocht',supplierBookingNumber:'F280000001',startDate:'2028-06-05',endDate:'2028-06-07'}]};assert.deepEqual(referenceDates(booking,['F280000001'],'finnlines'),[{reference:'F280000001',dates:['2028-06-05','2028-06-06']}]);booking.todos[0].endDate='2028-06-05';assert.deepEqual(referenceDates(booking,['F280000001'],'finnlines')[0].dates,['2028-06-05']);});
