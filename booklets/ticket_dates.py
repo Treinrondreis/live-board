@@ -31,7 +31,9 @@ def labelled_date(text,provider,allowed=()):
     printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider in ('voucher','trainline','raileurope','sbb') else DATE
     patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({printed_date})']
     if provider=='trainline':
-        patterns[:0]=[rf'(?m)^\s*Origen:\s*[^\n]{{1,100}}?\s+({DATE})\s+\d{{1,2}}:\d{{2}}',rf'(?m)^\s*({WRITTEN_DATE})\s+[A-Z]{{3}}\s*[-–]\s*[A-Z]{{3}}\b']
+        # UK PDFs join the date's words; only normalize alongside CRS route codes.
+        text=re.sub(r'(\d{1,2})(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(20\d{2})(?=\s+[A-Z]{3}\s*[-–]\s*[A-Z]{3}\b)',r'\1 \2 \3',text,flags=re.I)
+        patterns[:0]=[rf'(?m)^\s*Origen:\s*[^\n]{{1,100}}?\s+({DATE})\s+\d{{1,2}}:\d{{2}}',rf'(?m)^\s*({DATE})[ \t]*\r?\n[ \t]*Origen:[^\n]{{1,100}}\r?\n[ \t]*Destino:',rf'(?m)^\s*({WRITTEN_DATE})\s+[A-Z]{{3}}\s*[-–]\s*[A-Z]{{3}}\b']
     if provider=='mav':patterns.insert(0,rf'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*({DATE})')
     if provider in ('trainline','raileurope','sbb'):patterns.append(rf'(?m)^\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|tu|we|th|fr|sa|su),?\s+({printed_date})')
     for pattern in patterns:

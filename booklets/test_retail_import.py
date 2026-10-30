@@ -35,3 +35,17 @@ class RetailImportTests(unittest.TestCase):
         for provider in ['trainline','raileurope','sbb']:
             for filename in ['Other ABC123 ticket.pdf','SBB order_confirmation.pdf','Trainline invoice.pdf','Rail Europe receipt.pdf']:
                 self.assertFalse(ticket_drive.ticket_name(filename,provider),filename)
+
+    def test_trainline_compact_uk_dates_require_route_codes_and_spanish_dates_require_the_route_table(self):
+        for text,expected in [('06Jun2028 AAA-BBB','2028-06-06'),('07June2028 BBB - AAA','2028-06-07'),('06/06/2028\nOrigen: EXAMPLE CITY\nDestino: OTHER CITY\n09:43','2028-06-06')]:
+            self.assertEqual(ticket_dates.labelled_date(text,'trainline'),(expected,'pdf',False))
+        for text in ['Issued: 06Jun2028','Birth date: 06Jun2028\nAAA-BBB','06/06/2028\nIssued ticket\nOrigen: EXAMPLE CITY\nDestino: OTHER CITY','06/06/2028\nOrigen: EXAMPLE CITY','31Feb2028 AAA-BBB']:
+            self.assertFalse(ticket_dates.labelled_date(text,'trainline')[0],text)
+        self.assertEqual(ticket_dates.labelled_date('06Jun2028 AAA-BBB\n07Jun2028 BBB-AAA','trainline'),('','ambiguous',True))
+
+    def test_compact_trainline_dates_keep_every_traveller_and_the_return_date(self):
+        asset,raw=fixtures.TicketDateTests.upload(self,['06Jun2028 AAA-BBB','06Jun2028 AAA-BBB','08Jun2028 BBB-AAA','08Jun2028 BBB-AAA'])
+        pages=ticket_dates.inspect(SimpleNamespace(**vars(fixtures.s)),{'provider':'trainline','asset':asset['id'],'suggestedDates':['2028-06-06','2028-06-08']})['pages']
+        self.assertEqual([p['travelDate'] for p in pages],['2028-06-06','2028-06-06','2028-06-08','2028-06-08'])
+        self.assertFalse(any(p['dateNeedsReview'] for p in pages))
+        self.assertEqual((fixtures.s.DATA/'pdfs'/f"{asset['id']}.pdf").read_bytes(),raw)
