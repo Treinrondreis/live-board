@@ -15,11 +15,11 @@ export function bookingReferences(booking){
  for(const m of String(booking.notes||'').toUpperCase().matchAll(/\b(?:DNR|NS(?:\s+INTERNATIONAL)?|BOEKINGSCODE)\s*[:=\-]?\s*([A-Z0-9]{6,8})\b/g))if(/[A-Z]/.test(m[1]))refs.add(m[1]);
  return [...refs];
 }
-export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,state=readFlora,fetcher=fetch,clock=()=>Date.now()}={}){
+export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,state=readFlora,fetcher=fetch,clock=()=>Date.now(),readPDF}={}){
  const tickets=new Map();let busy=false;
  const clean=()=>{for(const [key,item] of tickets)if(item.expires<clock())tickets.delete(key);};
  const store=item=>{clean();if(tickets.size>=500)throw Error('Te veel open ticketimports. Probeer over een halfuur opnieuw.');const id=randomBytes(24).toString('hex');tickets.set(id,{...item,expires:clock()+1800000});return id;};
- const carrier=createCarrierMail({google,bookings,store,clock});
+ const carrier=createCarrierMail({google,bookings,store,clock,readPDF});
  return {
   async search(payload){
    if(providerKey(payload.provider||'ns')!=='ns')return carrier.search(payload);
