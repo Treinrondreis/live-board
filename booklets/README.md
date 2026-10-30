@@ -1,5 +1,24 @@
 # Boekjesmaker in Seinhuis
 
+## Korte route voor één boekje
+
+**Boekje maken** opent de sjabloonkeuze; daarna zoek en selecteer je de juiste
+boeking. Ook **Gebruiken** bij een sjabloon en **Nieuwe boeking met dit sjabloon**
+volgen deze route. De applicatie haalt gegevens en documenten op, controleert
+actuele bronnen, verplichte inhoud, onduidelijke keuzes en tekstpassing, slaat
+het boekje op en maakt bij een complete boeking meteen de PDF. Informatieve
+meldingen vormen geen extra bevestigingsstap. Drukwerk gebruikt gecontroleerde
+vulling; scherm-PDF’s krijgen geen drukwerkvulling.
+
+Bij ontbrekende onderdelen, twijfel, onvoldoende vulling of een mislukte
+broncontrole opent het bestaande boekjesscherm met de aandachtspunten bovenaan.
+Reeds opgehaalde onderdelen worden bewaard. Bij een opslagconflict blijven ze
+in het geopende concept; de wijziging van een collega wordt niet overschreven.
+Stoppen tijdens voorbereiden maakt geen PDF. Tijdens de export voorkomt een
+actieve vergrendeling een tweede start; bij een verloren antwoord wordt een
+al opgeslagen export van dezelfde boekversie opgezocht. Dit is browserwerk:
+het scherm moet tijdens de verwerking open blijven. Sanity wordt alleen gelezen.
+
 ## Meerdere boekjes met één sjabloon
 
 Via **Meerdere boekjes maken** kunnen één tot vijf boekingsnummers met één
