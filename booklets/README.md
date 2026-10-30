@@ -1,5 +1,21 @@
 # Boekjesmaker in Seinhuis
 
+## Trainline, Rail Europe en SBB
+
+Deze bronnen zijn los te kiezen en te combineren met andere ticketbronnen.
+Trainline herkent PNR’s en transactie-ID’s en behoudt alle reizigers en richtingen;
+bij losse PNR-bijlagen worden alleen de bijbehorende tickets gebruikt.
+Rail Europe herkent de RE-orderreferentie en kan een PNR uit de ticket-PDF
+controleren. Bij SBB worden ticketbijlagen en GoPEx-stoelreserveringen ondersteund;
+bagagebevestigingen en nieuwsbrieven worden overgeslagen. SBB-mails met alleen
+een orderpagina krijgen een knop om het ticket daar te downloaden en te uploaden.
+
+De originele PDF-pagina’s blijven behouden. Gmail-zoekresultaten gelden niet als
+bewijs: referenties worden in de mail, bijlagenaam of expliciete PDF-velden
+gecontroleerd. Alleen afzenders van de betreffende leverancier worden gebruikt.
+Facturen, annuleringsmails en boekingsbeheer-/betaallinks worden niet als ticket
+geïmporteerd. Bestaande sjablonen behouden hun bronkeuze.
+
 ## DFDS-bevestigingen
 
 DFDS is beschikbaar als losse documentbron en als bron bij meerdere tickets.

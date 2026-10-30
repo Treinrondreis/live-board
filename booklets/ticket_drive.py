@@ -5,6 +5,9 @@ import google_connection as connection
 import booking_documents
 
 PROVIDERS={
+    'trainline':(r'Trainline',r'(?:[A-Z0-9]{6}|\d{12})'),
+    'raileurope':(r'Rail[ _-]*Europe',r'(?:RE)?[A-Z0-9]{6}'),
+    'sbb':(r'SBB',r'\d{6,12}'),
     'dfds':(r'DFDS',r'\d{6,10}'),
     'ns':(r'NS(?: International)?',r'[A-Z0-9]{6,8}'),
     'mav':(r'M[AÁ]V',r'\d{10}'),
@@ -29,9 +32,10 @@ def matches(name,term):
     return bool(re.search(r'(?<!\d)'+r'[\s-]*'.join(term)+r'(?!\d)',name)) if term.isdigit() else False
 
 def ticket_name(name,provider):
-    if not name.lower().endswith('.pdf') or re.search(r'invoice|rechnung|factuur|sz[aá]mla|receipt|bescheinigung|refund|gutschrift|proof',name,re.I):return False
+    if not name.lower().endswith('.pdf') or re.search(r'invoice|rechnung|factuur|sz[aá]mla|receipt|bescheinigung|refund|gutschrift|proof|order[_ -]?confirmation|news',name,re.I):return False
+    if provider in ('trainline','raileurope','sbb'):name=name.replace('_',' ')
     if provider=='dfds':return bool(re.search(r'\bDFDS\b',name.replace('_',' '),re.I) and re.search(r'\b(klant|customer|passenger)\b',name.replace('_',' '),re.I) and not re.search(r'agent',name,re.I))
-    return bool(re.search(r'(?<!\w)'+PROVIDERS[provider][0]+r'(?!\w)|^OEBB[-_ ]?Ticket',name,re.I) and re.search(r'ticket|fahrkarte|j[ií]zdenka|reservierung',name,re.I))
+    return bool(re.search(r'(?<!\w)'+PROVIDERS[provider][0]+r'(?!\w)|^OEBB[-_ ]?Ticket',name,re.I) and re.search(r'ticket|billett?|fahrkarte|j[ií]zdenka|reservierung|reservation',name,re.I))
 
 def search(s,payload):
     booking_documents.drive_access(s.DATA)
