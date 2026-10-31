@@ -35,7 +35,10 @@ def labelled_date(text,provider,allowed=()):
         text=re.sub(r'(\d{1,2})(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(20\d{2})(?=\s+[A-Z]{3}\s*[-–]\s*[A-Z]{3}\b)',r'\1 \2 \3',text,flags=re.I)
         patterns[:0]=[rf'(?m)^\s*Origen:\s*[^\n]{{1,100}}?\s+({DATE})\s+\d{{1,2}}:\d{{2}}',rf'(?m)^\s*({DATE})[ \t]*\r?\n[ \t]*Origen:[^\n]{{1,100}}\r?\n[ \t]*Destino:',rf'(?m)^\s*({WRITTEN_DATE})\s+[A-Z]{{3}}\s*[-–]\s*[A-Z]{{3}}\b']
     if provider=='finnlines' or provider=='sanity' and re.search(r'Finnlines',text,re.I):patterns[:0]=[rf'(?m)^[^\d\n]{{2,80}}[-–][^\d\n]{{2,80}}\s*({DATE})\s*\d{{1,2}}[:.]\d{{2}}\s*{DATE}\s*\d{{1,2}}[:.]\d{{2}}']
-    if provider=='fjordline' or provider=='sanity' and re.search(r'Fjord\s*Line',text,re.I):patterns[:0]=[rf'Travel\s*details\s*(?:Name\s*of\s*passengers\s*)?({DATE})\b']
+    if provider=='fjordline' or provider=='sanity' and re.search(r'Fjord\s*Line',text,re.I):
+        # PDF extraction can insert the adjacent Payment Details heading before the sailing row.
+        sailing_time=r'(?:[01]?\d|2[0-3])[.:][0-5]\d'
+        patterns[:0]=[rf'Travel\s*details\s*(?:Name\s*of\s*passengers\s*)?({DATE})\b',rf'(?m)Travel[ \t]*details[ \t]*\r?\n[ \t]*Payment[ \t]*Details[ \t]*\r?\n[ \t]*({DATE})[ \t]+{sailing_time}[ \t]+{sailing_time}[ \t]*$']
     if provider=='mav':patterns.insert(0,rf'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*({DATE})')
     if provider in ('trainline','raileurope','sbb','sanity'):patterns.append(rf'(?m)^\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|tu|we|th|fr|sa|su),?\s+({printed_date})')
     for pattern in patterns:

@@ -34,6 +34,13 @@ class SanityFerryTests(unittest.TestCase):
         self.assertFalse(ticket_dates.labelled_date('CHECK-IN TIME 05.06.2028','fjordline')[0])
         self.assertEqual(ticket_dates.labelled_date(finn+'\nPORT BETA-PORT ALPHA 08/06/2028 02:00 09/06/2028 10:00 VESSEL','finnlines'),('','ambiguous',True))
 
+    def test_fjord_adjacent_payment_column_does_not_hide_printed_sailing_date(self):
+        text='Fjord Line\nBooking date: 01.06.2028\nTravel details\n  Payment Details\n06.06.2028 19.15 13.00\nCHECK-IN TIME 05.06.2028 18.15'
+        for provider in ('fjordline','sanity'):
+            self.assertEqual(ticket_dates.labelled_date(text,provider),('2028-06-06','pdf',False))
+            self.assertFalse(ticket_dates.labelled_date('Fjord Line\nTravel details\nPayment Details\nBooking date: 01.06.2028',provider)[0])
+            self.assertFalse(ticket_dates.labelled_date(text.replace('19.15 13.00','99.99 88.88'),provider)[0])
+
     def test_renamed_entur_receipt_cannot_become_a_sanity_ticket(self):
         a,_=fixtures.TicketDateTests.upload(self,['Electronic sales receipt\nThis receipt is not valid as a ticket.'])
         for provider in ['entur','sanity']:
