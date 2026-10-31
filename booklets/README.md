@@ -41,6 +41,26 @@ controle. ZSSK heeft voor automatische koppeling een expliciete referentie nodig
 zonder referentie blijft zelf uploaden beschikbaar. De praktijkproef wijzigt geen
 Sanity-gegevens of bestaande boekjes; regressietests gebruiken fictieve invoer.
 
+### Reisdatums bij deze bronnen
+
+Hovertravel herkent de losse datum onder de kolomkoppen van het Flight Ticket.
+Wightlink herkent de samengevoegde tijd-/datumkolommen en de Outward-/Return-regels
+op instapkaarten. Bij één duidelijke reisdatum in dezelfde PDF nemen ongedateerde
+vervolgpagina’s die datum over. Tegenstrijdige datums blijven controle vereisen.
+
+SNCF/TER leest `Utilisable du … au …` als geldigheidsperiode. Bij een periode van
+meerdere dagen wordt alleen automatisch gekozen als precies één ToDo-reisdatum
+voor dezelfde referentie erin valt. Zonder unieke koppeling blijft de periode om
+controle vragen. De datum bij REF kan een geboortedatum zijn en wordt niet gebruikt;
+ook de uitgiftedatum (`Emis le`) wordt niet als reisdatum gekozen.
+
+PKP en Go Nordic gebruiken de eerste herkende reisdatum in documentvolgorde voor
+alle pagina’s van dezelfde PDF. Go Nordic geldt in deze werkwijze als enkele reis;
+de aankomstdatum de volgende dag en de boekingsdatum tellen niet mee. Er worden
+geen datums tussen losse PDF’s overgenomen. Een afwijkende gekoppelde ToDo-datum
+blijft een controlepunt. Bestaande opgeslagen boekjes worden niet aangepast;
+opnieuw ophalen past deze herkenning toe op een nieuwe selectie.
+
 ## RateHawk, LTG Link, RENFE en Snälltåget
 
 RateHawk is beschikbaar binnen **Vouchers ophalen**, via Document kiezen / ophalen
