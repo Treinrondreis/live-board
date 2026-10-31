@@ -70,4 +70,33 @@ class SupplierTravelDateTests(unittest.TestCase):
         pages=self.inspect('hovertravel',['Departure: 09.06.2028','Conditions'],suggestedDates=['2028-06-08'])
         self.assertTrue(all(p['dateNeedsReview'] for p in pages))
 
+    def test_db_booked_journey_beats_long_validity_window_purchase_and_cancel_deadline(self):
+        for label in ('Hinfahrt','Rückfahrt','Einfache Fahrt'):
+            text='Online-Ticket\nGültigkeit: 08.06.2028 00:00 Uhr bis 10.06.2028 03:00 Uhr\nGebucht am 01.05.2028\nKostenfrei stornieren bis 07.06.2028\nIhre Reiseverbindung und Reservierung - '+label+' am 08.06.2028'
+            self.assertEqual(ticket_dates.labelled_date(text,'db'),('2028-06-08','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Reservierung\nIhre Reiseverbindung und Reservierung - Hinfahrt am\n08.06.2028\nGebucht am 01.05.2028','db'),('2028-06-08','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Fahrtantritt am 08.06.2028','db'),('2028-06-08','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Gültig am 08.06.2028 09:00 Uhr bis 03:00 Uhr des Folgetages','db'),('2028-06-08','pdf',False))
+        self.assertEqual(ticket_dates.labelled_date('Gebucht am 01.05.2028\nStornieren bis 07.06.2028','db'),('','unknown',True))
+
+    def test_db_outward_return_remain_distinct_and_conflicting_todo_stays_visible(self):
+        pages=self.inspect('db',['Ihre Reiseverbindung und Reservierung - Hinfahrt am 08.06.2028','Ihre Reiseverbindung und Reservierung - Rückfahrt am 12.06.2028'],suggestedDates=['2028-06-08','2028-06-12'])
+        self.assertEqual([p['travelDate'] for p in pages],['2028-06-08','2028-06-12']);self.assertFalse(any(p['dateNeedsReview'] for p in pages))
+        pages=self.inspect('db',['Ihre Reiseverbindung und Reservierung - Rückfahrt am 12.06.2028'],suggestedDates=['2028-06-08'])
+        self.assertTrue(pages[0]['dateNeedsReview'])
+        text='Ihre Reiseverbindung und Reservierung - Hinfahrt am 08.06.2028\nIhre Reiseverbindung und Reservierung - Rückfahrt am 12.06.2028'
+        self.assertEqual(ticket_dates.labelled_date(text,'db'),('','ambiguous',True))
+
+    def test_mav_reservation_needs_only_day_month_and_linked_journey_not_purchase_year(self):
+        text='HELYJEGY\nRESERVATION\nFROM -> TO\n08.06\n15:30\nEXAMPLE A -> EXAMPLE B\n08.06\n18:20\nIssued: 01.05.2027\nDate of birth: 08.06.1950'
+        self.assertEqual(ticket_dates.labelled_date(text,'mav',['2028-06-08']),('2028-06-08','pdf-day-month',False))
+        pages=self.inspect('mav',[text],suggestedDates=['2028-06-08'],travelDates=['2027-06-08','2028-06-08'])
+        self.assertEqual(pages[0]['travelDate'],'2028-06-08');self.assertFalse(pages[0]['dateNeedsReview'])
+        for hints in ([],['2028-06-09'],['2027-06-08','2028-06-08']):
+            self.assertEqual(ticket_dates.labelled_date(text,'mav',hints),('','pdf-day-month',True))
+        pages=self.inspect('mav',[text],suggestedDates=['2028-06-09'])
+        self.assertEqual(pages[0]['travelDate'],'');self.assertTrue(pages[0]['dateNeedsReview'])
+        new_year='HELYJEGY\nRESERVATION\n31.12\n23:00\nEXAMPLE A -> EXAMPLE B\n01.01\n05:00'
+        self.assertEqual(ticket_dates.labelled_date(new_year,'mav',['2028-12-31','2029-01-01']),('2028-12-31','pdf-day-month',False))
+
 if __name__=='__main__':unittest.main()
