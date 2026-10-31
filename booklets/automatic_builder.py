@@ -7,7 +7,7 @@ ROLES = ('', 'cover', 'contents', 'foreword', 'destination', 'train', 'route', '
 LABELS = {'cover':'Voorpagina', 'contents':'Inhoudsopgave', 'foreword':'Voorwoord',
           'destination':'Bestemming', 'train':'Treininformatie', 'route':'Route',
           'separator':'Tickets & Vouchers', 'ending':'Afsluiting'}
-PROVIDERS = ('ns', 'mav', 'db', 'obb', 'cd', 'dfds', 'trainline', 'raileurope', 'sbb', 'sanity', 'finnlines', 'fjordline', 'entur')
+PROVIDERS = ('ns', 'mav', 'db', 'obb', 'cd', 'dfds', 'trainline', 'raileurope', 'sbb', 'sanity', 'finnlines', 'fjordline', 'entur', 'ltg', 'renfe', 'snalltaget')
 
 def settings(body):
     if 'autoBuild' not in body:return

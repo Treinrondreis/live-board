@@ -1,5 +1,37 @@
 # Boekjesmaker in Seinhuis
 
+## RateHawk, LTG Link, RENFE en Snälltåget
+
+RateHawk is beschikbaar binnen **Vouchers ophalen**, via Document kiezen / ophalen
+→ RateHawk-vouchers uit mail zoeken. In de instellingen kan RateHawk-mail als
+voorkeursbron worden gekozen. Standaard blijven Sanity en Drive eerst aan bod;
+als daar geen document beschikbaar is, wordt de gekoppelde RateHawk-referentie
+uit de hotel-ToDo gebruikt. Een fout tijdens het laden van gevonden Drive-vouchers
+of een onduidelijke documentkeuze wordt niet door een andere bron gemaskeerd.
+
+RateHawk bewaart één taalversie per reservering: Nederlands indien aanwezig,
+anders Engels. Meerdere kandidaten voor dezelfde reservering vragen om een keuze.
+Originele PDF-pagina’s blijven behouden. De incheckdatum wordt uit de voucher gelezen;
+een onbekende datum wordt niet met een boekingsdatum ingevuld.
+
+LTG Link, RENFE en Snälltåget zijn losse ticketbronnen en kunnen worden gecombineerd.
+LTG leest de expliciete boekings- en ticketnummers in tickets.pdf wanneer deze
+niet in de mail staan; walletbestanden zijn geen PDF-ticket. RENFE ondersteunt de
+Localizador-bijlage, ook met MIME-type application/octet-stream. Alleen de expliciet
+herkende kaartbetalingspagina wordt bij de paginaselectie overgeslagen. Snälltåget
+gebruikt de reserverings-PDF en sluit _rcp-betaalbewijzen uit; een latere welkomstmail
+verdringt een eerder ontvangen geldig ticketbestand niet.
+
+Bronnen blijven gebonden aan leverancier, referentie en geselecteerde boeking.
+Annuleringen voorkomen automatische terugval op oude bestanden. Er wordt uitsluitend
+gelezen uit Sanity. Bestaande sjablonen houden hun ingestelde ticketbronnen.
+
+De goedgekeurde praktijkproef met vier originele PDF’s bevestigde de download en
+behoud van de originele bytes. Een LTG-informatiepagina is alleen een afbeelding:
+ze blijft behouden en vraagt datumcontrole voordat automatisch wordt geëxporteerd.
+Regressietests gebruiken uitsluitend fictieve gegevens. Klantbestanden en links
+staan buiten Git en worden na de proef verwijderd.
+
 ## Sanity-uploads, ČD, Finnlines, Fjord Line en Entur
 
 Bij ticketbronnen is **Sanity-uploads** beschikbaar. Die leest uitsluitend

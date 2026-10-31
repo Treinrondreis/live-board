@@ -250,9 +250,10 @@ def validate_body(kind,b,prepared=False):
                         if key in slot and (type(slot[key]) is not int or not 0<=slot[key]<=99):raise ValueError('Kies een reismoment of verblijf tussen 1 en 99, of 0 voor alles.')
                     if 'sortByDate' in slot and type(slot['sortByDate']) is not bool:raise ValueError('Kies wel of niet sorteren op datum.')
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
+                    if slot.get('voucherSource','standard') not in ('standard','ratehawk'):raise ValueError('Kies een geldige voucherbron.')
                     if 'ticketSources' in slot:
                         sources=slot['ticketSources']
-                        if not isinstance(sources,list) or not 1<=len(sources)<=13 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot dertien verschillende ticketbronnen.')
+                        if not isinstance(sources,list) or not 1<=len(sources)<=16 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot zestien verschillende ticketbronnen.')
                     if slot.get('documentKind')=='combinedTickets' and not slot.get('ticketSources'):raise ValueError('Kies minstens één ticketbron.')
                     if slot.get('ticketSourceMode','all') not in ('all','fallback'):raise ValueError('Kies combineren of de eerste beschikbare ticketbron.')
                     if slot.get('ticketDateBasis','booking') not in ('booking','source'):raise ValueError('Kies gezamenlijke reisdatums of datums binnen de ticketbron.')

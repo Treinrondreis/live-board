@@ -41,6 +41,15 @@ class SanityFerryTests(unittest.TestCase):
             self.assertFalse(ticket_dates.labelled_date('Fjord Line\nTravel details\nPayment Details\nBooking date: 01.06.2028',provider)[0])
             self.assertFalse(ticket_dates.labelled_date(text.replace('19.15 13.00','99.99 88.88'),provider)[0])
 
+    def test_new_supplier_dates_and_renfe_receipt_exclusion(self):
+        cases=[('ltg','E. bilietas / E. ticket Nr. 280101000002\nDATA\nDATE 2028-06-06\nDATE AND TIME 2028-01-01 13:20'),('renfe','Localizador: ABC123\nOrigen: EXAMPLE A 06/06/2028 08:00\nDestino: EXAMPLE B 06/06/2028 10:00\n01/01/2028 - 12:00'),('snalltaget','Reservation number: ABC123\nTicket, valid 06-06-2028\nDate of Birth 01-01-2000'),('ratehawk','Inchecken\nExample hotel\n06.06.2028, vanaf\nUitchecken\n08.06.2028')]
+        for provider,text in cases:
+            self.assertEqual(ticket_dates.labelled_date(text,provider),('2028-06-06','pdf',False))
+            self.assertFalse(ticket_dates.labelled_date('Issue date 01.01.2028',provider)[0])
+        a,_=fixtures.TicketDateTests.upload(self,[cases[1][1],'COPIA PARA CLIENTE\nCargo por ventas con tarjeta de crédito\nFecha viaje: 06/06/2028'])
+        r=ticket_dates.inspect(SimpleNamespace(**vars(fixtures.s)),{'asset':a['id'],'provider':'renfe'})
+        self.assertEqual(len(r['pages']),1);self.assertEqual(r['pages'][0]['page'],0)
+
     def test_renamed_entur_receipt_cannot_become_a_sanity_ticket(self):
         a,_=fixtures.TicketDateTests.upload(self,['Electronic sales receipt\nThis receipt is not valid as a ticket.'])
         for provider in ['entur','sanity']:

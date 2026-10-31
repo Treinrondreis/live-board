@@ -148,3 +148,20 @@ test('a distinct missing reference stays visible and missing mail differs from m
  const report={warnings:[],notices:[]};f.ctx.autoTicketMessages({references:['ABCDEF'],messages:[{id:'empty',reference:'ABCDEF',latest:true,tickets:[]}]},report,true);assert.match(report.missing[0].message,/mail gevonden.*geen ondersteunde ticket-PDF/);
  assert.match(f.ctx.documentSlotCard(f.slot(),0),/Ticketmails zoeken/);
 });
+
+
+test('new train suppliers are ticket sources while RateHawk stays in voucher chapters',()=>{
+ const f=fixture();for(const p of ['ltg','renfe','snalltaget'])assert(f.exec('Object.values(ticketKinds)').includes(p));
+ assert(!f.exec('Object.values(ticketKinds)').includes('ratehawk'));assert(!f.exec('ticketSourcesControls(draft.body.sections[0])').includes('value="ratehawk"'));
+ f.exec("draft.body.sections[0].documentKind='voucher';mailTicketImport(0)");assert.match(f.node('#modal').innerHTML,/RateHawk-vouchers importeren/);assert.match(f.node('#modal').innerHTML,/value="ratehawk"/);assert(!f.node('#modal').innerHTML.includes('value="renfe"'));
+});
+test('explicit RateHawk preference fills only the voucher chapter from the mail PDF',async()=>{
+ const f=fixture();f.exec("draft.body.sections[0].documentKind='voucher';draft.body.sections[0].voucherSource='ratehawk'");await f.exec('autoFillBookingDocuments()');
+ assert(f.slot().selected);assert.equal(f.slot().selected.pages,1);assert.equal(f.slot().selected.mailVoucherImport.providerKey,'ratehawk');assert(!f.slot().selected.ticketImport);assert(!f.calls.some(c=>c.path==='/api/booking-documents/drive-search'));
+});
+test('vouchers fall back to RateHawk when Sanity and Drive have no document',async()=>{
+ const f=fixture({api:async path=>path==='/api/booking-data/documents'?{items:[],attachments:[]}:path==='/api/booking-documents/drive-search'?{items:[]}:undefined});f.exec("draft.body.sanityBooking.sameNumberBookings=1;draft.body.sections[0].documentKind='voucher'");await f.exec('autoFillBookingDocuments()');assert(f.slot().selected);assert.equal(f.slot().selected.mailVoucherImport.providerKey,'ratehawk');
+});
+test('ambiguous Drive vouchers cannot be bypassed by silently choosing RateHawk',async()=>{
+ const f=fixture({api:async path=>path==='/api/booking-data/documents'?{items:[],attachments:[]}:path==='/api/booking-documents/drive-search'?{items:[{recommended:true,title:'Voucher A'},{recommended:true,title:'Voucher B'}]}:undefined});f.exec("draft.body.sanityBooking.sameNumberBookings=1;draft.body.sections[0].documentKind='voucher'");await f.exec('autoFillBookingDocuments()');assert(!f.slot().selected);assert.match(f.slot().issue,/Meerdere/);assert(!f.calls.some(c=>c.path==='/api/mail-tickets/search'));
+});
