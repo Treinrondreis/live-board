@@ -58,6 +58,7 @@ def action(s,b):
                 pdf=s.DATA/'exports'/(ident+'.pdf');staged=pdf.with_suffix('.removed')
                 if pdf.exists():pdf.replace(staged)
                 try:
+                    if c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='travel_sites'").fetchone():c.execute('DELETE FROM travel_sites WHERE export_id=?',(ident,))
                     c.execute('DELETE FROM exports WHERE id=?',(ident,));c.execute('DELETE FROM export_details WHERE id=?',(ident,))
                     c.execute('DELETE FROM export_drive WHERE id=?',(ident,));c.commit()
                 except Exception:

@@ -36,6 +36,7 @@ def resolved(b):
         if document_condition(slot,b) is False:continue
         if slot.get('choice') and not slot.get('selected'):continue
         section=copy.deepcopy(slot['selected'] if slot.get('choice') else slot)
+        if slot.get('choice')=='document':section['_websiteKind']=slot.get('documentKind','')
         section.update({k:slot[k] for k in trip_fillers.KEYS if k in slot})
         section['_tripFillerIndex']=index
         if slot.get('choice') and (slot.get('tocBoldOverride') or slot.get('choice')=='document' and 'tocBold' in slot):section['tocBold']=bool(slot.get('tocBold'))

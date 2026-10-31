@@ -87,6 +87,9 @@ def application(environ,start_response):
         return server.km_archive.handle(server,path,environ,response)
     if path.startswith('/internal/print-orders/'):
         return server.print_orders.handle(server,path,environ,response,ExportStream,start_response)
+    if path.startswith('/internal/travel-sites/'):
+        try:return server.travel_sites.handle(SimpleNamespace(**vars(server)),path,environ,response)
+        except Exception:return response(503,{'error':'De reiswebsite is tijdelijk niet beschikbaar.'})
     # Stream immutable PDFs without retaining the document in memory.
     match=re.fullmatch(r'/files/(asset|export)/([a-f0-9]{32})',path)
     if match and method in ('GET','HEAD'):
