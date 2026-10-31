@@ -1,5 +1,42 @@
 # Boekjesmaker in Seinhuis
 
+## Automatische persoonlijke reiswebsite
+
+Elke nieuwe PDF-export maakt ook een persoonlijke reiswebsite uit diezelfde
+onveranderlijke PDF-versie. De site heeft mobiele tekstkaarten, categorieën,
+filters op de al gecontroleerde hoofdstukdatums, een omslag en PDF-knoppen voor
+hoofdstukken en het complete boekje. Ook snel maken en batches gebruiken deze
+exportstap. Er wordt geen inhoud uit live Sanity bijgewerkt of naar een externe
+websiteleverancier verstuurd. Er is geen AI-vertaling of OCR-stap: tekst komt uit
+de definitieve PDF. Afbeeldingen, ingewikkelde tabellen en scans blijven volledig
+beschikbaar via de PDF-knop; deze zijn niet automatisch in webtekst omgezet.
+Een tickethoofdstuk kan meerdere trajecten omvatten. Het dagfilter filtert
+hoofdstukken op bekende datums en claimt geen volledige ticketdekking.
+
+Via **Persoonlijke website** bij de PDF kan een medewerker de link en code
+kopiëren, een nieuwe code maken of toegang uitzetten. Eerdere PDF’s worden pas
+omgezet wanneer de medewerker daar op die knop klikt. Iedere PDF-versie heeft
+een eigen site; oude gedeelde versies worden niet stilzwijgend vervangen.
+De PDF blijft bewaard wanneer het aanmaken van de website mislukt; de melding
+biedt dezelfde websiteknop om opnieuw te proberen.
+
+Technisch actief: willekeurige 128-bit link, afzonderlijke 10-teken toegangscode,
+PBKDF2-codecontrole, versleutelde codeopslag met de bestaande lokale sleutel,
+per-site ondertekende HttpOnly/Secure/SameSite=Strict sessie van maximaal zeven
+dagen, tien codepogingen per kwartier per site, geen indexering, geen caching,
+geen referrer en een CSP met script-hash. Codevernieuwing maakt eerdere sessies
+ongeldig. De site verloopt standaard na een jaar, of dertig dagen na de laatst
+bekende reisdag als dat later is (maximaal drie jaar). Verwijderen naar de
+boekjes-/PDF-prullenbak blokkeert de site; definitief verwijderen van de PDF
+verwijdert ook de website-inhoud en codes. De toegangscode wordt niet gemaild.
+
+De klantgateway staat alleen de vaste `/reis/<id>`-routes toe. Hij deelt geen
+Seinhuis-cookies of ongecontroleerde browserheaders met de websitebackend.
+Alle andere boekjesroutes blijven beheerderauthenticatie vereisen. Delen van
+een link en code met de juiste reiziger blijft een handeling van de medewerker;
+de software controleert de identiteit van die ontvanger niet. Een ingelogde
+Boekjesmaker-beheerder kan de website zelf bekijken zonder klantcode.
+
 ## Citylink, Eurostar, SNCF/TER, SJ, Hovertravel, Go Nordic, Wightlink, PKP, ZSSK en Teldar
 
 De negen vervoerders zijn beschikbaar als losse en gecombineerde ticketbron.

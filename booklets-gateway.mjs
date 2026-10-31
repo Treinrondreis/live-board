@@ -5,6 +5,7 @@ import http from 'node:http';
 import https from 'node:https';
 import {Transform} from 'node:stream';
 import {adminAuthenticated} from './admin-security.mjs';
+import {travelSiteGateway} from './booklets-travel-sites.mjs';
 
 export const BOOKLETS_PREFIX='/seinhuis/boekjesmaker';
 const MAX_UPLOAD=50*1024*1024;
@@ -14,6 +15,7 @@ export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,
     if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/'))return false;
     for(const [key,value] of Object.entries({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow, noarchive','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'}))res.setHeader(key,value);
     const fail=(code,message,details={})=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:message,...details}));return true;};
+    if(url.pathname.startsWith(prefix+'/reis/'))return travelSiteGateway(req,res,url,{prefix,config:configuration(),authenticate});
     const owner=await authenticate(req);
     if(!owner){
       // A cross-site OAuth return has no SameSite=Strict cookie. A deliberate

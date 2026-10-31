@@ -7,7 +7,7 @@ import booking_documents,ticket_drive,mail_ticket_pdf
 import field_background,field_flow,field_fit
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 import export_names,export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks,print_orders
-import trip_fillers, automatic_builder
+import trip_fillers, automatic_builder, travel_sites
 from types import SimpleNamespace
 from features import COUNTRIES, SIZES, pdf_format, resolved, plan, insert_fillers, refresh_blocks, library_stamp, document_condition, omitted_document_warnings
 import base64, hashlib, hmac, io, json, os, re, secrets, socket, sqlite3, subprocess, threading, time, uuid
@@ -72,6 +72,7 @@ with db() as c:
     ''')
     export_history.initialize(c)
     export_storage.initialize(c)
+    travel_sites.initialize(c)
     km_archive.initialize(c)
     book_activity.initialize(c)
     print_orders.initialize(c)
@@ -444,7 +445,7 @@ def make_export(book,options=None):
         export_checks.check()
         key=section.get('_digitalChapter')
         if key is None:continue
-        if key not in digital_chapters:digital_chapters[key]={'title':section.get('tocTitle') or section['title'],'hidden':bool(section.get('tocHidden')),'pageNumbers':[]}
+        if key not in digital_chapters:digital_chapters[key]={'title':section.get('tocTitle') or section['title'],'hidden':bool(section.get('tocHidden')),'pageNumbers':[],**travel_sites.chapter_metadata(section)}
         digital_chapters[key]['pageNumbers'].extend(range(starts[n]+1,starts[n]+section['pages']+1))
     report['digitalChapters']=[{**chapter,'page':chapter['pageNumbers'][0],'end':chapter['pageNumbers'][-1]} for chapter in digital_chapters.values() if not chapter['hidden']]
     report['warnings']=list(dict.fromkeys(report['warnings']+document_duplicates.warnings(SimpleNamespace(**globals()),b)))
@@ -472,7 +473,10 @@ def make_export(book,options=None):
         change=export_history.summary(json.loads(previous['snapshot']) if previous else None,snapshot)
         c.execute('INSERT INTO exports VALUES(?,?,?,?,?,?)',(i,book['id'],book['title'],now(),json.dumps(snapshot,ensure_ascii=False),json.dumps(report,ensure_ascii=False)))
         c.execute('INSERT INTO export_details(id,note,summary) VALUES(?,?,?)',(i,options.get('note','')[:1000],change))
-    return {'id':i,'report':report,'url':f'/files/export/{i}',**export_storage.finish(SimpleNamespace(**globals()),i,seconds=min(110,145-(time.monotonic()-export_started)))}
+    website={}
+    try:website['personalWebsite']=travel_sites.ensure(SimpleNamespace(**globals()),i)
+    except Exception:website['websiteWarning']='De PDF is opgeslagen. De persoonlijke website kon nog niet worden gemaakt; probeer het via Persoonlijke website.'
+    return {'id':i,'report':report,'url':f'/files/export/{i}',**website,**export_storage.finish(SimpleNamespace(**globals()),i,seconds=min(110,145-(time.monotonic()-export_started)))}
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
@@ -593,6 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200,{'user':u},'application/json',{'Set-Cookie':f'session={token}; HttpOnly; SameSite=Strict; Path=/'})
             session=self.auth()
             if not session:return self.send(401,{'error':'Log eerst in.'})
+            if path=='/api/travel-site':return self.send(200,travel_sites.manage(SimpleNamespace(**globals()),b))
             if path=='/api/logout':return self.send(200,{'ok':True},headers={'Set-Cookie':'session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/'})
             if path=='/api/users':
                 if not session['user']['admin']:return self.send(403,{'error':'Alleen de beheerder kan accounts toevoegen.'})
