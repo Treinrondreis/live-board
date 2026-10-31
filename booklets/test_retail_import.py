@@ -10,7 +10,7 @@ class RetailImportTests(unittest.TestCase):
             self.assertIn(kind,booking_documents.TICKET_KINDS)
             fixtures.s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':kind}]})
         sources=list(automatic_builder.PROVIDERS)
-        self.assertEqual(len(sources),13)
+        self.assertEqual(len(sources),16)
         fixtures.s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':'combinedTickets','ticketSources':sources}]})
         for invalid in [sources+['unknown'],sources+['sbb']]:
             with self.assertRaises(ValueError):fixtures.s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':'combinedTickets','ticketSources':invalid}]})

@@ -5,6 +5,9 @@ import google_connection as connection
 import booking_documents
 
 PROVIDERS={
+    'ltg':(r'LTG[ _-]*Link',r'\d{12}'),
+    'renfe':(r'RENFE',r'[A-Z0-9]{6}'),
+    'snalltaget':(r'Sn[aä]llt[aå]get',r'[A-Z0-9]{6}'),
     'finnlines':(r'Finnlines',r'F\d{9}'),
     'fjordline':(r'Fjord[ _-]*Line',r'\d{8}'),
     'entur':(r'Entur',r'[A-Z0-9]{8}'),
