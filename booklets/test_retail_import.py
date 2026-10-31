@@ -5,12 +5,12 @@ import automatic_builder,booking_documents,ticket_dates,ticket_drive
 import test_ticket_dates as fixtures
 
 class RetailImportTests(unittest.TestCase):
-    def test_three_document_sources_and_nine_combined_sources_validate(self):
-        for kind in ['trainlineTickets','raileuropeTickets','sbbTickets']:
+    def test_supported_document_sources_and_all_combined_sources_validate(self):
+        for kind in ['trainlineTickets','raileuropeTickets','sbbTickets','finnlinesTickets','fjordlineTickets','enturTickets','sanityTickets']:
             self.assertIn(kind,booking_documents.TICKET_KINDS)
             fixtures.s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':kind}]})
         sources=list(automatic_builder.PROVIDERS)
-        self.assertEqual(len(sources),9)
+        self.assertEqual(len(sources),13)
         fixtures.s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':'combinedTickets','ticketSources':sources}]})
         for invalid in [sources+['unknown'],sources+['sbb']]:
             with self.assertRaises(ValueError):fixtures.s.validate_body('template',{'format':'A4','sections':[{'choice':'document','documentKind':'combinedTickets','ticketSources':invalid}]})

@@ -1,5 +1,28 @@
 # Boekjesmaker in Seinhuis
 
+## Sanity-uploads, ČD, Finnlines, Fjord Line en Entur
+
+Bij ticketbronnen is **Sanity-uploads** beschikbaar. Die leest uitsluitend
+PDF-bijlagen van de gekozen boeking en controleert de koppeling opnieuw bij
+export. Duidelijke ticketnamen kunnen automatisch mee; onbekende bijlagen
+vragen om een keuze. Facturen, hotelvouchers, betalingsbewijzen en algemene
+informatie worden uitgesloten. De bron schrijft niets naar Sanity.
+
+Finnlines gebruikt de T-reisbevestiging en slaat de I-factuur over. Ook een
+bevestiging in een antwoord van Finnlines kan worden opgehaald. Een terugbetaling
+van een dubbele betaling geldt niet als een geannuleerde overtocht. Fjord Line
+gebruikt het Travel Document. Bij ČD wordt Additional Services.pdf overgeslagen.
+
+Entur-ticketbijlagen worden gecontroleerd; een sales receipt is geen geldig
+ticket en wordt niet geïmporteerd. Bij zo’n mail staat concreet dat de echte
+ticket-PDF via upload of de gekoppelde Sanity-boeking moet worden aangeleverd.
+Er wordt geen ticket aangemaakt of geboekt via een ontvangstbewijs.
+
+Dezelfde originele PDF uit een mail en Sanity wordt bij automatisch combineren
+één keer opgenomen. De eerste bron behoudt haar paginaselectie, zodat een elders
+weggelaten poortjespagina niet via een dubbele bron terugkomt. Bestaande
+sjablonen behouden hun ingestelde ticketbronnen.
+
 ## Trainline, Rail Europe en SBB
 
 Deze bronnen zijn los te kiezen en te combineren met andere ticketbronnen.

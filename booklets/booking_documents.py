@@ -1,10 +1,10 @@
 """Private booking documents rendered into immutable personal PDF assets."""
-import base64,json,os,re
+import base64,hashlib,json,os,re
 from urllib.parse import urlencode
 import google_connection as connection
 import google_layout,sanity_sources,ticket_import,booking_letter_layout
 
-TICKET_KINDS=('nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','trainlineTickets','raileuropeTickets','sbbTickets','combinedTickets')
+TICKET_KINDS=('nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','trainlineTickets','raileuropeTickets','sbbTickets','finnlinesTickets','fjordlineTickets','enturTickets','sanityTickets','combinedTickets')
 KINDS=('schedule',*TICKET_KINDS,'voucher','letter')
 
 def store(s,raw,title):
@@ -17,8 +17,9 @@ def render(s,payload):
     doc=payload.get('document',{});fmt=payload.get('format','A4')
     requested_layout=payload.get('letterLayout','text')
     if requested_layout not in ('text','columns'):raise ValueError('Kies één of twee kolommen voor de brief.')
-    if fmt not in s.SIZES or doc.get('kind') not in ('letter','voucher') or not isinstance(doc.get('content'),list):raise ValueError('Ongeldig Sanity-boekingsdocument.')
+    if fmt not in s.SIZES or doc.get('kind') not in ('letter','voucher','ticket') or not isinstance(doc.get('content'),list):raise ValueError('Ongeldig Sanity-boekingsdocument.')
     if len(json.dumps({k:v for k,v in doc.items() if k!='originalPdf'}))>4*1024*1024:raise ValueError('Boekingsdocument te groot.')
+    if doc.get('kind')=='ticket' and (not doc.get('originalPdf') or doc.get('attachment') is not True):raise ValueError('Kies de originele ticket-PDF uit de gekoppelde Sanity-boeking.')
     if doc.get('originalPdf'):
         encoded=doc['originalPdf']
         if not isinstance(encoded,str) or len(encoded)>40*1024*1024:raise ValueError('Originele Sanity-PDF te groot.')
@@ -26,7 +27,7 @@ def render(s,payload):
         except (ValueError,TypeError):raise ValueError('Ongeldige originele Sanity-PDF.')
         warnings=doc.get('warnings',[])
         if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')
-        return {**store(s,raw,doc.get('title','Sanity-document')),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate','attachment') if k in doc},'originalPdf':True}}
+        return {**store(s,raw,doc.get('title','Sanity-document')),'sourceDigest':hashlib.sha256(raw).hexdigest(),'warnings':warnings,'bookingDocument':{**{k:doc[k] for k in ('bookingId','documentId','kind','revision','digest','loadedAt','travelDate','attachment') if k in doc},'originalPdf':True}}
     m,images=sanity_sources.model([doc],{'title':doc.get('title','Brief'),'columns':1})
     warnings=doc.get('warnings',[])
     if not isinstance(warnings,list) or len(warnings)>100 or any(not isinstance(w,str) or len(w)>2000 for w in warnings):raise ValueError('Ongeldige documentwaarschuwingen.')

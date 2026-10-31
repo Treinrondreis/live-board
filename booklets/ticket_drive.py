@@ -5,6 +5,9 @@ import google_connection as connection
 import booking_documents
 
 PROVIDERS={
+    'finnlines':(r'Finnlines',r'F\d{9}'),
+    'fjordline':(r'Fjord[ _-]*Line',r'\d{8}'),
+    'entur':(r'Entur',r'[A-Z0-9]{8}'),
     'trainline':(r'Trainline',r'(?:[A-Z0-9]{6}|\d{12})'),
     'raileurope':(r'Rail[ _-]*Europe',r'(?:RE)?[A-Z0-9]{6}'),
     'sbb':(r'SBB',r'\d{6,12}'),
@@ -32,8 +35,9 @@ def matches(name,term):
     return bool(re.search(r'(?<!\d)'+r'[\s-]*'.join(term)+r'(?!\d)',name)) if term.isdigit() else False
 
 def ticket_name(name,provider):
-    if not name.lower().endswith('.pdf') or re.search(r'invoice|rechnung|factuur|sz[aá]mla|receipt|bescheinigung|refund|gutschrift|proof|order[_ -]?confirmation|news',name,re.I):return False
-    if provider in ('trainline','raileurope','sbb'):name=name.replace('_',' ')
+    if not name.lower().endswith('.pdf') or re.search(r'invoice|rechnung|factuur|sz[aá]mla|receipt|bescheinigung|refund|gutschrift|proof|order[_ -]?confirmation|news|additional[ _]services',name,re.I):return False
+    if provider in ('trainline','raileurope','sbb','finnlines','fjordline','entur'):name=name.replace('_',' ')
+    if provider=='finnlines':return bool(re.search(r'\bFinnlines\b',name,re.I) and re.search(r'ticket|booking[ _-]*confirmation|travel',name,re.I))
     if provider=='dfds':return bool(re.search(r'\bDFDS\b',name.replace('_',' '),re.I) and re.search(r'\b(klant|customer|passenger)\b',name.replace('_',' '),re.I) and not re.search(r'agent',name,re.I))
     return bool(re.search(r'(?<!\w)'+PROVIDERS[provider][0]+r'(?!\w)|^OEBB[-_ ]?Ticket',name,re.I) and re.search(r'ticket|billett?|fahrkarte|j[ií]zdenka|reservierung|reservation',name,re.I))
 
