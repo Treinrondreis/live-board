@@ -8,12 +8,12 @@ const backend=http.createServer((req,res)=>{let bytes=0;req.on('data',b=>bytes+=
 await new Promise(r=>backend.listen(0,'127.0.0.1',r));
 const secret='s'.repeat(48),origin='https://treinbord.up.railway.app';
 const printCalls=[];
-const gateway=createBookletsGateway({bookings:{ticketSearch:async body=>({providerKey:'sanity',bookingId:body.bookingId,messages:[]})},printer:{quote:async body=>{printCalls.push(body);return {id:'synthetic-quote'}}},mail:{search:async body=>({query:body.query,messages:[]}),download:async body=>{if(['unavailable','blocked'].includes(body.ticket)){const e=Error('Geen PDF');e.code=body.ticket==='blocked'?'TICKET_REMOTE_BLOCKED':'TICKET_NOT_PDF';throw e;}return Buffer.from('%PDF-private-ticket');}},authenticate:async req=>req.headers.cookie==='owner=valid',configuration:()=>({upstream:`http://127.0.0.1:${backend.address().port}`,secret,origin})});
+const gateway=createBookletsGateway({bookings:{ticketSearch:async body=>({providerKey:'sanity',bookingId:body.bookingId,messages:[]})},printer:{quote:async body=>{printCalls.push(body);return {id:'synthetic-quote'}}},mail:{document:async()=>({provider:'citylink',html:'<p>Fictional ticket</p>',images:[]}),search:async body=>({query:body.query,messages:[]}),download:async body=>{if(['unavailable','blocked'].includes(body.ticket)){const e=Error('Geen PDF');e.code=body.ticket==='blocked'?'TICKET_REMOTE_BLOCKED':'TICKET_NOT_PDF';throw e;}return Buffer.from('%PDF-private-ticket');}},authenticate:async req=>req.headers.cookie==='owner=valid',configuration:()=>({upstream:`http://127.0.0.1:${backend.address().port}`,secret,origin})});
 const front=http.createServer(async(req,res)=>{if(!await gateway(req,res,new URL(req.url,'http://test')))res.writeHead(404).end();});
 await new Promise(r=>front.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${front.address().port}`;
 try{
- for(const path of ['/api/state','/files/export/'+ 'a'.repeat(32),'/digital/'+'b'.repeat(32),'/import','/api/mail-tickets/search','/api/mail-tickets/download','/api/booking-data/search','/api/booking-data/documents','/api/booking-data/document','/api/print/quote','/api/print/order']){
+ for(const path of ['/api/state','/files/export/'+ 'a'.repeat(32),'/digital/'+'b'.repeat(32),'/import','/api/mail-tickets/search','/api/mail-tickets/document','/api/mail-tickets/download','/api/booking-data/search','/api/booking-data/documents','/api/booking-data/document','/api/print/quote','/api/print/order']){
    const r=await fetch(base+p+path);assert.equal(r.status,401);assert.equal(r.headers.get('cache-control'),'no-store');
  }
  assert.equal(seen.length,0);
@@ -31,6 +31,7 @@ try{
  assert.equal((await fetch(base+p+'/api/print/unknown',{method:'POST',headers,body:'{}'})).status,404);
  assert.equal((await fetch(base+p+'/api/print/quote',{method:'POST',headers,body:'[]'})).status,400);
  const search=await fetch(base+p+'/api/mail-tickets/search',{method:'POST',headers,body:JSON.stringify({query:'ABCDEFG'})});assert.equal(search.status,200);assert.equal((await search.json()).query,'ABCDEFG');
+ const native=await fetch(base+p+'/api/mail-tickets/document',{method:'POST',headers,body:'{}'});assert.equal(native.status,200);assert.equal((await native.json()).provider,'citylink');
  const sanitySearch=await fetch(base+p+'/api/mail-tickets/search',{method:'POST',headers,body:JSON.stringify({provider:'sanity',bookingId:'fictional-booking',query:'1234'})});assert.equal(sanitySearch.status,200);assert.equal((await sanitySearch.json()).providerKey,'sanity');
  const ticket=await fetch(base+p+'/api/mail-tickets/download',{method:'POST',headers,body:'{}'});assert.equal(ticket.status,200);assert.equal(await ticket.text(),'%PDF-private-ticket');
  const unavailable=await fetch(base+p+'/api/mail-tickets/download',{method:'POST',headers,body:JSON.stringify({ticket:'unavailable'})});assert.equal(unavailable.status,400);assert.deepEqual(await unavailable.json(),{error:'Geen PDF',code:'TICKET_NOT_PDF'});

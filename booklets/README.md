@@ -1,5 +1,46 @@
 # Boekjesmaker in Seinhuis
 
+## Citylink, Eurostar, SNCF/TER, SJ, Hovertravel, Go Nordic, Wightlink, PKP, ZSSK en Teldar
+
+De negen vervoerders zijn beschikbaar als losse en gecombineerde ticketbron.
+Teldar blijft een hotelvoucherbron, naast RateHawk. Bestaande sjablonen houden hun
+bronkeuze. Nieuwe automatische voorstellen kunnen alle aanwezige vervoerders
+combineren. Sanity wordt uitsluitend gelezen.
+
+SJ, Hovertravel, Wightlink, PKP en ZSSK gebruiken originele PDF-bijlagen; SNCF/TER
+gebruikt de expliciete billet-download op het gevalideerde ticket-CDN. Facturen,
+walletbestanden en losse voorbeeldafbeeldingen worden niet als PDF-ticket gekozen.
+ZSSK-referenties worden in het originele ticket gecontroleerd.
+
+Citylink en Eurostar leveren ook tickets in de mail zelf. Deze ticketmail kan
+naar PDF worden afgedrukt met de originele rasterbarcodes. Go Nordic gebruikt
+uitsluitend de officiële bevestigingsmail, niet algemene agentcorrespondentie.
+De geïsoleerde PDF-worker gebruikt alleen aangeleverde, gecontroleerde afbeeldingen,
+geen externe bestanden, scripts, bijlagen of netwerkbronnen. Barcodepixels worden
+na afdrukken met de aangeleverde originele afbeeldingen vergeleken; bij ontbrekende
+barcodes wordt geen onvolledig ticket toegevoegd. Datums die niet ondubbelzinnig
+uit de bron volgen vragen handmatige controle.
+
+Eurostar-ticketpagina’s worden uit hun trackinglink gehaald en opnieuw op domein,
+pad en PNR gecontroleerd. SNCF-links blijven beperkt tot het bekende ticket-CDN.
+Bij geblokkeerde downloads kan de medewerker de oorspronkelijke ticketpagina
+openen en de PDF uploaden. Vanuit zoekresultaten is ook de originele mail te openen.
+
+Teldar gebruikt de prepaid voucherbijlage. Kamersuffixen horen bij dezelfde
+basisreservering; een annuleringsherinnering verdringt de voucher niet. Echte
+annuleringen blokkeren oude documenten. Meerdere onduidelijke voucherbestanden
+vragen om een keuze. Vouchers uit RateHawk en Teldar kunnen worden gecombineerd.
+Een onduidelijke of tijdens het laden gewijzigde Drive-bron wordt niet omzeild.
+
+De privé-praktijkproef heeft bij alle tien bronnen documenten opgeleverd, met
+ongewijzigde originele PDF-bytes en gecontroleerd behoud van de originele
+Citylink- en Eurostar-barcodes. De afdruk van ticketmails heeft een eigen vloeiende
+opmaak en kan meerdere pagina’s omvatten. Dit is geen controle van ticketgeldigheid
+of scanbaarheid bij de vervoerder. Pagina’s zonder eenduidige reisdatum vereisen
+controle. ZSSK heeft voor automatische koppeling een expliciete referentie nodig;
+zonder referentie blijft zelf uploaden beschikbaar. De praktijkproef wijzigt geen
+Sanity-gegevens of bestaande boekjes; regressietests gebruiken fictieve invoer.
+
 ## RateHawk, LTG Link, RENFE en Snälltåget
 
 RateHawk is beschikbaar binnen **Vouchers ophalen**, via Document kiezen / ophalen

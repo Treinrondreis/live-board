@@ -57,6 +57,7 @@ export function createBookletsGateway({authenticate=req=>adminAuthenticated(req,
           const result=await bookings[action](body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;
         }
         if(action==='search'){const result=body.provider==='sanity'?await bookings.ticketSearch(body):await mail.search(body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}
+        if(action==='document'){const result=await mail.document(body);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return true;}
         if(action==='download'){const bytes=await mail.download(body);res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':bytes.length});res.end(bytes);return true;}
         return fail(404,'Ticketactie niet gevonden.');
       }catch(error){return fail(error.status===429?429:400,error.message||'Ticketimport mislukt.',['TICKET_NOT_PDF','TICKET_REMOTE_BLOCKED'].includes(error.code)?{code:error.code}:{});}

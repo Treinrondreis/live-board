@@ -1,11 +1,14 @@
+import {mailDocumentCandidate} from './booklets-mail-document.mjs';
+import {moreProviders,morePatterns,moreTodoReferences,moreMessageReferences,moreAttachment,moreAttachmentReferences,moreLinks,morePortal} from './booklets-more-sources.mjs';
 import {extraProviders,extraPatterns,extraTodoReferences,extraMessageReferences,extraAttachment,extraAttachmentReferences,preferredExtraAttachments} from './booklets-extra-sources.mjs';
 import {ferryEnturProviders,ferryEnturPatterns,ferryEnturTodoReferences,ferryEnturMessageReferences,ferryEnturAttachment,ferryEnturAttachmentReferences,ferryEnturDiagnostic,ferryCancelled} from './booklets-ferry-entur.mjs';
 import {plainHTML,pdfText} from './flora-mail-source.mjs';
 
-export const retailProviders={...extraProviders,...ferryEnturProviders,trainline:{name:'Trainline',domain:'thetrainline.com'},raileurope:{name:'Rail Europe',domain:'raileurope.com'},sbb:{name:'SBB',domain:'sbb.ch'}};
+export const retailProviders={...moreProviders,...extraProviders,...ferryEnturProviders,trainline:{name:'Trainline',domain:'thetrainline.com'},raileurope:{name:'Rail Europe',domain:'raileurope.com'},sbb:{name:'SBB',domain:'sbb.ch'}};
 const normal=s=>String(s||'').normalize('NFKC').toUpperCase().replace(/[\s-]/g,'');
-const patterns={...extraPatterns,...ferryEnturPatterns,trainline:/^(?:[A-Z0-9]{6}|\d{12})$/,raileurope:/^(?:RE)?[A-Z0-9]{6}$/,sbb:/^\d{6,12}$/};
+const patterns={...morePatterns,...extraPatterns,...ferryEnturPatterns,trainline:/^(?:[A-Z0-9]{6}|\d{12})$/,raileurope:/^(?:RE)?[A-Z0-9]{6}$/,sbb:/^\d{6,12}$/};
 export function retailTodoReferences(todo,provider){
+ if(moreProviders[provider])return moreTodoReferences(todo,provider);
  if(extraProviders[provider])return extraTodoReferences(todo,provider);
  if(ferryEnturProviders[provider])return ferryEnturTodoReferences(todo,provider);
  const title=(todo.title||'')+' '+(todo.description||'');
@@ -16,6 +19,7 @@ export function retailTodoReferences(todo,provider){
  return [...new Set(raw.split(/[,;|/]/).map(normal).filter(r=>patterns[provider].test(r)))];
 }
 export function retailMessageReferences(provider,subject,text,filenames=[]){
+ if(moreProviders[provider])return moreMessageReferences(provider,subject,text,filenames);
  if(extraProviders[provider])return extraMessageReferences(provider,subject,text,filenames);
  if(ferryEnturProviders[provider])return ferryEnturMessageReferences(provider,subject,text,filenames);
  const source=subject+'\n'+text,refs=new Set(),add=r=>{r=normal(r);if(patterns[provider].test(r))refs.add(r);};
@@ -27,6 +31,7 @@ export function retailMessageReferences(provider,subject,text,filenames=[]){
  return [...refs];
 }
 export function retailAttachment(name,provider,subject='',from=''){
+ if(moreProviders[provider])return moreAttachment(name,provider);
  if(extraProviders[provider])return extraAttachment(name,provider);
  if(ferryEnturProviders[provider])return ferryEnturAttachment(name,provider,subject);
  if(!/\.pdf$/i.test(name)||/invoice|rechnung|factuur|receipt|refund|order[_ -]?confirmation|news|newsletter|fahrplan/i.test(name))return false;
@@ -35,22 +40,23 @@ export function retailAttachment(name,provider,subject='',from=''){
  return /ticket|billett?|fahrkarte|reservierung|reservation|sitzplatz/i.test(name)||/shop-gopex@sbb\.ch/i.test(from)&&/Gotthard Panorama Express/i.test(subject)&&/^\d{10}\.pdf$/.test(name);
 }
 export function retailPortal(value,provider){
+ if(moreProviders[provider])return morePortal(value,provider);
  try{const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.port||u.hash)return '';
   if(provider==='sbb'&&u.hostname==='shop.sbb.ch'&&/^\/customer\/(?:de|en|fr|it)\/alw\/order$/.test(u.pathname)&&u.searchParams.getAll('orderId').length===1&&[...u.searchParams.keys()].every(k=>k==='orderId')&&/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(u.searchParams.get('orderId')||''))return u.href;
  }catch{}return '';
 }
 export function retailSearchQuery(provider,reference){
- const term=normal(reference);if(!/^[A-Z0-9]{3,18}$/.test(term))throw Error('Ongeldige vervoerdersreferentie.');
+ const term=normal(reference).replace(provider==='teldar'?/\/\d{1,2}$/:/$^/,'');if(!/^[A-Z0-9]{3,18}$/.test(term))throw Error('Ongeldige vervoerdersreferentie.');
  const variants=[term];if(provider==='raileurope'&&/^RE[A-Z0-9]{6}$/.test(term))variants.push('RE-'+term.slice(2));
  if(provider==='sbb'&&/^\d{7,8}$/.test(term))variants.push(term.slice(0,6)+'-'+term.slice(6));
- return `from:(${retailProviders[provider].domain}) {${variants.map(v=>'"'+v+'"').join(' ')}} -in:spam -in:trash`;
+ return `${retailProviders[provider].domains?'{'+retailProviders[provider].domains.map(d=>'from:'+d).join(' ')+'}':'from:('+retailProviders[provider].domain+')'} {${variants.map(v=>'"'+v+'"').join(' ')}} -in:spam -in:trash`;
 }
 const walk=p=>[p,...(p?.parts||[]).flatMap(walk)];
 const header=(m,n)=>(m.payload?.headers||[]).find(h=>h.name.toLowerCase()===n)?.value||'';
-const sender=(from,provider)=>{const domain=from.match(/(?:<|\b)[A-Z0-9._%+-]+@([A-Z0-9.-]+)>?\s*$/i)?.[1]?.toLowerCase(),expected=retailProviders[provider].domain;return domain===expected||domain?.endsWith('.'+expected);};
+const sender=(from,provider)=>{const domain=from.match(/(?:<|\b)[A-Z0-9._%+-]+@([A-Z0-9.-]+)>?\s*$/i)?.[1]?.toLowerCase(),expected=retailProviders[provider].domains||[retailProviders[provider].domain];return expected.some(d=>domain===d||domain?.endsWith('.'+d));};
 export function createRetailMail({google,bookings,store,clock,readPDF=pdfText,referenceDates,bookingJourneyDates}){
  return {async search(payload){
-  const provider=payload.provider,config=retailProviders[provider],term=normal(payload.query);
+  const provider=payload.provider,config=retailProviders[provider],term=normal(payload.query).replace(provider==='teldar'?/\/\d{1,2}$/:/$^/,'');
   if(!/^[A-Z0-9]{3,18}$/.test(term))throw Error('Vul een boekingsnummer of vervoerdersreferentie in.');
   if(!(await google.status()).connected)throw Error('Koppel de Gmail-mailbox eerst in FloRA.');
   const get=await google.reader(),deadline=clock()+90000,check=()=>{if(clock()>deadline)throw Error('Tickets zoeken duurt te lang. Zoek één referentie tegelijk.');};
@@ -85,14 +91,18 @@ export function createRetailMail({google,bookings,store,clock,readPDF=pdfText,re
    const cancelled=ferryEnturProviders[provider]?ferryCancelled(provider,subject):/geannuleerd|annulering|cancel(?:led|ed|lation)|storno|storniert|refund|terugbetaling|anulaci[oó]n|cancelaci[oó]n/i.test(subject),tickets=[];
    for(const p of candidates){if(invalidPdfs.has(p))continue;let own=pdfRefs.get(p)||[];
     if(ferryEnturProviders[provider]){const fileRefs=ferryEnturAttachmentReferences(p.filename,provider);if(fileRefs.length)own=fileRefs;}
+    if(moreProviders[provider]){const fileRefs=moreAttachmentReferences(p.filename,provider);if(fileRefs.length)own=fileRefs;}
     if(extraProviders[provider]){const fileRefs=extraAttachmentReferences(p.filename,provider);if(fileRefs.length)own=fileRefs;}
     if(provider==='trainline'){const pnrs=retailMessageReferences(provider,'','',[p.filename]);if(pnrs.length)own=pnrs;}
     if((verifyPDFsOnly||own.length)&&!own.some(r=>matches.includes(r)))continue;
     const reference=own.find(r=>matches.includes(r))||matches[0];tickets.push({id:store({kind:'attachment',provider,mail:id,reference,filename:p.filename,attachmentId:p.body?.attachmentId,data:p.body?.data}),title:p.filename,reference});
    }
+   for(const link of moreLinks(bodies,provider))tickets.push({id:store({kind:'carrier-link',provider,mail:id,reference:matches[0],link}),title:config.name+' '+matches[0]+' · PDF',reference:matches[0]});
+   const document=mailDocumentCandidate(provider,subject,bodies,parts,matches);if(document&&!tickets.length)tickets.push({id:store({kind:'mail-document',...document,mail:id,references:matches}),mailDocument:true,title:document.title,reference:matches[0]});
    const manualLinks=[...new Set(bodies.flatMap(b=>[...b.matchAll(/https:\/\/[^\s<>"']+/g)].map(x=>x[0].replaceAll('&amp;','&'))).map(u=>retailPortal(u,provider)).filter(Boolean))].map(url=>({url,label:config.name+'-ticketpagina openen'}));
-   const ambiguous=provider==='ratehawk'&&matches.some(ref=>tickets.filter(t=>t.reference===ref).length>1);
-   messages.push({...(ambiguous?{automatic:false}:{}),diagnostic:ambiguous?'Meerdere RateHawk-vouchers voor dezelfde reservering gevonden. Kies de juiste pagina’s handmatig.':ferryEnturDiagnostic(provider,rejectedReceipt?'This receipt is not valid as a ticket.':text,attachments.map(p=>p.filename)),id,reference:matches[0],references:matches,subject,date:new Date(Number(m.internalDate)).toISOString(),cancelled,tickets:cancelled?[]:tickets,manualLinks,changed:/changed|gewijzigd|geändert|amended|cambios/i.test(subject)});
+   for(const url of moreLinks(bodies,provider))if(!manualLinks.some(l=>l.url===url))manualLinks.push({url,label:config.name+'-PDF downloaden'});
+   const ambiguous=['ratehawk','teldar'].includes(provider)&&matches.some(ref=>tickets.filter(t=>t.reference===ref).length>1);
+   messages.push({...(ambiguous?{automatic:false}:{}),diagnostic:ambiguous?'Meerdere '+config.name+'-vouchers voor dezelfde reservering gevonden. Kies de juiste pagina’s handmatig.':ferryEnturDiagnostic(provider,rejectedReceipt?'This receipt is not valid as a ticket.':text,attachments.map(p=>p.filename)),id,reference:matches[0],references:matches,subject,date:new Date(Number(m.internalDate)).toISOString(),cancelled,tickets:cancelled?[]:tickets,manualLinks,changed:/changed|gewijzigd|geändert|amended|cambios/i.test(subject)});
   }
   messages.sort((a,b)=>b.date.localeCompare(a.date));const meaningful=new Set(messages.filter(m=>m.tickets.length||m.manualLinks.length||m.cancelled||m.changed).flatMap(m=>m.references)),seen=new Set();
   for(const m of messages){const usable=m.tickets.length||m.manualLinks.length||m.cancelled||m.changed||m.references.some(r=>!meaningful.has(r));m.latest=!!usable&&m.references.every(r=>!seen.has(r));if(usable)for(const r of m.references)seen.add(r);m.selected=m.latest&&!m.cancelled&&m.tickets.length>0;}

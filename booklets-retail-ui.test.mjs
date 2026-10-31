@@ -14,6 +14,12 @@ test('SBB and ÖBB portal actions coexist and remain bound to the current bookin
 test('portal buttons reject external hosts, payment actions and extra SBB parameters',()=>{
  const c=ui();assert.equal(c.safeTicketPortal(sbb),sbb);for(const url of [sbb.replace('shop.sbb.ch','evil.example'),sbb+'&refund=true',sbb.replace('/order?','/payment?'),sbb.replace('https:','http:')])assert.equal(c.safeTicketPortal(url),'');
 });
+
+test('Eurostar dashboard and SNCF download fallback accept only validated carrier routes',()=>{
+ const c=ui(),e='https://www.eurostar.com/customer-dashboard/en/booking?pnr=ABC123',s='https://genetix.eto.prod.cdn.vsct.fr/202801010/eto-12345678-abcd-1234-abcd-123456789012';
+ assert.equal(c.safeTicketPortal(e),e);assert.equal(c.safeTicketPortal(s),s);
+ for(const u of [e+'&cancel=true',e.replace('www.eurostar.com','example.org'),s+'?redirect=true'])assert.equal(c.safeTicketPortal(u),'');
+});
 test('a bundled mail covers both references, while separate Drive tickets retain their own reference',async()=>{
  const c=ui();let calls=0;c.api=async()=>{calls++;return {items:['ABC123','XYZ789'].map((reference,i)=>({id:'fictional-file-'+i,title:'Rail Europe ticket.pdf',reference}))};};
  const start=source.indexOf('async function enrichDriveTickets('),end=source.indexOf('\nfunction ticketDriveSearch(',start);runInNewContext(source.slice(start,end),c);

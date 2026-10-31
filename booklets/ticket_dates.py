@@ -3,16 +3,20 @@ import re,time
 from datetime import date
 from pypdf import PdfReader
 
-PROVIDERS=('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','finnlines','fjordline','entur','ltg','renfe','snalltaget','sanity','ratehawk','voucher')
+PROVIDERS=('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','finnlines','fjordline','entur','ltg','renfe','snalltaget','sanity','ratehawk','teldar','voucher','citylink','eurostar','sncf','sj','hovertravel','gonordic','wightlink','pkp','zssk')
 DATE=r'(?:20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2}[.\-/]20\d{2})'
 MONTHS={name:n for n,names in enumerate(('januari january','februari february','maart march','april','mei may','juni june','juli july','augustus august','september','oktober october','november','december'),1) for name in names.split()}
+MONTHS.update({name:n for n,names in enumerate(('janvier januari','février februari','mars','avril','mai','juin','juillet juli','août augusti','septembre','octobre oktober','novembre','décembre december'),1) for name in names.split()})
 MONTHS.update({name:n for n,name in enumerate(('jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'),1)})
+MONTH_FIRST=r'(?:'+'|'.join(MONTHS)+r')\s+\d{1,2},?\s+20\d{2}'
 WRITTEN_DATE=r'\d{1,2}\s+(?:'+'|'.join(MONTHS)+r')\s+20\d{2}'
 
 def voucher_iso(value):
     parsed=iso(value)
     if parsed:return parsed
-    m=re.fullmatch(r'(\d{1,2})\s+([a-z]+)\s+(20\d{2})',str(value).strip(),re.I)
+    first=re.fullmatch(r'([a-zÀ-ž]+)\s+(\d{1,2}),?\s+(20\d{2})',str(value).strip(),re.I)
+    if first and first[1].lower() in MONTHS:return iso(f'{first[3]}-{MONTHS[first[1].lower()]:02}-{int(first[2]):02}')
+    m=re.fullmatch(r'(\d{1,2})\s+([a-zÀ-ž]+)\s+(20\d{2})',str(value).strip(),re.I)
     if not m or m[2].lower() not in MONTHS:return ''
     return iso(f'{m[3]}-{MONTHS[m[2].lower()]:02}-{int(m[1]):02}')
 
@@ -26,9 +30,9 @@ def iso(value):
 
 def labelled_date(text,provider,allowed=()):
     text=text[:100000]
-    if provider in ('voucher','ratehawk'):labels=r'check[ -]?in|incheck(?:datum|en)?|arrival(?: date)?|aankomst(?:datum)?'
+    if provider in ('voucher','ratehawk','teldar'):labels=r'check[ -]?in|incheck(?:datum|en)?|arrival(?: date)?|aankomst(?:datum)?'
     else:labels=r'date of travel|fecha(?: de viaje)?|vertrek(?:datum)?|departure(?: date)?|abfahrt(?: am)?|d[eé]part(?: le)?|travel date|reisdatum|odjezd'
-    printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider in ('voucher','ratehawk','trainline','raileurope','sbb','sanity') else DATE
+    printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider in ('voucher','ratehawk','teldar','trainline','raileurope','sbb','sanity','eurostar','citylink','gonordic','sj','sncf','hovertravel','wightlink') else DATE
     patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({printed_date})']
     if provider in ('trainline','renfe','sanity'):
         # UK PDFs join the date's words; only normalize alongside CRS route codes.
@@ -42,12 +46,21 @@ def labelled_date(text,provider,allowed=()):
     if provider=='ltg' or provider=='sanity' and re.search(r'LTG|E\.\s*bilietas',text,re.I):patterns.insert(0,rf'(?m)^[ \t]*(?:DATA[ \t]*\n[ \t]*)?DATE[ \t]+({DATE})[ \t]*$')
     if provider=='snalltaget' or provider=='sanity' and re.search(r'Sn[aä]llt[aå]get',text,re.I):patterns.insert(0,rf'Ticket,[ \t]*valid[ \t]+({DATE})')
     if provider=='ratehawk':patterns.insert(0,rf'(?:Inchecken|Check[ -]?in)[ \t]*\n(?:[^\d\n]{{1,120}}\n){{0,2}}[ \t]*({DATE})')
+    if provider=='citylink':patterns.insert(0,rf'Your trip details\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+({MONTH_FIRST})')
+    if provider=='gonordic':patterns.insert(0,rf'({WRITTEN_DATE})\s+\d{{1,2}}:\d{{2}}\s*[-–]\s*Departure')
+    if provider=='pkp':patterns.insert(0,rf'Departure\s*/\s*arrival date\s*:\s*({DATE})')
+    if provider=='sncf':patterns[:0]=[rf'(?:valable|valide)\s+(?:le|du)\s+({printed_date})',rf'(?:D[eé]part|Aller)\s*[:：]?\s*({printed_date})']
+    if provider=='eurostar':patterns.insert(0,rf'(?:Outbound|Inbound|Return)\s+(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+)?({printed_date})')
+    if provider=='teldar' and re.search(r'PREPAID BOOKING|Teldar Travel',text,re.I):patterns.insert(0,rf'(?m)^[ \t]*({DATE})[ \t]+{DATE}[ \t]*$')
+    if provider=='zssk' and 'ODCHOD / HINFAHRT' in text:
+        short={iso(m[1][:-2]+'20'+m[1][-2:]) for m in re.finditer(r'(?m)^[ \t]*(\d{2}\.\d{2}\.\d{2})[ \t]+\d{1,2}:\d{2}',text)}-{''}
+        if short:return (next(iter(short)),'pdf',False) if len(short)==1 else ('','ambiguous',True)
     if provider=='mav':patterns.insert(0,rf'(?:VONAT\s*/\s*TRAIN|TRAIN)\s*:\s*\d+\s*\(\s*({DATE})')
-    if provider in ('trainline','raileurope','sbb','sanity'):patterns.append(rf'(?m)^\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|tu|we|th|fr|sa|su),?\s+({printed_date})')
+    if provider in ('trainline','raileurope','sbb','sanity','sj','eurostar','citylink','hovertravel','gonordic','wightlink'):patterns.append(rf'(?m)^\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|tu|we|th|fr|sa|su),?\s+({printed_date})')
     for pattern in patterns:
-        values={(voucher_iso(m[1]) if provider in ('voucher','ratehawk','trainline','raileurope','sbb','sanity') else iso(m[1])) for m in re.finditer(pattern,text,re.I)}-{''}
+        values={(voucher_iso(m[1]) if provider in ('voucher','ratehawk','teldar','trainline','raileurope','sbb','sanity','eurostar','citylink','gonordic','sj','sncf','hovertravel','wightlink') else iso(m[1])) for m in re.finditer(pattern,text,re.I)}-{''}
         if values:return (next(iter(values)),'pdf',False) if len(values)==1 else ('','ambiguous',True)
-    if provider not in ('voucher','ratehawk'):
+    if provider not in ('voucher','ratehawk','teldar'):
         # Validity is an anchor, not a birthday or the date the ticket was issued.
         validity=list(re.finditer(rf'(?:g[eü]ltig(?:keit)?(?:\s*(?:ab|von))?|geldig(?:\s*(?:van|vanaf))?|valid(?:ity)?(?:\s*from)?|platnost(?:\s*od)?|first day of validity|[eé]rv[eé]nyes\s*/\s*valid)\s*[:：]?\s*({DATE})',text,re.I))
         values={iso(m[1]) for m in validity}-{''}
@@ -78,7 +91,7 @@ def moment_dates(body,slot,candidate):
     if slot.get('documentKind')!='voucher' and slot.get('ticketDateBasis','booking')=='booking':
         dates.update((body.get('sanityBooking') or {}).get('journeyDates',[]))
         for other in body.get('sections',[]):
-            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','trainlineTickets','raileuropeTickets','sbbTickets','finnlinesTickets','fjordlineTickets','enturTickets','ltgTickets','renfeTickets','snalltagetTickets','sanityTickets'):continue
+            if other.get('documentKind') not in ('combinedTickets','nsTickets','mavTickets','dbTickets','obbTickets','cdTickets','dfdsTickets','trainlineTickets','raileuropeTickets','sbbTickets','finnlinesTickets','fjordlineTickets','enturTickets','ltgTickets','renfeTickets','snalltagetTickets','citylinkTickets','eurostarTickets','sncfTickets','sjTickets','hovertravelTickets','gonordicTickets','wightlinkTickets','pkpTickets','zsskTickets','sanityTickets'):continue
             source=other.get('selected') or {}
             dates.update(p['travelDate'] for p in source.get('originalPages',source.get('pageSources',[])) if iso(p.get('travelDate')))
     return sorted(d for d in dates if iso(d))
@@ -100,7 +113,7 @@ def inspect(s,payload):
         if provider=='ns' and omit_gate_pass and is_gate_pass(text):continue
         if provider in ('sanity','entur') and re.search(r'not valid as (?:a )?ticket|electronic sales receipt|kvittering.*ikke.*billett',text,re.I):raise ValueError('Dit document is een betalingsbewijs en geen ticket. Kies de echte ticket-PDF.')
         value,source,review=labelled_date(text,provider,allowed)
-        if provider not in ('dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget','ratehawk') and not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
+        if provider not in ('dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget','ratehawk','teldar','citylink','eurostar','sncf','sj','hovertravel','gonordic','wightlink','pkp','zssk') and not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
         pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text),**ticket_details(text)})
     # Continuation pages can share a date, but this suggestion still needs checking.

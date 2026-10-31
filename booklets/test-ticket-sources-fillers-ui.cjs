@@ -7,7 +7,7 @@ function fixture(options={}){
  const exec=code=>vm.runInContext(code,ctx);
  exec(`state={objects:[],exports:[]};draft={kind:'book',title:'Test',body:{format:'A4',values:{},sanityBooking:{id:'customer',number:'1234A',name:'Test'},sections:[{choice:'document',documentKind:'combinedTickets',ticketSources:['ns','obb'],ticketSourceMode:'all',title:'Tickets',selected:null,options:[]}]}}`);
  ctx.api=async(path,b)=>{calls.push({path,b:structuredClone(b)});if(options.api){const r=await options.api(path,b);if(r!==undefined)return r;}
-  if(path==='/api/mail-tickets/search'){if(options.missing?.includes(b.provider))return {references:[],messages:[]};return {references:[b.provider+'-REF'],messages:[{id:b.provider,reference:b.provider+'-REF',latest:true,tickets:[{id:b.provider,title:'TICKET-'+b.provider+'.pdf'}]}]};}
+  if(path==='/api/mail-tickets/search'){if(b.provider==='teldar')return {references:[],messages:[]};if(options.missing?.includes(b.provider))return {references:[],messages:[]};return {references:[b.provider+'-REF'],messages:[{id:b.provider,reference:b.provider+'-REF',latest:true,tickets:[{id:b.provider,title:'TICKET-'+b.provider+'.pdf'}]}]};}
   if(path.startsWith('/api/upload'))return {id:'pdf-'+b,pages:options.pdfPages||1};
   if(path==='/api/tickets/inspect')return {pages:Array.from({length:options.pdfPages||1},(_,page)=>({asset:b.asset,page,travelDate:b.provider==='ns'?'2026-10-14':'2026-10-12',dateNeedsReview:false,dateSource:'pdf',documentRole:'ticket',departureTime:'10:00'}))};
   if(path==='/api/tickets/compose')return {asset:'composed',pages:b.pages.length,format:'A4'};
@@ -164,4 +164,11 @@ test('vouchers fall back to RateHawk when Sanity and Drive have no document',asy
 });
 test('ambiguous Drive vouchers cannot be bypassed by silently choosing RateHawk',async()=>{
  const f=fixture({api:async path=>path==='/api/booking-data/documents'?{items:[],attachments:[]}:path==='/api/booking-documents/drive-search'?{items:[{recommended:true,title:'Voucher A'},{recommended:true,title:'Voucher B'}]}:undefined});f.exec("draft.body.sanityBooking.sameNumberBookings=1;draft.body.sections[0].documentKind='voucher'");await f.exec('autoFillBookingDocuments()');assert(!f.slot().selected);assert.match(f.slot().issue,/Meerdere/);assert(!f.calls.some(c=>c.path==='/api/mail-tickets/search'));
+});
+
+test('all nine new ticket sources are selectable and Teldar remains a hotel voucher source',()=>{
+ const f=fixture();for(const p of ['citylink','eurostar','sncf','sj','hovertravel','gonordic','wightlink','pkp','zssk'])assert(f.exec('Object.values(ticketKinds)').includes(p));assert(!f.exec('Object.values(ticketKinds)').includes('teldar'));assert(!f.exec('ticketSourcesControls(draft.body.sections[0])').includes('value="teldar"'));f.exec("draft.body.sections[0].documentKind='voucher';mailTicketImport(0,'teldar')");assert.match(f.node('#modal').innerHTML,/Teldar-vouchers importeren/);
+});
+test('RateHawk and Teldar combine different hotel vouchers with their original dates',async()=>{
+ const f=fixture({api:async(path,b)=>path==='/api/booking-data/documents'?{items:[],attachments:[]}:path==='/api/booking-documents/drive-search'?{items:[]}:path==='/api/mail-tickets/search'&&b.provider==='teldar'?{references:['ABC123'],messages:[{id:'teldar',reference:'ABC123',latest:true,tickets:[{id:'teldar',title:'Voucher.pdf'}]}]}:undefined});f.exec("draft.body.sanityBooking.sameNumberBookings=1;draft.body.sections[0].documentKind='voucher'");await f.exec('autoFillBookingDocuments()');assert.equal(f.slot().selected.pages,2);assert.equal(f.slot().selected.mailVoucherImport.providers.length,2);
 });
