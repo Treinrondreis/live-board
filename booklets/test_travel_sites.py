@@ -5,14 +5,23 @@ from urllib.parse import urlsplit
 from unittest.mock import patch
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from PIL import Image
 import test_cloud as fixtures
 import travel_sites
 s=fixtures.cloud.server
 
 class TravelSiteTests(unittest.TestCase):
     def setUp(self):travel_sites.ATTEMPTS.clear()
-    def export(self,title='Example journey',ticket=False):
-        stream=io.BytesIO();cv=canvas.Canvas(stream,pagesize=s.SIZES['A4']);cv.drawString(30,790,'Fictional journey information');cv.drawString(30,765,'Example Town to Other Town');cv.showPage();cv.save()
+    def export(self,title='Example journey',ticket=False,picture=False):
+        stream=io.BytesIO();cv=canvas.Canvas(stream,pagesize=s.SIZES['A4']);cv.drawString(30,790,'Fictional journey information');cv.drawString(30,765,'Example Town to Other Town')
+        if picture:
+            pixels=io.BytesIO();Image.new('RGB',(150,90),'red').save(pixels,format='PNG')
+            cv.drawImage(ImageReader(io.BytesIO(pixels.getvalue())),40,500,width=300,height=180)
+            cv.setFillColorRGB(0,0,0);cv.rect(40,500,150,180,fill=1,stroke=0)
+            cv.drawString(40,440,'HIDDEN EXAMPLE TEXT')
+            cv.setFillColorRGB(1,1,1);cv.rect(35,430,220,30,fill=1,stroke=0)
+        cv.showPage();cv.save()
         status,_,raw=fixtures.request('/api/upload','POST',stream.getvalue());self.assertEqual(status,200);asset=json.loads(raw)
         body={'format':'A4','outputMode':'screen','sections':[{'asset':asset['id'],'pages':1,'fields':[],'title':'Practical information','values':{}}]}
         if ticket:
@@ -51,7 +60,7 @@ class TravelSiteTests(unittest.TestCase):
     def test_no_customer_data_or_files_without_code_and_no_internal_access_without_gateway(self):
         _,result=self.export('PRIVATE EXAMPLE NAME');site=result['personalWebsite']
         page=self.customer(site);self.assertEqual(page[0],200);self.assertNotIn(b'PRIVATE EXAMPLE NAME',page[2]);self.assertIn('sha256-',page[1]['Content-Security-Policy'])
-        for action in ('data','book','cover','chapter/0'):
+        for action in ('data','book','cover','chapter/0','image/0/0'):
             self.assertEqual(self.customer(site,action)[0],401)
             self.assertEqual(self.customer(site,action,authorized=False)[0],401)
         self.assertEqual(fixtures.request('/api/travel-site','POST',b'{}',authorized=False)[0],401)
@@ -95,12 +104,14 @@ class TravelSiteTests(unittest.TestCase):
         self.assertEqual(travel_sites.category({'bookingDocuments':[{'kind':'voucher'}]}),'hotels')
 
     def test_purging_old_export_removes_private_website_content_and_credentials(self):
-        book,result=self.export();site=result['personalWebsite']
+        book,result=self.export(picture=True);site=result['personalWebsite']
+        self.assertTrue(list((s.DATA/'previews').glob('export-'+result['id']+'-picture-*.png')))
         status,_,raw=fixtures.request('/api/export','POST',json.dumps({**book,'allowUneven':True}).encode());self.assertEqual(status,200)
         for action in ('trash','purge'):
             status,_,raw=fixtures.request('/api/export-status','POST',json.dumps({'id':result['id'],'bookId':book['id'],'action':action}).encode());self.assertEqual(status,200,raw)
         with s.db() as c:self.assertIsNone(c.execute('SELECT id FROM travel_sites WHERE export_id=?',(result['id'],)).fetchone())
         self.assertEqual(self.customer(site)[0],404)
+        self.assertFalse(list((s.DATA/'previews').glob('export-'+result['id']+'-picture-*.png')))
 
     def test_manual_ticket_upload_stays_a_pdf_with_checked_day_filter_and_no_barcode_text_dump(self):
         _,result=self.export(ticket=True);site=result['personalWebsite'];token=self.login(site)
@@ -117,5 +128,28 @@ class TravelSiteTests(unittest.TestCase):
             c.execute('UPDATE exports SET report=?,snapshot=? WHERE id=?',(json.dumps(report),json.dumps(snapshot),result['id']));c.execute('DELETE FROM travel_sites WHERE export_id=?',(result['id'],))
         site=self.manage(result,'ensure');status,_,raw=self.customer(site,'data',token=self.login(site));self.assertEqual(status,200)
         chapter=json.loads(raw)['chapters'][0];self.assertEqual(chapter['kind'],'tickets');self.assertEqual(chapter['dates'],['2028-06-08']);self.assertEqual(chapter['text'],'')
+
+    def test_pdf_pictures_and_text_are_available_together_only_after_login_and_masks_remain_visible(self):
+        _,result=self.export(picture=True);site=result['personalWebsite'];token=self.login(site)
+        status,_,raw=self.customer(site,'data',token=token);self.assertEqual(status,200);chapter=json.loads(raw)['chapters'][0]
+        self.assertIn('Fictional journey information',chapter['text']);self.assertEqual(chapter['images'],[{'index':0}]);self.assertNotIn('bbox',raw.decode());self.assertNotIn('cache',raw.decode())
+        self.assertNotIn('HIDDEN EXAMPLE TEXT',chapter['text'])
+        self.assertEqual(self.customer(site,'image/0/0')[0],401)
+        # Cached images do not redownload the complete PDF from Drive.
+        with patch.object(s.export_storage,'pdf',side_effect=AssertionError('Unexpected source download')):
+            status,headers,png=self.customer(site,'image/0/0',token=token)
+        self.assertEqual(status,200);self.assertEqual(headers['Content-Type'],'image/png')
+        with Image.open(io.BytesIO(png)) as image:
+            image=image.convert('RGB');self.assertLess(max(image.getpixel((image.width//4,image.height//2))),10)
+            red=image.getpixel((image.width*3//4,image.height//2));self.assertGreater(red[0],240);self.assertLess(max(red[1:]),10)
+        self.assertEqual(self.customer(site,'image/0/99',token=token)[0],404)
+        other=self.export()[1]['personalWebsite'];self.assertEqual(self.customer(other,'image/0/0',token=token)[0],401)
+        self.manage(result,'disable');self.assertEqual(self.customer(site,'image/0/0',token=token)[0],404)
+
+    def test_ticket_images_and_barcodes_stay_in_the_original_pdf(self):
+        _,result=self.export(ticket=True,picture=True);site=result['personalWebsite'];token=self.login(site)
+        chapter=json.loads(self.customer(site,'data',token=token)[2])['chapters'][0]
+        self.assertEqual(chapter['kind'],'tickets');self.assertEqual(chapter['images'],[]);self.assertEqual(chapter['text'],'')
+        self.assertEqual(self.customer(site,'image/0/0',token=token)[0],404)
 
 if __name__=='__main__':unittest.main()

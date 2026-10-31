@@ -8,8 +8,15 @@ filters op de al gecontroleerde hoofdstukdatums, een omslag en PDF-knoppen voor
 hoofdstukken en het complete boekje. Ook snel maken en batches gebruiken deze
 exportstap. Er wordt geen inhoud uit live Sanity bijgewerkt of naar een externe
 websiteleverancier verstuurd. Er is geen AI-vertaling of OCR-stap: tekst komt uit
-de definitieve PDF. Afbeeldingen, ingewikkelde tabellen en scans blijven volledig
-beschikbaar via de PDF-knop; deze zijn niet automatisch in webtekst omgezet.
+de definitieve PDF. Foto’s en kaarten staan vergrootbaar bij de hoofdstuktekst.
+De zichtbare afbeeldingsgebieden worden uit de definitieve PDF gerenderd, inclusief
+afdekkingen; ruwe ingebedde afbeeldingen worden niet vrijgegeven. Opaak afgedekte
+tekst onder rechthoeken wordt niet als webtekst meegenomen. De beelden staan in
+een afgeschermde servercache, ook als de PDF naar Drive wordt verplaatst. Maximaal
+twaalf afbeeldingen per hoofdstuk en tachtig per boekje; de volledige PDF blijft
+altijd beschikbaar. Ticketbeelden en barcodes blijven in de originele PDF.
+Ingewikkelde tabellen, vectorillustraties en scans worden niet automatisch nette
+webtekst; het oorspronkelijke PDF-hoofdstuk blijft bereikbaar.
 Een tickethoofdstuk kan meerdere trajecten omvatten. Het dagfilter filtert
 hoofdstukken op bekende datums en claimt geen volledige ticketdekking.
 

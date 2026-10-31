@@ -1,5 +1,5 @@
 """Versioned private travel websites from immutable, checked booklet exports."""
-import base64,hashlib,hmac,io,json,re,secrets,threading,time
+import base64,hashlib,hmac,io,json,math,re,secrets,threading,time
 from datetime import datetime,timezone
 from pathlib import Path
 from pypdf import PdfReader,PdfWriter
@@ -40,11 +40,74 @@ def export_row(s,ident):
     if not row or deleted or book and json.loads(book['body']).get('deletedAt'):raise ValueError('Deze PDF-versie is niet beschikbaar.')
     return row
 
+def picture_path(s,export_id,picture):
+    name=picture.get('cache','')
+    if not re.fullmatch(r'export-'+re.escape(export_id)+r'-picture-\d{1,3}-[a-f0-9]{20}\.png',name):raise ValueError('Ongeldige afbeelding.')
+    return s.DATA/'previews'/name
+
+def render_picture(s,page,picture,export_id):
+    import pymupdf
+    path=picture_path(s,export_id,picture)
+    if not path.is_file():
+        rect=pymupdf.Rect(picture['bbox']) & page.rect
+        scale=min(2,1200/max(rect.width,rect.height))
+        # Render only the visible PDF region, including masks/overlays. Raw
+        # embedded image bytes could reveal content hidden in the final PDF.
+        raw=page.get_pixmap(matrix=pymupdf.Matrix(scale,scale),clip=rect,alpha=False).tobytes('png')
+        s.ensure_capacity(len(raw));temporary=path.with_suffix('.'+secrets.token_hex(8)+'.tmp')
+        try:temporary.write_bytes(raw);temporary.replace(path)
+        finally:temporary.unlink(missing_ok=True)
+    return path
+
+def illustrations(s,document,numbers,export_id,budget):
+    import pymupdf
+    pictures=[]
+    for n in numbers:
+        page=document[n-1];rects=[];seen=set()
+        for image in page.get_image_info():
+            if not all(math.isfinite(v) for v in image['bbox']):continue
+            rect=(pymupdf.Rect(image['bbox'])*page.rotation_matrix) & page.rect
+            if rect.is_empty or rect.width<72 or rect.height<45 or rect.width*rect.height<page.rect.width*page.rect.height*.025:continue
+            key=tuple(round(v,1) for v in rect)
+            if key not in seen:rects.append(rect);seen.add(key)
+        for rect in sorted(rects,key=lambda r:(r.y0,r.x0)):
+            if len(pictures)>=12 or budget['count']>=80:return pictures
+            bbox=list(rect);key=hashlib.sha256(json.dumps([n,bbox]).encode()).hexdigest()[:20]
+            picture={'page':n,'bbox':bbox,'cache':f'export-{export_id}-picture-{n}-{key}.png'}
+            render_picture(s,page,picture,export_id);pictures.append(picture);budget['count']+=1
+    return pictures
+
+def visible_text(page):
+    import pymupdf
+    masks=[]
+    for drawing in page.get_drawings():
+        items=drawing.get('items',[])
+        if drawing.get('fill') is not None and drawing.get('fill_opacity',1)==1 and len(items)==1 and items[0][0]=='re':
+            masks.append((drawing['seqno'],pymupdf.Rect(items[0][1])))
+    lines=[];previous=None
+    for span in page.get_texttrace():
+        if span.get('type')==3 or span.get('opacity',1)==0:continue
+        characters=[]
+        for code,_,origin,bbox in span['chars']:
+            box=pymupdf.Rect(bbox);inside=(box & page.rect).get_area()
+            covered=any(sequence>span['seqno'] and (box & rect).get_area()>0 for sequence,rect in masks)
+            if not inside or covered:
+                if characters and characters[-1]!=' ':characters.append(' ')
+            elif code>=32:characters.append(chr(code))
+        text=''.join(characters).strip()
+        if not text:continue
+        rect=pymupdf.Rect(span['bbox'])
+        if previous is not None and abs(rect.y0-previous.y0)<2 and rect.x0>=previous.x1-1:lines[-1]+=' '+text
+        else:lines.append(text)
+        previous=rect
+    return '\n'.join(lines)
+
 def content(s,row):
+    import pymupdf
     report=json.loads(row['report']);chapters=report.get('digitalChapters') or [{'title':'Uw reisboekje','pageNumbers':list(range(1,report['pages']+1))}]
     sections=json.loads(row['snapshot']).get('body',{}).get('sections',[])
-    result=[];total=0;deadline=time.monotonic()+20
-    with s.export_storage.pdf(s,row['id']) as path:
+    result=[];total=0;deadline=time.monotonic()+20;budget={'count':0}
+    with s.export_storage.pdf(s,row['id']) as path,pymupdf.open(path) as pictures:
         reader=PdfReader(path)
         if not 1<=len(reader.pages)<=500:raise ValueError('Het boekje is te groot voor de reiswebsite.')
         for chapter in chapters:
@@ -58,11 +121,12 @@ def content(s,row):
             kind=chapter.get('kind',legacy.get('kind','informatie'));texts=[]
             if kind!='tickets':
                 for n in numbers:
-                    text=reader.pages[n-1].extract_text() or ''
+                    text=visible_text(pictures[n-1])
                     if len(text)>60000:raise ValueError('Een pagina bevat te veel tekst voor de reiswebsite.')
                     texts.append(text.strip());total+=len(text)
             if total>2000000:raise ValueError('Het boekje bevat te veel tekst voor de reiswebsite.')
-            result.append({'title':str(chapter.get('title','Reisinformatie'))[:200],'kind':kind,'dates':chapter.get('dates',legacy.get('dates',[])),'pageNumbers':numbers,'text':'\n\n'.join(texts)})
+            images=illustrations(s,pictures,numbers,row['id'],budget) if kind!='tickets' else []
+            result.append({'title':str(chapter.get('title','Reisinformatie'))[:200],'kind':kind,'dates':chapter.get('dates',legacy.get('dates',[])),'pageNumbers':numbers,'text':'\n\n'.join(texts),'images':images})
     return {'title':row['title'],'created':row['created'],'chapters':result}
 
 def ensure(s,ident):
@@ -119,7 +183,7 @@ def authorized(row,value):
 def response_json(response,status,data,headers=None):return response(status,data,headers=headers)
 
 def handle(s,path,environ,response):
-    match=re.fullmatch(r'/internal/travel-sites/([a-f0-9]{32})(?:/(data|login|logout|book|cover|chapter/\d{1,3}))?',path)
+    match=re.fullmatch(r'/internal/travel-sites/([a-f0-9]{32})(?:/(data|login|logout|book|cover|chapter/\d{1,3}|image/\d{1,3}/\d{1,2}))?',path)
     if not match:return response(404,{'error':'Niet gevonden.'})
     ident,action=match.groups();action=action or 'page';method=environ['REQUEST_METHOD']
     if method!=('POST' if action in ('login','logout') else 'GET'):return response(405,{'error':'Ongeldige methode.'})
@@ -152,10 +216,20 @@ def handle(s,path,environ,response):
         return response_json(response,200,{'ok':True},cookie(token(row,min(row['expires'],int(time.time())+7*86400)),7*86400))
     if environ.get('HTTP_X_TRAVEL_SITE_OWNER')!='1' and not authorized(row,environ.get('HTTP_X_TRAVEL_SITE_SESSION','')):return response(401,{'error':'Voer uw toegangscode in.'})
     data=json.loads(row['content'])
-    if action=='data':return response(200,{**data,'chapters':[{k:v for k,v in c.items() if k!='pageNumbers'} for c in data['chapters']]})
+    if action=='data':return response(200,{**data,'chapters':[{**{k:v for k,v in c.items() if k not in ('pageNumbers','images')},'images':[{'index':i} for i,_ in enumerate(c.get('images',[]))]} for c in data['chapters']]})
+    image=None
+    if action.startswith('image/'):
+        _,chapter,number=action.split('/');chapter=int(chapter);number=int(number)
+        if not 0<=chapter<len(data['chapters']) or not 0<=number<len(data['chapters'][chapter].get('images',[])):return response(404,{'error':'Afbeelding niet gevonden.'})
+        image=data['chapters'][chapter]['images'][number];cached=picture_path(s,row['export_id'],image)
+        if cached.is_file():return response(200,cached.read_bytes(),'image/png')
     if not RENDER.acquire(blocking=False):return response(429,{'error':'Het document wordt voorbereid. Probeer het opnieuw.'},headers={'Retry-After':'3'})
     try:
         with s.export_storage.pdf(s,row['export_id']) as source:
+            if image:
+                import pymupdf
+                with pymupdf.open(source) as doc:cached=render_picture(s,doc[image['page']-1],image,row['export_id'])
+                return response(200,cached.read_bytes(),'image/png')
             if action=='book':return response(200,Path(source).read_bytes(),'application/pdf',{'Content-Disposition':s.export_names.disposition(s,row['export_id'],'attachment')})
             if action=='cover':
                 import pymupdf

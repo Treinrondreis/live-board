@@ -4,7 +4,7 @@ import https from 'node:https';
 // Only this fixed customer namespace bypasses Seinhuis login. The upstream
 // checks a separate per-website session; never forward admin/browser headers.
 export async function travelSiteGateway(req,res,url,{prefix,config,authenticate}){
- const match=url.pathname.match(new RegExp('^'+prefix+'/reis/([a-f0-9]{32})(?:/(data|login|logout|book|cover|chapter/\\d{1,3}))?/?$'));
+ const match=url.pathname.match(new RegExp('^'+prefix+'/reis/([a-f0-9]{32})(?:/(data|login|logout|book|cover|chapter/\\d{1,3}|image/\\d{1,3}/\\d{1,2}))?/?$'));
  const fail=(status,error)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error}));return true;};
  if(!match||url.search)return fail(404,'Niet gevonden.');
  const [,id,action]=match,method=['login','logout'].includes(action)?'POST':'GET';

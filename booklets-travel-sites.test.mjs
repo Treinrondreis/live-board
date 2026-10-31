@@ -15,10 +15,11 @@ try{
  await fetch(url+'/data',{headers:{cookie:`owner=invalid; trr_reis_${id}=${session}; trr_reis_${other}=other`,'x-travel-site-owner':'1','x-booklets-gateway':'attacker'}});
  assert.equal(seen.at(-1).headers['x-travel-site-owner'],undefined);assert.equal(seen.at(-1).headers.cookie,undefined);assert.equal(seen.at(-1).headers['x-travel-site-session'],session);assert.equal(seen.at(-1).headers['x-booklets-gateway'],secret);
  await fetch(url+'/data',{headers:{cookie:'owner=valid'}});assert.equal(seen.at(-1).headers['x-travel-site-owner'],'1');
+ await fetch(url+'/image/0/0',{headers:{cookie:`trr_reis_${id}=${session}`}});assert.equal(seen.at(-1).url,'/internal/travel-sites/'+id+'/image/0/0');assert.equal(seen.at(-1).headers['x-travel-site-session'],session);
  const headers={origin,'x-travel-site':'1','content-type':'application/json'};
  const accepted=await fetch(url+'/login',{method:'POST',headers,body:JSON.stringify({code:'FICTIONAL1'})});assert.equal(accepted.status,200);assert.equal(accepted.headers.getSetCookie().length,1);assert(accepted.headers.getSetCookie()[0].startsWith('trr_reis_'+id+'='));assert(!accepted.headers.getSetCookie()[0].includes('admin='));
  const count=seen.length;
- for(const suffix of ['/../api/state','/chapter/../../api/state','/%2fapi/state','/chapter/9999','/data?code=secret','//data'])assert.notEqual((await fetch(url+suffix)).status,200);
+ for(const suffix of ['/../api/state','/chapter/../../api/state','/%2fapi/state','/chapter/9999','/image/0/999','/image/../../api/state','/data?code=secret','//data'])assert.notEqual((await fetch(url+suffix)).status,200);
  for(const h of [{...headers,origin:'https://evil.example'},{...headers,'x-travel-site':'0'}])assert.equal((await fetch(url+'/login',{method:'POST',headers:h,body:'{}'})).status,403);
  assert.equal((await fetch(url+'/login',{method:'POST',headers,body:'x'.repeat(513)})).status,413);
  assert.equal((await fetch(url+'/book',{method:'POST',headers,body:'{}'})).status,405);
