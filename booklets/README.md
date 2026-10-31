@@ -61,6 +61,19 @@ geen datums tussen losse PDF’s overgenomen. Een afwijkende gekoppelde ToDo-dat
 blijft een controlepunt. Bestaande opgeslagen boekjes worden niet aangepast;
 opnieuw ophalen past deze herkenning toe op een nieuwe selectie.
 
+DB-mail wordt gezocht en gecontroleerd op zowel `bahn.de` als
+`deutschebahn.com`. Annuleringen op beide domeinen blokkeren oudere tickets;
+facturen blijven uitgesloten en toegestane PDF-downloadhosts zijn niet verruimd.
+De reisdatum bij `Ihre Reiseverbindung und Reservierung` heeft voorrang op de
+langere geldigheidsperiode. Hinfahrt, Rückfahrt en Einfache Fahrt worden herkend,
+evenals de oudere labels Fahrtantritt am en Gültig am. Koop- en uiterste
+annuleringsdatums worden niet als vertrekdatum gekozen.
+
+MAV-plaatsreserveringen kunnen alleen dag en maand afdrukken. Bij één passende
+gekoppelde reisdatum wordt het ontbrekende jaartal daaraan ontleend; de koopdatum
+of het huidige kalenderjaar wordt hiervoor niet gebruikt. Een daadwerkelijk
+afwijkende dag/maand of een onduidelijke koppeling blijft controle vereisen.
+
 ## RateHawk, LTG Link, RENFE en Snälltåget
 
 RateHawk is beschikbaar binnen **Vouchers ophalen**, via Document kiezen / ophalen

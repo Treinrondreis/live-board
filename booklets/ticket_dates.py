@@ -34,6 +34,19 @@ def labelled_date(text,provider,allowed=()):
     else:labels=r'date of travel|fecha(?: de viaje)?|vertrek(?:datum)?|departure(?: date)?|abfahrt(?: am)?|d[eé]part(?: le)?|travel date|reisdatum|odjezd'
     printed_date=rf'(?:{DATE}|{WRITTEN_DATE})' if provider in ('voucher','ratehawk','teldar','trainline','raileurope','sbb','sanity','eurostar','citylink','gonordic','sj','sncf','hovertravel','wightlink') else DATE
     patterns=[rf'(?:{labels})\s*[:：]?\s*[^\d\n]{{0,30}}({printed_date})']
+    if provider=='db':
+        # Prefer the booked journey above the timetable to the broader
+        # ticket validity window (which can end several days later).
+        patterns[:0]=[rf'Ihre\s+Reiseverbindung\s+und\s+Reservierung\s*[-–]\s*(?:Hinfahrt|R[üu]ckfahrt|Einfache\s+Fahrt)\s+am\s+({DATE})',rf'Fahrtantritt\s+am\s+({DATE})',rf'G[üu]ltig\s+am\s+({DATE})']
+    if provider=='mav' and journey_details(text)['documentRole']=='reservation':
+        # MAV seat reservations can print only dd.mm and a departure time.
+        # Resolve that day/month within the linked journey, never by taking
+        # the purchase year or today's year.
+        short=re.search(r'(?m)^\s*(\d{2})[.](\d{2})[.]?\s+(\d{2}:\d{2})\b',text)
+        if short:
+            matches={d for d in allowed if iso(d) and int(d[5:7])==int(short[2]) and int(d[8:10])==int(short[1])}
+            if len(matches)==1:return next(iter(matches)),'pdf-day-month',False
+            return '','pdf-day-month',True
     if provider in ('trainline','renfe','sanity'):
         # UK PDFs join the date's words; only normalize alongside CRS route codes.
         text=re.sub(r'(\d{1,2})(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(20\d{2})(?=\s+[A-Z]{3}\s*[-–]\s*[A-Z]{3}\b)',r'\1 \2 \3',text,flags=re.I)
@@ -135,8 +148,10 @@ def inspect(s,payload):
         if provider in ('renfe','sanity') and re.search(r'COPIA PARA CLIENTE',text,re.I) and re.search(r'Cargo por ventas con tarjeta',text,re.I):continue
         if provider=='ns' and omit_gate_pass and is_gate_pass(text):continue
         if provider in ('sanity','entur') and re.search(r'not valid as (?:a )?ticket|electronic sales receipt|kvittering.*ikke.*billett',text,re.I):raise ValueError('Dit document is een betalingsbewijs en geen ticket. Kies de echte ticket-PDF.')
-        value,source,review=labelled_date(text,provider,suggested if provider=='sncf' else allowed)
-        if provider not in ('dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget','ratehawk','teldar','citylink','eurostar','sncf','sj','hovertravel','gonordic','wightlink','pkp','zssk') and not value and source!='ambiguous' and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
+        hints=suggested if provider=='sncf' else allowed
+        if provider=='mav' and suggested:hints=suggested
+        value,source,review=labelled_date(text,provider,hints)
+        if provider not in ('dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget','ratehawk','teldar','citylink','eurostar','sncf','sj','hovertravel','gonordic','wightlink','pkp','zssk') and not value and source not in ('ambiguous','pdf-day-month') and len(set(suggested))==1:value=suggested[0];source='sanity-todo';review=False
         if value and suggested and value not in suggested and not (provider=='ns' and source in ('pdf','pdf-timetable','pdf-validity') and value in continuations):review=True;source='pdf-conflict'
         pages.append({'asset':ident,'page':n,'travelDate':value,'dateSource':source,'dateNeedsReview':review,**journey_details(text),**ticket_details(text)})
     # These documents use their first actual journey date in document order.
