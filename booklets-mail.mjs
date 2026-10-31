@@ -1,3 +1,4 @@
+import {loadMailDocument} from './booklets-mail-document.mjs';
 import {randomBytes} from 'node:crypto';
 import {floraGoogle} from './flora-google.mjs';
 import {fetchBookings} from './flora-sanity.mjs';
@@ -51,13 +52,14 @@ export function createBookletsMail({google=floraGoogle,bookings=fetchBookings,st
    for(const m of messages){const group=m.reference||m.id;m.latest=!latest.has(group);latest.add(group);m.selected=m.latest&&!!m.reference&&!m.cancelled&&m.tickets.length>0;}
    return {provider:'NS International',providerKey:'ns',query:term,booking:booking?String(booking.index):null,references:booking?bookingReferences(booking):[],gatePassOmissionReferences:booking?gatePassOmissionReferences(booking):[],referenceDates:booking?referenceDates(booking,bookingReferences(booking)):[],referenceContinuationDates:booking?referenceContinuationDates(booking,bookingReferences(booking)):[],journeyDates:booking?bookingJourneyDates(booking):[],travelDates:booking?[...new Set((booking.todos||[]).map(t=>isoDate(t.startDate)).filter(Boolean))]:[],messages};
   },
+  async document(payload){clean();const item=tickets.get(payload.ticket);if(!item||item.kind!=='mail-document')throw Error('Deze ticketmail is verlopen. Zoek de mail opnieuw.');return loadMailDocument(item,{google,fetcher});},
   async download(payload){
    clean();const item=tickets.get(payload.ticket);if(!item)throw Error('Deze ticketselectie is verlopen. Zoek de mails opnieuw.');if(busy){const e=Error('Er wordt al een ticket opgehaald. Probeer zo opnieuw.');e.status=429;throw e;}busy=true;
    try {
     if(item.kind==='attachment'){const get=await google.reader();const body=item.data?{data:item.data}:item.attachmentId?await get(`messages/${item.mail}/attachments/${item.attachmentId}`):null;if(!body?.data||body.data.length>14*1024*1024)throw Error('Ticketbijlage ontbreekt of is groter dan 10 MB.');const bytes=Buffer.from(body.data,'base64url');if(bytes.length>10*1024*1024||bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Deze ticketbijlage is geen geldige PDF van maximaal 10 MB.');return bytes;}
     const safe=link=>item.kind==='carrier-link'?safeCarrierPDF(link,item.provider):safeTicketURL(link);let u=safe(item.link);if(!u)throw Error('Niet ondersteunde ticketverwijzing.');let response;const signal=AbortSignal.timeout(25000);
     for(let hop=0;hop<=3;hop++){response=await fetcher(u,{redirect:'manual',signal,headers:{Accept:'application/pdf'}});if(![301,302,303,307,308].includes(response.status))break;const location=response.headers.get('location');await response.body?.cancel();u=location&&safe(new URL(location,u).href);if(!u||hop===3)throw Error('Niet ondersteunde ticketverwijzing.');}
-    if(!response.ok){const e=Error(item.provider==='obb'&&response.status===403?'ÖBB weigert de automatische download (HTTP 403). Gebruik de ÖBB-downloadknop en upload de PDF.':'Ticket niet beschikbaar (HTTP '+response.status+').');if(item.provider==='obb'&&response.status===403)e.code='TICKET_REMOTE_BLOCKED';throw e;}const chunks=[];let size=0;
+    if(!response.ok){const e=Error(item.provider==='obb'&&response.status===403?'ÖBB weigert de automatische download (HTTP 403). Gebruik de ÖBB-downloadknop en upload de PDF.':'Ticket niet beschikbaar (HTTP '+response.status+').');if(['obb','sncf'].includes(item.provider)&&response.status===403)e.code='TICKET_REMOTE_BLOCKED';else if([404,410].includes(response.status))e.code='TICKET_NOT_PDF';throw e;}const chunks=[];let size=0;
     for await(const chunk of response.body){size+=chunk.length;if(size>10*1024*1024){await response.body.cancel().catch(()=>{});throw Error('Ticket-PDF is groter dan 10 MB.');}chunks.push(chunk);}
     const bytes=Buffer.concat(chunks);if(bytes.subarray(0,5).toString()!=='%PDF-'){const e=Error('Deze ticketknop levert geen PDF. Mogelijk is het ticket geannuleerd of verlopen.');e.code='TICKET_NOT_PDF';throw e;}return bytes;
    }finally{busy=false;}

@@ -3,7 +3,7 @@ import book_links
 import copy
 from pdf_geometry import display_meta, normalize_page
 import ticket_import,ticket_dates,train_screen
-import booking_documents,ticket_drive
+import booking_documents,ticket_drive,mail_ticket_pdf
 import field_background,field_flow,field_fit
 import bulk_ops, preflight, sanity_sources, google_sources, google_connection, route_maker, station_catalog
 import export_names,export_history,export_storage,km_archive,document_duplicates,book_activity,export_checks,print_orders
@@ -250,10 +250,10 @@ def validate_body(kind,b,prepared=False):
                         if key in slot and (type(slot[key]) is not int or not 0<=slot[key]<=99):raise ValueError('Kies een reismoment of verblijf tussen 1 en 99, of 0 voor alles.')
                     if 'sortByDate' in slot and type(slot['sortByDate']) is not bool:raise ValueError('Kies wel of niet sorteren op datum.')
                     if slot.get('documentKind') not in booking_documents.KINDS:raise ValueError('Ongeldige documentplek.')
-                    if slot.get('voucherSource','standard') not in ('standard','ratehawk'):raise ValueError('Kies een geldige voucherbron.')
+                    if slot.get('voucherSource','standard') not in ('standard','ratehawk','teldar'):raise ValueError('Kies een geldige voucherbron.')
                     if 'ticketSources' in slot:
                         sources=slot['ticketSources']
-                        if not isinstance(sources,list) or not 1<=len(sources)<=16 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot zestien verschillende ticketbronnen.')
+                        if not isinstance(sources,list) or not 1<=len(sources)<=25 or any(not isinstance(p,str) or p not in ('ns','mav','db','obb','cd','dfds','trainline','raileurope','sbb','sanity','finnlines','fjordline','entur','ltg','renfe','snalltaget','citylink','eurostar','sncf','sj','hovertravel','gonordic','wightlink','pkp','zssk') for p in sources) or len(set(sources))!=len(sources):raise ValueError('Kies één tot vijfentwintig verschillende ticketbronnen.')
                     if slot.get('documentKind')=='combinedTickets' and not slot.get('ticketSources'):raise ValueError('Kies minstens één ticketbron.')
                     if slot.get('ticketSourceMode','all') not in ('all','fallback'):raise ValueError('Kies combineren of de eerste beschikbare ticketbron.')
                     if slot.get('ticketDateBasis','booking') not in ('booking','source'):raise ValueError('Kies gezamenlijke reisdatums of datums binnen de ticketbron.')
@@ -606,6 +606,7 @@ class Handler(BaseHTTPRequestHandler):
                 result['catalogRevisions']={o['id']:o['revision'] for o in objects}
                 return self.send(200,result)
             if path=='/api/tickets/compose':return self.send(200,ticket_import.compose(SimpleNamespace(**globals()),b))
+            if path=='/api/tickets/mail-render':return self.send(200,mail_ticket_pdf.render(SimpleNamespace(**globals()),b))
             if path=='/api/tickets/inspect':return self.send(200,ticket_dates.inspect(SimpleNamespace(**globals()),b))
             if path=='/api/train-screen/inspect':return self.send(200,train_screen.inspect(SimpleNamespace(**globals()),b))
             if path=='/api/train-screen/render':return self.send(200,train_screen.render(SimpleNamespace(**globals()),b))

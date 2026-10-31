@@ -5,6 +5,16 @@ import google_connection as connection
 import booking_documents
 
 PROVIDERS={
+    'citylink':(r'Citylink',r'(?:\d{8}|ETS\d{8})'),
+    'eurostar':(r'Eurostar',r'[A-Z0-9]{6}'),
+    'sncf':(r'(?:SNCF|TER)',r'(?:[A-Z0-9]{6}|[A-Z]{2}\d{6})'),
+    'sj':(r'SJ',r'[A-Z0-9]{6,10}'),
+    'hovertravel':(r'Hovertravel',r'\d{8}'),
+    'gonordic':(r'Go[ _-]*Nordic',r'\d{5,8}'),
+    'wightlink':(r'Wightlink',r'\d{8}'),
+    'pkp':(r'PKP',r'(?:[A-Z]{2})?\d{8}'),
+    'zssk':(r'ZSSK',r'\d{16}'),
+
     'ltg':(r'LTG[ _-]*Link',r'\d{12}'),
     'renfe':(r'RENFE',r'[A-Z0-9]{6}'),
     'snalltaget':(r'Sn[aä]llt[aå]get',r'[A-Z0-9]{6}'),
