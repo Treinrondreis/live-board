@@ -13,7 +13,7 @@ s=fixtures.cloud.server
 
 class TravelSiteTests(unittest.TestCase):
     def setUp(self):travel_sites.ATTEMPTS.clear()
-    def export(self,title='Example journey',ticket=False,picture=False):
+    def export(self,title='Example journey',ticket=False,picture=False,hidden_info=False):
         stream=io.BytesIO();cv=canvas.Canvas(stream,pagesize=s.SIZES['A4']);cv.drawString(30,790,'Fictional journey information');cv.drawString(30,765,'Example Town to Other Town')
         if picture:
             pixels=io.BytesIO();Image.new('RGB',(150,90),'red').save(pixels,format='PNG')
@@ -21,14 +21,20 @@ class TravelSiteTests(unittest.TestCase):
             cv.setFillColorRGB(0,0,0);cv.rect(40,500,150,180,fill=1,stroke=0)
             cv.drawString(40,440,'HIDDEN EXAMPLE TEXT')
             cv.setFillColorRGB(1,1,1);cv.rect(35,430,220,30,fill=1,stroke=0)
-        cv.showPage();cv.save()
+        cv.showPage()
+        cv.save()
         status,_,raw=fixtures.request('/api/upload','POST',stream.getvalue());self.assertEqual(status,200);asset=json.loads(raw)
         body={'format':'A4','outputMode':'screen','sections':[{'asset':asset['id'],'pages':1,'fields':[],'title':'Practical information','values':{}}]}
+        if hidden_info:
+            body['sections'][0]['tocHidden']=True
+            ticket_stream=io.BytesIO();ticket_canvas=canvas.Canvas(ticket_stream,pagesize=s.SIZES['A4']);ticket_canvas.drawString(30,790,'FICTIONAL TICKET');ticket_canvas.showPage();ticket_canvas.save()
+            status,_,raw=fixtures.request('/api/upload','POST',ticket_stream.getvalue());self.assertEqual(status,200);ticket_asset=json.loads(raw)
+            body['sections'].append({'choice':'document','documentKind':'nsTickets','title':'Train tickets','selected':{'asset':ticket_asset['id'],'pages':1,'fields':[],'title':'Train tickets','values':{}}})
         if ticket:
             section=body['sections'][0]
             section['pageSources']=[{'asset':asset['id'],'page':0,'travelDate':'2028-06-08','dateNeedsReview':False}]
             body['sections']=[{'choice':'document','documentKind':'nsTickets','title':'Train tickets','selected':section}]
-        status,_,raw=fixtures.request('/api/save','POST',json.dumps({'kind':'book','title':title,'body':body}).encode());self.assertEqual(status,200);book=json.loads(raw)
+        status,_,raw=fixtures.request('/api/save','POST',json.dumps({'kind':'book','title':title,'body':body}).encode());self.assertEqual(status,200,raw);book=json.loads(raw)
         status,_,raw=fixtures.request('/api/export','POST',json.dumps({**book,'allowUneven':True}).encode());self.assertEqual(status,200,raw);result=json.loads(raw)
         self.assertIn('personalWebsite',result,raw);return book,result
     def customer(self,site,action='',method='GET',body=None,token='',owner=False,authorized=True):
@@ -57,6 +63,30 @@ class TravelSiteTests(unittest.TestCase):
         self.assertNotIn(site['code'].encode(),row['code']);self.assertNotEqual(row['digest'],site['code'])
         status,_,raw=fixtures.request('/api/export','POST',json.dumps({**book,'allowUneven':True}).encode());self.assertEqual(status,200)
         second=json.loads(raw)['personalWebsite'];self.assertNotEqual(second['url'],site['url']);self.assertNotEqual(second['code'],site['code'])
+    def test_hiding_information_in_contents_does_not_remove_its_text_and_picture_from_website(self):
+        _,result=self.export(picture=True,hidden_info=True);site=result['personalWebsite']
+        data=json.loads(self.customer(site,'data',token=self.login(site))[2])
+        self.assertEqual(len(data['chapters']),2)
+        self.assertIn('Fictional journey information',data['chapters'][0]['text'])
+        self.assertEqual(data['chapters'][0]['images'],[{'index':0}])
+        self.assertEqual(data['chapters'][1]['kind'],'tickets')
+
+    def test_existing_partial_website_is_repaired_from_saved_pdf_without_changing_link_code_or_revocation(self):
+        _,result=self.export(picture=True,hidden_info=True);site=result['personalWebsite']
+        with s.db() as c:
+            report=json.loads(c.execute('SELECT report FROM exports WHERE id=?',(result['id'],)).fetchone()['report']);report.pop('websiteChapters',None)
+            c.execute('UPDATE exports SET report=? WHERE id=?',(json.dumps(report),result['id']))
+            original=json.loads(c.execute('SELECT content FROM travel_sites WHERE export_id=?',(result['id'],)).fetchone()['content'])
+            original.pop('version');original['chapters']=original['chapters'][1:]
+            c.execute('UPDATE travel_sites SET content=? WHERE export_id=?',(json.dumps(original),result['id']))
+        self.manage(result,'disable');updated=self.manage(result,'ensure')
+        self.assertEqual(updated['url'],site['url']);self.assertEqual(updated['code'],site['code']);self.assertTrue(updated['revoked'])
+        with s.db() as c:fixed=json.loads(c.execute('SELECT content FROM travel_sites WHERE export_id=?',(result['id'],)).fetchone()['content'])
+        self.assertEqual(len(fixed['chapters']),2);self.assertTrue(fixed['chapters'][0]['images'])
+        self.assertEqual(fixed['chapters'][1]['kind'],'tickets')
+        self.assertEqual(self.customer(site)[0],404)
+        with patch.object(travel_sites,'content',side_effect=AssertionError('Already repaired')):self.manage(result,'ensure')
+
     def test_no_customer_data_or_files_without_code_and_no_internal_access_without_gateway(self):
         _,result=self.export('PRIVATE EXAMPLE NAME');site=result['personalWebsite']
         page=self.customer(site);self.assertEqual(page[0],200);self.assertNotIn(b'PRIVATE EXAMPLE NAME',page[2]);self.assertIn('sha256-',page[1]['Content-Security-Policy'])
@@ -123,6 +153,7 @@ class TravelSiteTests(unittest.TestCase):
         _,result=self.export(ticket=True)
         with s.db() as c:
             row=c.execute('SELECT report,snapshot FROM exports WHERE id=?',(result['id'],)).fetchone();report=json.loads(row['report']);snapshot=json.loads(row['snapshot'])
+            report.pop('websiteChapters',None)
             for chapter in report['digitalChapters']:chapter.pop('kind',None);chapter.pop('dates',None)
             section=snapshot['body']['sections'][0];section.pop('_websiteKind',None);section['ticketImport']={'provider':'fictional'}
             c.execute('UPDATE exports SET report=?,snapshot=? WHERE id=?',(json.dumps(report),json.dumps(snapshot),result['id']));c.execute('DELETE FROM travel_sites WHERE export_id=?',(result['id'],))

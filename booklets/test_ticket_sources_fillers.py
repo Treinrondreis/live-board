@@ -22,7 +22,7 @@ class TicketSourcesFillerTests(unittest.TestCase):
         result=s.make_export({'id':'filler-test','title':'Test','body':b},{'fill':True})
         reader=PdfReader(s.DATA/'exports'/(result['id']+'.pdf'));self.assertEqual(len(reader.pages),4)
         self.assertEqual([p.extract_text().strip() for p in reader.pages],['Cover','Vienna','Hotel','Return'])
-        self.assertEqual(result['report']['fillersSkipped'],['Extra Vienna']);self.assertEqual(len(b['sections']),5)
+        self.assertEqual([chapter['title'] for chapter in result['report']['websiteChapters']],['Cover','Vienna','Hotel','Return']);self.assertEqual(result['report']['fillersSkipped'],['Extra Vienna']);self.assertEqual(len(b['sections']),5)
         normal=s.make_export({'id':'keep-test','title':'Test','body':b},{'allowUneven':True})
         self.assertEqual(normal['report']['pages'],5)
 
