@@ -20,6 +20,14 @@ webtekst; het oorspronkelijke PDF-hoofdstuk blijft bereikbaar.
 Een tickethoofdstuk kan meerdere trajecten omvatten. Het dagfilter filtert
 hoofdstukken op bekende datums en claimt geen volledige ticketdekking.
 
+De website neemt ook hoofdstukken mee die verborgen zijn in de inhoudsopgave.
+Die instelling blijft alleen van toepassing op de inhoudsopgave en digitale proef.
+Ook na aanpassing van vulpagina’s blijven de opgenomen hoofdstukken behouden.
+De omslag is zichtbaar op desktop en mobiel. Eerdere onvolledige reiswebsites
+worden bij het opnieuw openen van **Persoonlijke website** hersteld uit dezelfde
+opgeslagen PDF; link, code, vervaldatum en uitgeschakelde toegang blijven behouden.
+Openbare klantverzoeken voeren deze herstelbewerking niet uit.
+
 Via **Persoonlijke website** bij de PDF kan een medewerker de link en code
 kopiëren, een nieuwe code maken of toegang uitzetten. Eerdere PDF’s worden pas
 omgezet wanneer de medewerker daar op die knop klikt. Iedere PDF-versie heeft

@@ -102,10 +102,23 @@ def visible_text(page):
         previous=rect
     return '\n'.join(lines)
 
+def website_chapters(report):
+    if 'websiteChapters' in report:return report['websiteChapters']
+    chapters=[dict(chapter) for chapter in report.get('digitalChapters',[])]
+    included={n for chapter in chapters for n in chapter.get('pageNumbers',range(chapter['page'],chapter['end']+1))}
+    starts=report.get('chapterStarts',[])
+    # Older exports used the contents-page visibility as a website filter.
+    # Recover omitted sections from the stored PDF report, never from live data.
+    for index,section in enumerate(starts):
+        end=starts[index+1]['page']-1 if index+1<len(starts) else report['pages']
+        pages=[n for n in range(section['page'],end+1) if n not in included]
+        if pages:chapters.append({**section,'pageNumbers':pages});included.update(pages)
+    return sorted(chapters,key=lambda chapter:chapter.get('pageNumbers',[chapter.get('page',1)])[0])
+
 def content(s,row):
     import pymupdf
-    report=json.loads(row['report']);chapters=report.get('digitalChapters') or [{'title':'Uw reisboekje','pageNumbers':list(range(1,report['pages']+1))}]
-    sections=json.loads(row['snapshot']).get('body',{}).get('sections',[])
+    report=json.loads(row['report']);chapters=website_chapters(report) or [{'title':'Uw reisboekje','pageNumbers':list(range(1,report['pages']+1))}]
+    sections=s.resolved(json.loads(row['snapshot']).get('body',{}))
     result=[];total=0;deadline=time.monotonic()+20;budget={'count':0}
     with s.export_storage.pdf(s,row['id']) as path,pymupdf.open(path) as pictures:
         reader=PdfReader(path)
@@ -115,7 +128,7 @@ def content(s,row):
             numbers=chapter.get('pageNumbers') or list(range(chapter['page'],chapter['end']+1))
             if not numbers or any(type(n) is not int or not 1<=n<=len(reader.pages) for n in numbers):raise ValueError('Ongeldige hoofdstukpagina’s.')
             legacy={}
-            if report.get('digitalChapters') and 'kind' not in chapter:
+            if report.get('chapterStarts') and 'kind' not in chapter:
                 matches=[i for i,start in enumerate(report.get('chapterStarts',[])) if start['page']==numbers[0] and i<len(sections)]
                 if len(matches)==1:legacy=chapter_metadata(sections[matches[0]])
             kind=chapter.get('kind',legacy.get('kind','informatie'));texts=[]
@@ -127,11 +140,14 @@ def content(s,row):
             if total>2000000:raise ValueError('Het boekje bevat te veel tekst voor de reiswebsite.')
             images=illustrations(s,pictures,numbers,row['id'],budget) if kind!='tickets' else []
             result.append({'title':str(chapter.get('title','Reisinformatie'))[:200],'kind':kind,'dates':chapter.get('dates',legacy.get('dates',[])),'pageNumbers':numbers,'text':'\n\n'.join(texts),'images':images})
-    return {'title':row['title'],'created':row['created'],'chapters':result}
+    return {'version':2,'title':row['title'],'created':row['created'],'chapters':result}
 
 def ensure(s,ident):
     row=export_row(s,ident)
-    with s.db() as c:existing=c.execute('SELECT id FROM travel_sites WHERE export_id=?',(ident,)).fetchone()
+    with s.db() as c:existing=c.execute('SELECT id,content FROM travel_sites WHERE export_id=?',(ident,)).fetchone()
+    if existing and json.loads(existing['content']).get('version',0)<2:
+        data=content(s,row)
+        with s.db() as c:c.execute('UPDATE travel_sites SET content=? WHERE id=?',(json.dumps(data,ensure_ascii=False),existing['id']))
     if not existing:
         data=content(s,row);salt,hashed,encrypted=credentials()
         expires=int(time.time())+365*86400

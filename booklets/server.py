@@ -359,6 +359,9 @@ def make_export(book,options=None):
     if preparation['missing'] and not options.get('skipChoices'):raise ValueError('Bevestig eerst dat niet ingestelde keuzes mogen worden overgeslagen.')
     sections=preparation['sections']
     for chapter_index,section in enumerate(sections):section['_digitalChapter']=chapter_index
+    chapter_keys={section['_tripFillerIndex']:section['_digitalChapter'] for section in sections}
+    for section in preparation['adjustedSections']:
+        if section.get('_tripFillerIndex') in chapter_keys:section['_digitalChapter']=chapter_keys[section['_tripFillerIndex']]
     if preparation['needed'] and options.get('fill'):
         if not preparation['canFill']:raise ValueError('Stel eerst passende vulpagina’s in voor dit formaat.')
         sections=preparation['adjustedSections']
@@ -447,7 +450,8 @@ def make_export(book,options=None):
         if key is None:continue
         if key not in digital_chapters:digital_chapters[key]={'title':section.get('tocTitle') or section['title'],'hidden':bool(section.get('tocHidden')),'pageNumbers':[],**travel_sites.chapter_metadata(section)}
         digital_chapters[key]['pageNumbers'].extend(range(starts[n]+1,starts[n]+section['pages']+1))
-    report['digitalChapters']=[{**chapter,'page':chapter['pageNumbers'][0],'end':chapter['pageNumbers'][-1]} for chapter in digital_chapters.values() if not chapter['hidden']]
+    report['websiteChapters']=[{**chapter,'page':chapter['pageNumbers'][0],'end':chapter['pageNumbers'][-1]} for chapter in digital_chapters.values()]
+    report['digitalChapters']=[chapter for chapter in report['websiteChapters'] if not chapter['hidden']]
     report['warnings']=list(dict.fromkeys(report['warnings']+document_duplicates.warnings(SimpleNamespace(**globals()),b)))
     report['outputMode']='screen' if screen else 'print'
     if not screen:report['warnings'].append('Geen PDF/X-certificering, kleurconversie of automatische controle van fotoresolutie/afloop. Stem dit af op het gekozen drukproduct en controleer een proefdruk.')
