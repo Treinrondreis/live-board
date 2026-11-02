@@ -234,8 +234,9 @@ het scherm moet tijdens de verwerking open blijven. Sanity wordt alleen gelezen.
 
 Via **Meerdere boekjes maken** kunnen één tot vijf boekingsnummers met één
 sjabloon worden voorbereid. Bij een dubbel boekingsnummer kiest de gebruiker
-eerst de juiste boeking. Voorbereiden maakt nieuwe, afzonderlijk opgeslagen
-boekjes; bestaande boekjes blijven behouden. Klantwaarden, documentselecties en
+eerst de juiste boeking. **Boekjes maken** haalt documenten op, controleert de
+boekingen en maakt voor iedere complete boeking direct een aparte PDF. Er is geen
+extra genereerklik nodig. De boekjes worden eerst afzonderlijk opgeslagen; bestaande boekjes blijven behouden. Klantwaarden, documentselecties en
 persoonlijke overlays uit het sjabloon worden voor de nieuwe boeking geleegd.
 
 De browser verwerkt de groep na elkaar via de bestaande beveiligde API’s.
@@ -245,11 +246,14 @@ Er is geen zelfstandige achtergrondwerker die doorgaat na het sluiten van de
 browser. De groepsverwijzing staat bij ieder boekje op de server; klantgegevens
 of sleutels worden hiervoor niet in browseropslag gezet.
 
-Alleen gecontroleerde regels kunnen samen worden gegenereerd, met een aparte
+Alleen complete, gecontroleerde regels worden direct gegenereerd, met een aparte
 PDF en de bestaande opslaginstelling per boeking. Ontbrekende documenten,
 onbevestigde voorstellen en onbereikbare bronnen blijven voor individuele
 controle staan. Een opgeslagen boekje kan worden geopend, aangepast en via
-**Opslaan en terug naar groep** opnieuw worden gecontroleerd. De controles
+**Opslaan en terug naar groep** opnieuw worden gecontroleerd. Daarna kan de
+gecorrigeerde regel via **Geselecteerde PDF’s maken** worden gegenereerd; met
+**Niet-afgeronde boekjes controleren en maken** worden overige complete regels
+direct gemaakt. Een bewust uitgevinkte regel blijft uitgevinkt. De controles
 worden vóór elke PDF opnieuw uitgevoerd. Wijzigingen van collega’s worden niet
 overschreven; reeds gemaakte PDF’s van dezelfde boekversie worden bij hervatten
 overgenomen. Een later gewijzigd boekje vraagt opnieuw controle en kan een nieuwe

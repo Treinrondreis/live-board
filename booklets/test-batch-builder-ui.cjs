@@ -11,7 +11,7 @@ function fixture(options={}){
  let saves=0,exportCalls=0,inspections=0;
  ctx.api=async(path,body)=>{calls.push({path,body:structuredClone(body)});const route=path.replace('/seinhuis/boekjesmaker','');
   if(route==='/api/save'){saves++;if(options.failSave===saves)throw Error('Opslaan mislukt');const old=objects.get(body.id);if(old&&old.revision!==body.revision)throw Error('Een collega heeft dit boekje gewijzigd.');const row={...structuredClone(body),revision:(old?.revision||0)+1};objects.set(row.id,row);return {id:row.id,revision:row.revision};}
-  if(route==='/api/export'){exportCalls++;if(options.failExport===body.id)throw Error('PDF mislukt');const item={id:require('node:crypto').randomUUID().replaceAll('-',''),book_id:body.id,bookRevision:body.revision,report:{pages:4}};exports.unshift(item);if(options.timeoutAfterExport)throw Error('Antwoord onderbroken');return {id:item.id,report:item.report,storage:'drive'};}
+  if(route==='/api/export'){exportCalls++;if(options.failExport===body.id||options.failExportBooking===objects.get(body.id)?.body.sanityBooking.id)throw Error('PDF mislukt');const item={id:require('node:crypto').randomUUID().replaceAll('-',''),book_id:body.id,bookRevision:body.revision,report:{pages:4}};exports.unshift(item);if(options.timeoutAfterExport)throw Error('Antwoord onderbroken');return {id:item.id,report:item.report,storage:'drive',...(options.websiteWarning?{websiteWarning:'Website nog niet gereed'}:{})};}
   if(route==='/api/booking-data/search')return {items:options.lookup?options.lookup(body.number):bookings.filter(b=>b.number===body.number)};
   if(route==='/api/google/prepare')return {errors:[{title:'Route',message:'Google-bron niet bereikbaar'}]};
   throw Error('Unexpected '+route);
@@ -81,3 +81,39 @@ test('editing a generated book queues a new PDF while keeping the earlier PDF an
 
 
 test('returning after one correction rechecks that row and preserves other batch statuses',async()=>{const f=fixture();await f.start();f.rows()[1].status='error';f.rows()[1].messages=['Ander document ontbreekt'];await f.ctx.openBatchBook(0);f.exec("draft.title='Aangepast';dirty=true");await f.ctx.returnToBookBatch();assert.equal(f.rows()[0].status,'ready');assert.equal(f.rows()[1].status,'error');assert.deepEqual(Array.from(f.rows()[1].messages),['Ander document ontbreekt']);assert.equal(f.exec('view'),'batch');assert.equal(f.objects.get(f.rows()[0].bookId).title,'Aangepast');});
+
+
+test('the batch make button prepares and immediately exports every complete booking as a separate PDF',async()=>{
+ const f=fixture();await f.refresh();f.ctx.renderBatch();assert.match(f.node('#main').innerHTML,/Boekjes maken/);
+ await f.ctx.prepareBatchBooks();assert(f.rows().every(r=>r.status==='done'));assert.equal(f.exports.length,2);
+ const exports=f.calls.filter(c=>c.path?.endsWith('/api/export'));assert(exports.every(c=>c.body.skipChoices===false&&c.body.fill===false&&c.body.libraryStamp));
+ assert.notEqual(exports[0].body.id,exports[1].body.id);assert.equal(f.exportCalls(),2);
+ await f.ctx.prepareBatchBooks();assert.equal(f.exportCalls(),2);assert.equal([...f.objects.values()].filter(o=>o.kind==='book').length,2);
+});
+
+test('direct batch generation leaves incomplete bookings for correction and continues with complete bookings',async()=>{
+ const f=fixture({failCheck:'booking-one'});await f.refresh();await f.ctx.prepareBatchBooks();assert.equal(f.rows()[0].status,'review');assert.equal(f.rows()[1].status,'done');assert.equal(f.exports.length,1);
+ assert.match(f.rows()[0].messages.join(' '),/Past niet/);assert.equal(f.exports[0].book_id,f.rows()[1].bookId);
+ const failed=fixture({failImport:'booking-one'});await failed.refresh();await failed.ctx.prepareBatchBooks();assert.equal(failed.rows()[0].status,'error');assert.equal(failed.rows()[1].status,'done');
+});
+
+test('a PDF failure does not stop the direct batch and a lost response is recovered without duplicate exports',async()=>{
+ const failed=fixture({failExportBooking:'booking-one'});await failed.refresh();await failed.ctx.prepareBatchBooks();assert.equal(failed.rows()[0].status,'error');assert.equal(failed.rows()[1].status,'done');
+ const lost=fixture({timeoutAfterExport:true});await lost.refresh();await lost.ctx.prepareBatchBooks();assert(lost.rows().every(r=>r.status==='done'));await lost.ctx.prepareBatchBooks();assert.equal(lost.exportCalls(),2);
+});
+
+test('stop finishes the current PDF, skips later bookings and restarting never duplicates the completed PDF',async()=>{
+ const f=fixture({stopAfterFirst:true});await f.refresh();await f.ctx.prepareBatchBooks();assert.equal(f.rows()[0].status,'done');assert.equal(f.rows()[1].status,'queued');assert.equal(f.exportCalls(),1);
+ await f.ctx.prepareBatchBooks();assert(f.rows().every(r=>r.status==='done'));assert.equal(f.exportCalls(),2);
+});
+
+test('deselected bookings remain excluded from direct generation and unconfirmed choices still require review',async()=>{
+ const f=fixture();await f.start();f.rows()[0].selected=false;await f.ctx.prepareBatchBooks();assert.equal(f.rows()[0].status,'ready');assert.equal(f.rows()[0].selected,false);assert.equal(f.rows()[1].status,'done');await f.ctx.prepareBatchBooks();assert.equal(f.exportCalls(),1);
+ const uncertain=fixture();uncertain.objects.get(uncertain.template.id).body.sections[0].autoProposal={confirmed:false};await uncertain.refresh();await uncertain.ctx.prepareBatchBooks();assert(uncertain.rows().every(r=>r.status==='review'));assert.equal(uncertain.exportCalls(),0);
+});
+
+test('direct generation respects print filling, missing Google sources and website failures after a successful PDF',async()=>{
+ const print=fixture();print.objects.get(print.template.id).body.outputMode='print';await print.refresh();await print.ctx.prepareBatchBooks();assert(print.calls.filter(c=>c.path?.endsWith('/api/export')).every(c=>c.body.fill===true&&c.body.allowUneven===false));
+ const google=fixture();google.objects.get(google.template.id).body.sections[0].googleDoc={url:'https://docs.google.com/document/d/example/edit'};await google.refresh();await google.ctx.prepareBatchBooks();assert(google.rows().every(r=>r.status==='error'));assert.equal(google.exportCalls(),0);
+ const website=fixture({websiteWarning:true});await website.refresh();await website.ctx.prepareBatchBooks();assert(website.rows().every(r=>r.status==='done'));assert(website.rows().every(r=>r.warnings.includes('Website nog niet gereed')));
+});
