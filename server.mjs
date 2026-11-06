@@ -1056,6 +1056,7 @@ async function startNdov(){
 }
 
 const pageRoutes={
+  '/treinrapport':'/train-report.html','/treinrapport/':'/train-report.html',
   '/embed':'/embed/noorwegen.html','/embed/':'/embed/noorwegen.html',
   '/dagverslagen':'/day-reports.html','/dagverslagen/':'/day-reports.html',
   '/aansluitarchief':'/connections-archive.html','/aansluitarchief/':'/connections-archive.html',
