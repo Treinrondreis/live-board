@@ -8,6 +8,7 @@ export const reportGroups = [
   {id:'swiss',title:'ICE Zwitserland – Keulen',direction:'Richting Keulen',trains:['108','106'],stations:['Köln Hbf','Düsseldorf Hbf','Frankfurt Flughafen']}
 ];
 export const stationAliases = {
+  'Berlin Hbf':['Berlin Hbf','Berlin Hbf (tief)'],
   'Amsterdam Centraal':['Amsterdam Centraal','Amsterdam C'],
   'Amersfoort Centraal':['Amersfoort Centraal','Amersfoort'],
   'Utrecht Centraal':['Utrecht Centraal','Utrecht C'],
@@ -16,6 +17,7 @@ export const stationAliases = {
   'Köln Messe/Deutz':['Köln Messe/Deutz','Köln Messe/Deutz Gl.11-12','Köln Messe Deutz'],
   'Berlin Gesundbrunnen':['Berlin Gesundbrunnen','Berlin-Gesundbrunnen']
 };
+export const defaultReportSource = group => ['swiss','nightjet-east','frankfurt-east'].includes(group.id)?'DB':'NDOV';
 export const normalizeStation = value => value.normalize('NFKC').trim().toLowerCase();
 export const aliasesFor = station => (stationAliases[station] || [station]).map(normalizeStation);
 export function reportNumbers(group,date) {

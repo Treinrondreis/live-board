@@ -1,4 +1,4 @@
-import {reportGroups,reportNumbers,aliasesFor} from './public/train-report-config.mjs';
+import {reportGroups,reportNumbers,aliasesFor,normalizeStation,defaultReportSource} from './public/train-report-config.mjs';
 
 const day = ms => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(ms);
 const shift = (date,n) => new Date(Date.parse(date+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
@@ -9,10 +9,34 @@ const numberAliases = group => group.id==='nightjet-east'?{'421':'40421'}:group.
 export function reportSelection(filters,now=Date.now()) {
   const group=reportGroups.find(g=>g.id===filters.group);
   if(!group)throw invalid('Onbekende treingroep.');
-  const station=filters.station || group.stations[0],source=filters.source || 'DB',days=Number(filters.days || 30);
+  const station=filters.station || group.stations[0],source=filters.source || defaultReportSource(group),days=Number(filters.days || 30);
   if(!group.stations.includes(station)||!['DB','NDOV'].includes(source)||![30,60,90].includes(days))throw invalid('Ongeldige selectie.');
   const to=shift(day(now),-1),from=shift(to,1-days);
   return {group,station,source,days,from,to,dates:Array.from({length:days},(_,i)=>shift(to,-i))};
+}
+
+// The full journey archive has arrival history that departure-board summaries omit.
+// Read only explicit realtime/measurement/realized fields, never planning as +0.
+export function journeyReportRows(journeys,selection){
+  const rows=[],stations=new Set([...aliasesFor(selection.station),...(selection.group.id==='berlin-east'&&selection.station==='Berlin Hbf'?aliasesFor('Berlin Gesundbrunnen'):[])]);
+  const accepted=selection.source==='NDOV'?['NDOV','NDOV_RIT']:['DB'];
+  for(const row of journeys){
+    let state;try{state=JSON.parse(row.state_json);}catch{continue;}
+    for(const stop of state.stops||[]){
+      if(!stop.station||!stations.has(normalizeStation(stop.station)))continue;
+      const a=stop.arrival;if(!a)continue;
+      const events=[a.realtime&&{...a.realtime,expected:a.realtime.expectedTime},a.measurement&&{...a.measurement,expected:a.measurement.expectedTime,baseline:a.measurement.plannedTime},a.realized&&{...a.realized,actual:a.realized.time}].filter(Boolean);
+      for(const e of events){
+        const planned=Number(e.baseline||a.planning?.time||a.original?.time),at=Number(e.recordedAt||e.sourceTimestamp);
+        if(!accepted.includes(e.source)||!Number.isFinite(planned)||planned<=0||!Number.isFinite(at)||at<=0)continue;
+        const actual=Number(e.actual)||null,expected=Number(e.expected)||null;
+        if(!e.cancelled&&!actual&&!expected)continue;
+        const date=day(planned);if(date<selection.from||date>selection.to)continue;
+        const event={date,number:String(state.trainNumber),category:state.category,source:e.source,station:stop.station,mode:'arrival',planned,observedAt:at,actual,expected,cancelled:!!e.cancelled,realtime:true,delay:actual||expected?Math.round(((actual||expected)-planned)/60000):null};
+        rows.push({event_date:date,train_number:event.number,category:event.category,station:normalizeStation(stop.station),source:e.source,event_mode:'arrival',last_seen:at,measured_at:at,payload:JSON.stringify(event),measured_payload:JSON.stringify(event)});
+      }
+    }
+  }return rows;
 }
 
 // One arrival per day/train; never interpret an absent observation as a train not running.
@@ -54,5 +78,7 @@ export async function readTrainReport(q,filters,now=Date.now()) {
   const placeholders=values=>values.map(v=>{args.push(v);return '$'+args.length}).join(',');
   const numberSQL=placeholders(numbers),stationSQL=placeholders(stations),sourceSQL=placeholders(selection.source==='NDOV'?['NDOV','NDOV_RIT']:['DB']);
   const rows=await q(`SELECT event_date,source,train_number,category,station,event_mode,last_seen,measured_at,measured_payload,payload FROM train_stop_summaries WHERE event_date >= $1 AND event_date <= $2 AND event_mode='arrival' AND train_number IN (${numberSQL}) AND station IN (${stationSQL}) AND source IN (${sourceSQL})`,args);
-  return buildTrainReport(selection,rows);
+  const journeyArgs=[shift(selection.from,-2),selection.to,...numbers];
+  const journeys=await q(`SELECT state_json FROM journey_archive WHERE service_date >= $1 AND service_date <= $2 AND train_number IN (${numbers.map((_,i)=>'$'+(i+3)).join(',')})`,journeyArgs);
+  return buildTrainReport(selection,[...rows,...journeyReportRows(journeys,selection)]);
 }
