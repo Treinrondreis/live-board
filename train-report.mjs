@@ -9,7 +9,7 @@ const numberAliases = group => group.id==='nightjet-east'?{'421':'40421'}:group.
 export function reportSelection(filters,now=Date.now()) {
   const group=reportGroups.find(g=>g.id===filters.group);
   if(!group)throw invalid('Onbekende treingroep.');
-  const station=filters.station || group.stations[0],source=filters.source || defaultReportSource(group),days=Number(filters.days || 30);
+  const station=filters.station || group.stations[0],source=filters.source || defaultReportSource(group,station),days=Number(filters.days || 30);
   if(!group.stations.includes(station)||!['DB','NDOV'].includes(source)||![30,60,90].includes(days))throw invalid('Ongeldige selectie.');
   const to=shift(day(now),-1),from=shift(to,1-days);
   return {group,station,source,days,from,to,dates:Array.from({length:days},(_,i)=>shift(to,-i))};

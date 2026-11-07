@@ -17,7 +17,8 @@ export const stationAliases = {
   'Köln Messe/Deutz':['Köln Messe/Deutz','Köln Messe/Deutz Gl.11-12','Köln Messe Deutz'],
   'Berlin Gesundbrunnen':['Berlin Gesundbrunnen','Berlin-Gesundbrunnen']
 };
-export const defaultReportSource = group => ['swiss','nightjet-east','frankfurt-east'].includes(group.id)?'DB':'NDOV';
+const dutchReportStations=new Set(['Amsterdam Centraal','Amersfoort Centraal','Deventer','Hengelo','Utrecht Centraal','Arnhem Centraal']);
+export const defaultReportSource = (group,station=group.stations[0]) => dutchReportStations.has(station)?'NDOV':'DB';
 export const normalizeStation = value => value.normalize('NFKC').trim().toLowerCase();
 export const aliasesFor = station => (stationAliases[station] || [station]).map(normalizeStation);
 export function reportNumbers(group,date) {

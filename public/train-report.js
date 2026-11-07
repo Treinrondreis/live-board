@@ -8,7 +8,7 @@ for(const group of reportGroups){
   const section=el('section'),head=el('div',undefined,'section-head'),title=el('div');title.append(el('h2',group.title),el('div',group.direction,'sub'));head.append(title);
   const params=new URLSearchParams(location.search),prefix=group.id+'-';
   const station=picker('Meetstation',group.stations,group.stations.includes(params.get(prefix+'station'))?params.get(prefix+'station'):group.stations[0]);
-  const source=picker('Bron',['DB','NDOV'],['DB','NDOV'].includes(params.get(prefix+'source'))?params.get(prefix+'source'):defaultReportSource(group));
+  const source=picker('Bron',['DB','NDOV'],['DB','NDOV'].includes(params.get(prefix+'source'))?params.get(prefix+'source'):defaultReportSource(group,station.select.value));
   const days=picker('Aantal dagen',['30','60','90'],['30','60','90'].includes(params.get(prefix+'days'))?params.get(prefix+'days'):'30');
   for(const {select} of [station,source,days])select.setAttribute('aria-label',select.parentNode.firstChild.textContent+' · '+group.title+' · '+group.direction);
   const pickers=el('div',undefined,'pickers');pickers.append(station.field,source.field,days.field);head.append(pickers);
@@ -44,5 +44,6 @@ for(const group of reportGroups){
       if(preservePosition)window.scrollBy(0,head.getBoundingClientRect().top-anchorTop);
     }catch(error){if(request!==controller)return;status.className='status error';status.textContent=error.name==='AbortError'?'Laden duurde te lang. Wijzig een selectie om opnieuw te proberen.':'Gegevens konden niet worden geladen. Wijzig een selectie om opnieuw te proberen.';}finally{clearTimeout(timeout);if(request===controller)matrix.removeAttribute('aria-busy');}
   }
-  for(const {select} of [station,source,days])select.addEventListener('change',()=>load(true));load();
+  station.select.addEventListener('change',()=>{source.select.value=defaultReportSource(group,station.select.value);load(true);});
+  for(const {select} of [source,days])select.addEventListener('change',()=>load(true));load();
 }
