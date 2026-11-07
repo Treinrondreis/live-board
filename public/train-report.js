@@ -7,7 +7,7 @@ function picker(label,values,value){const field=el('label',label),select=el('sel
 for(const group of reportGroups){
   const section=el('section'),head=el('div',undefined,'section-head'),title=el('div');title.append(el('h2',group.title),el('div',group.direction,'sub'));head.append(title);
   const params=new URLSearchParams(location.search),prefix=group.id+'-';
-  const station=picker('Aankomststation',group.stations,group.stations.includes(params.get(prefix+'station'))?params.get(prefix+'station'):group.stations[0]);
+  const station=picker('Meetstation',group.stations,group.stations.includes(params.get(prefix+'station'))?params.get(prefix+'station'):group.stations[0]);
   const source=picker('Bron',['DB','NDOV'],['DB','NDOV'].includes(params.get(prefix+'source'))?params.get(prefix+'source'):defaultReportSource(group));
   const days=picker('Aantal dagen',['30','60','90'],['30','60','90'].includes(params.get(prefix+'days'))?params.get(prefix+'days'):'30');
   for(const {select} of [station,source,days])select.setAttribute('aria-label',select.parentNode.firstChild.textContent+' · '+group.title+' · '+group.direction);
@@ -17,7 +17,11 @@ for(const group of reportGroups){
   if(group.id==='swiss')section.append(el('p','15 mei t/m 9 juli 2027: 108 → 1074 en 106 → 1072.','foot'));
   root.append(section);let controller;
   async function load(save=false){
-    controller?.abort();controller=new AbortController();const request=controller;matrix.replaceChildren();detail.hidden=true;status.className='status';status.textContent='Gegevens laden…';
+    controller?.abort();controller=new AbortController();const request=controller;
+    const anchorTop=head.getBoundingClientRect().top,initialScroll=window.scrollY,horizontalScroll=matrix.scrollLeft;
+    // Keep the old table's layout while loading; removing it collapses the page
+    // and clamps scrollY, especially for the last groups near the page bottom.
+    matrix.style.visibility='hidden';matrix.inert=true;matrix.setAttribute('aria-busy','true');detail.hidden=true;status.className='status';status.textContent='Gegevens laden…';
     const query=new URLSearchParams({group:group.id,station:station.select.value,source:source.select.value,days:days.select.value});
     if(save){const url=new URL(location.href);for(const key of ['station','source','days'])url.searchParams.set(prefix+key,query.get(key));history.replaceState(null,'',url);}
     const timeout=setTimeout(()=>request.abort(),20000);
@@ -29,13 +33,16 @@ for(const group of reportGroups){
       const tbody=el('tbody');for(const row of data.rows){const tr=el('tr'),date=el('th',dateFormat.format(new Date(row.date+'T12:00:00Z')));date.scope='row';tr.append(date);
         for(const cell of row.cells){const td=el('td'),text=cell.status==='cancelled'?'✕':cell.status==='not-applicable'?'−':cell.status!=='measured'?'?':(cell.delay>=0?'+':'')+cell.delay;
           const value=el('button',text,'value '+(cell.status==='cancelled'?'cancel':cell.status==='measured'?delayClass(cell.delay):''));value.type='button';
-          const info=`${row.date} · ${group.category||'ICE'} ${cell.number} · ${cell.station||data.station} · ${cell.source||data.source}: ${cell.status==='cancelled'?'opgeheven bij deze halte':cell.status==='measured'?cell.delay+' minuten, '+(cell.kind==='actual'?'bevestigde realisatie':'bronverwachting'):cell.status==='not-applicable'?'niet van toepassing':'geen meting'}${cell.observedAt?' · laatst gemeten '+timeFormat.format(cell.observedAt):''}`;
-          value.title=info;value.setAttribute('aria-label',info);value.addEventListener('click',()=>{detail.textContent=info;detail.hidden=false;});td.append(value);
+          const info=`${row.date} · ${group.category||'ICE'} ${cell.number} · ${cell.station||data.station} · ${cell.eventMode==='departure'?'vertrek':'aankomst'} · ${cell.source||data.source}: ${cell.status==='cancelled'?'opgeheven bij deze halte':cell.status==='measured'?cell.delay+' minuten, '+(cell.kind==='actual'?'bevestigde realisatie':'bronverwachting'):cell.status==='not-applicable'?'niet van toepassing':'geen meting'}${cell.observedAt?' · laatst gemeten '+timeFormat.format(cell.observedAt):''}`;
+          value.title=info;value.setAttribute('aria-label',info);value.addEventListener('click',()=>{detail.textContent=info;detail.hidden=false;});td.append(value);if(cell.eventMode==='departure')td.append(el('span','V','fallback'));
           if(group.id==='berlin-east'&&data.station==='Berlin Hbf'&&cell.station&&/gesundbrunnen/i.test(cell.station))td.append(el('span','G','fallback'));
           if(group.id==='swiss'&&new Set(numbers.map(n=>n[row.cells.indexOf(cell)])).size>1)td.append(el('small',' '+cell.number));tr.append(td);
         }tbody.append(tr);
-      }table.append(tbody);matrix.append(table);const count=data.rows.flatMap(r=>r.cells).filter(c=>c.status!=='unknown').length;status.textContent=`${data.days} dagen · ${data.from} t/m ${data.to} · ${data.source} · ${count} meetpunten${count===0?' — geen aankomstmetingen voor deze bron/stationcombinatie. Probeer de andere bron.':''}`;
-    }catch(error){if(request!==controller)return;status.className='status error';status.textContent=error.name==='AbortError'?'Laden duurde te lang. Wijzig een selectie om opnieuw te proberen.':'Gegevens konden niet worden geladen. Wijzig een selectie om opnieuw te proberen.';}finally{clearTimeout(timeout);}
+      }table.append(tbody);const preservePosition=save&&Math.abs(window.scrollY-initialScroll)<2;
+      matrix.replaceChildren(table);matrix.style.visibility='';matrix.inert=false;matrix.scrollLeft=horizontalScroll;
+      const count=data.rows.flatMap(r=>r.cells).filter(c=>c.status!=='unknown').length;status.textContent=`${data.days} dagen · ${data.from} t/m ${data.to} · ${data.source} · ${count} meetpunten${count===0?' — geen metingen voor deze bron/stationcombinatie. Probeer de andere bron.':''}`;
+      if(preservePosition)window.scrollBy(0,head.getBoundingClientRect().top-anchorTop);
+    }catch(error){if(request!==controller)return;status.className='status error';status.textContent=error.name==='AbortError'?'Laden duurde te lang. Wijzig een selectie om opnieuw te proberen.':'Gegevens konden niet worden geladen. Wijzig een selectie om opnieuw te proberen.';}finally{clearTimeout(timeout);if(request===controller)matrix.removeAttribute('aria-busy');}
   }
   for(const {select} of [station,source,days])select.addEventListener('change',()=>load(true));load();
 }

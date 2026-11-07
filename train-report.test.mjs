@@ -62,3 +62,17 @@ test('full journey arrivals are read without promoting timetable-only fields to 
  assert.deepEqual(journeyReportRows([{state_json:JSON.stringify(state)}],reportSelection({group:'berlin-west',source:'DB'},now)),[]);
  sqlite.close();
 });
+test('225 uses an explicitly labelled departure when no usable arrival exists',async()=>{
+ const {sqlite,q}=database();await initAnalytics({sqlite});
+ const e={...event,number:'225',station:'Frankfurt(M) Flughafen Fernbf',mode:'departure',delay:26};
+ await recordStopSummaries([e]);
+ let r=await readTrainReport(q,{group:'frankfurt-east',source:'DB'},now);let cell=r.rows[0].cells[1];
+ assert.equal(cell.status,'measured');assert.equal(cell.delay,26);assert.equal(cell.eventMode,'departure');
+ await recordStopSummaries([{...e,mode:'arrival',realtime:false,delay:0}]);
+ r=await readTrainReport(q,{group:'frankfurt-east',source:'DB'},now);assert.equal(r.rows[0].cells[1].eventMode,'departure');
+ await recordStopSummaries([{...e,mode:'arrival',delay:23,observedAt:e.observedAt-1000}]);
+ r=await readTrainReport(q,{group:'frankfurt-east',source:'DB'},now);cell=r.rows[0].cells[1];assert.equal(cell.eventMode,'arrival');assert.equal(cell.delay,23);
+ await recordStopSummaries([{...e,cancelled:true,number:'123'}]);
+ r=await readTrainReport(q,{group:'frankfurt-east',source:'DB'},now);assert.equal(r.rows[0].cells[2].status,'cancelled');assert.equal(r.rows[0].cells[2].eventMode,'departure');
+ sqlite.close();
+});
