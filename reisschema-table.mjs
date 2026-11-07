@@ -9,7 +9,7 @@ import {punctualityView} from './punctuality-view.mjs';
   if(!o)return {alert:false,changed:false,communicated:false};
   const changed=o.departure_time!==r.departure_time||o.departure_date!==r.travel_date||o.arrival_time!==r.arrival_time||o.arrival_date!==(r.arrival_date||r.travel_date)||o.cancelled||o.connection_broken||o.station_changed||numberAssessment(r,o).notify;
   const earlier=minute(r.travel_date,r.departure_time)-minute(o.departure_date,o.departure_time);
-  return {changed,earlier,alert:earlier>=4||o.cancelled||o.station_changed||(o.connection_broken&&!o.backup_communicated),communicated:changed&&r.communication?.change_key===o.change_key};
+  return {changed,earlier,alert:earlier>=4||o.cancelled||o.station_changed||(o.connection_broken&&!o.backup_communicated),communicated:changed&&!!o.change_key&&r.communication?.change_key===o.change_key};
  }
  const safeLink=value=>{try{const u=new URL(value);return u.protocol==='https:'&&['drive.google.com','docs.google.com'].includes(u.hostname)&&!u.username&&!u.password?u.href:null;}catch{return null;}};
  const documentLink=(value,label='Reisschema openen',primary=false)=>{const url=safeLink(value);return url?'<a class="'+(primary?'document-button':'')+'" target="_blank" rel="noopener noreferrer" href="'+escape(url)+'">'+escape(label)+' ↗</a>':'<span class="muted">Geen documentlink beschikbaar</span>';};
