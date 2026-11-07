@@ -24,7 +24,7 @@ export function journeyReportRows(journeys,selection){
     let state;try{state=JSON.parse(row.state_json);}catch{continue;}
     for(const stop of state.stops||[]){
       if(!stop.station||!stations.has(normalizeStation(stop.station)))continue;
-      const a=stop.arrival;if(!a)continue;
+      const mode=selection.group.eventModes?.[selection.station]||'arrival',a=stop[mode];if(!a)continue;
       const events=[a.realtime&&{...a.realtime,expected:a.realtime.expectedTime},a.measurement&&{...a.measurement,expected:a.measurement.expectedTime,baseline:a.measurement.plannedTime},a.realized&&{...a.realized,actual:a.realized.time}].filter(Boolean);
       for(const e of events){
         const planned=Number(e.baseline||a.planning?.time||a.original?.time),at=Number(e.recordedAt||e.sourceTimestamp);
@@ -32,8 +32,8 @@ export function journeyReportRows(journeys,selection){
         const actual=Number(e.actual)||null,expected=Number(e.expected)||null;
         if(!e.cancelled&&!actual&&!expected)continue;
         const date=day(planned);if(date<selection.from||date>selection.to)continue;
-        const event={date,number:String(state.trainNumber),category:state.category,source:e.source,station:stop.station,mode:'arrival',planned,observedAt:at,actual,expected,cancelled:!!e.cancelled,realtime:true,delay:actual||expected?Math.round(((actual||expected)-planned)/60000):null};
-        rows.push({event_date:date,train_number:event.number,category:event.category,station:normalizeStation(stop.station),source:e.source,event_mode:'arrival',last_seen:at,measured_at:at,payload:JSON.stringify(event),measured_payload:JSON.stringify(event)});
+        const event={date,number:String(state.trainNumber),category:state.category,source:e.source,station:stop.station,mode,planned,observedAt:at,actual,expected,cancelled:!!e.cancelled,realtime:true,delay:actual||expected?Math.round(((actual||expected)-planned)/60000):null};
+        rows.push({event_date:date,train_number:event.number,category:event.category,station:normalizeStation(stop.station),source:e.source,event_mode:mode,last_seen:at,measured_at:at,payload:JSON.stringify(event),measured_payload:JSON.stringify(event)});
       }
     }
   }return rows;
@@ -45,7 +45,9 @@ export function buildTrainReport(selection,rows) {
   const sources=selection.source==='NDOV'?['NDOV','NDOV_RIT']:['DB'];
   const candidates=new Map(),aliases=numberAliases(group);
   for(const row of rows){
-    if(!sources.includes(row.source)||!['arrival','departure'].includes(row.event_mode)||!dates.includes(row.event_date)||!['ICE','NJ','IC','EC'].includes(String(row.category).toUpperCase()))continue;
+    if(!sources.includes(row.source)||!['arrival','departure'].includes(row.event_mode)||!dates.includes(row.event_date)||!(group.categories||['ICE','NJ','IC','EC']).includes(String(row.category).toUpperCase()))continue;
+    const requiredMode=group.eventModes?.[station];
+    if(requiredMode&&row.event_mode!==requiredMode)continue;
     const isPrimary=primary.has(row.station);
     if(!isPrimary&&!fallback.has(row.station))continue;
     let latest,measured;

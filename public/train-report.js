@@ -12,9 +12,11 @@ for(const group of reportGroups){
   const days=picker('Aantal dagen',['30','60','90'],['30','60','90'].includes(params.get(prefix+'days'))?params.get(prefix+'days'):'30');
   for(const {select} of [station,source,days])select.setAttribute('aria-label',select.parentNode.firstChild.textContent+' · '+group.title+' · '+group.direction);
   const pickers=el('div',undefined,'pickers');pickers.append(station.field,source.field,days.field);head.append(pickers);
-  const status=el('p','Gegevens laden…','status'),matrix=el('div',undefined,'matrix'),detail=el('p',undefined,'detail');status.setAttribute('role','status');detail.setAttribute('aria-live','polite');detail.hidden=true;section.append(head,status,matrix,detail);
+  const modeNote=el('p',undefined,'foot');modeNote.hidden=!group.eventModes;
+  const status=el('p','Gegevens laden…','status'),matrix=el('div',undefined,'matrix'),detail=el('p',undefined,'detail');status.setAttribute('role','status');detail.setAttribute('aria-live','polite');detail.hidden=true;section.append(head,modeNote,status,matrix,detail);
   if(group.id==='berlin-east')section.append(el('p','G = Berlin Gesundbrunnen, als terugval wanneer voor Berlin Hbf geen bruikbare aankomstmeting beschikbaar is.','foot'));
   if(group.id==='swiss')section.append(el('p','15 mei t/m 9 juli 2027: 108 → 1074 en 106 → 1072.','foot'));
+  if(group.note)section.append(el('p',group.note,'foot'));
   root.append(section);let controller;
   async function load(save=false){
     controller?.abort();controller=new AbortController();const request=controller;
@@ -22,6 +24,7 @@ for(const group of reportGroups){
     // Keep the old table's layout while loading; removing it collapses the page
     // and clamps scrollY, especially for the last groups near the page bottom.
     matrix.style.visibility='hidden';matrix.inert=true;matrix.setAttribute('aria-busy','true');detail.hidden=true;status.className='status';status.textContent='Gegevens laden…';
+    if(group.eventModes)modeNote.textContent=(group.eventModes[station.select.value]==='departure'?'Vertrekmetingen':'Aankomstmetingen')+' bij '+station.select.value+'.';
     const query=new URLSearchParams({group:group.id,station:station.select.value,source:source.select.value,days:days.select.value});
     if(save){const url=new URL(location.href);for(const key of ['station','source','days'])url.searchParams.set(prefix+key,query.get(key));history.replaceState(null,'',url);}
     const timeout=setTimeout(()=>request.abort(),20000);
