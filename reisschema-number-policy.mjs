@@ -12,10 +12,16 @@ export function reservationStatus(leg,observation){
 }
 export function numberAssessment(leg,o={}){
  o||={};
- const before=trainDigits(leg.train_number),after=trainDigits(o.train_number);
- const changed=!!before&&!!after&&before!==after;
+ const regional=/^(RE|RB|S|SPR|SPRINTER|RS|R)\d*$/.test(trainKind(leg.train_number))||/\(\d+\)/.test(leg.train_number||'');
+ // A regional line label and an operating trip number are different identifiers.
+ // Only compare them when both sources explicitly identify the same namespace.
+ const explicitTrip=leg.trip_number&&o.trip_number;
+ const explicitLine=leg.line_number&&o.line_number;
+ const comparable=!regional||!!explicitTrip||!!explicitLine;
+ const before=trainDigits(explicitTrip?leg.trip_number:explicitLine?leg.line_number:leg.train_number),after=trainDigits(explicitTrip?o.trip_number:explicitLine?o.line_number:o.train_number);
+ const changed=comparable&&!!before&&!!after&&before!==after;
  const exception=numberException(leg),reserved=reservationStatus(leg,o)==='reserved';
- return {changed,notify:changed&&reserved&&!exception,reserved,exception,before:leg.train_number,after:o.train_number||leg.train_number};
+ return {changed,notify:changed&&reserved&&!exception,reserved,exception,comparable,before:leg.train_number,after:o.train_number||leg.train_number};
 }
 export function controlPolicy(row){
  const items=(row.control?.sources||[]).flatMap(s=>{try{return [JSON.parse(s)];}catch{return [];}});

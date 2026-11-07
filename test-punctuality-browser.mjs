@@ -22,6 +22,7 @@ try{
  assert.equal(await page.locator('#register .punctuality-current').innerText(),'Actueel\n+12');assert.equal(await page.locator('#register').getByText('10:12',{exact:true}).count(),0);
  await page.locator('#register [data-select-leg]').first().check();await page.locator('#register [data-select-leg]').nth(1).check();await page.getByRole('button',{name:'Geselecteerde ritten controleren (2)',exact:true}).click();await page.getByText('Controle aangevraagd voor 2 ritregels.',{exact:false}).waitFor();assert.deepEqual(requests,[{legIds:[leg.leg_id,secondLeg.leg_id]}]);
  await mkdir(new URL('./outputs/',import.meta.url),{recursive:true});await page.locator('#register').screenshot({path:new URL('./outputs/reisschema-stiptheid-voorbeeld.png',import.meta.url).pathname.replace(/^\/(\w:)/,'$1')});
+ await page.locator('#register .control-details summary').first().click();
  await page.getByRole('button',{name:'Stiptheidshistorie',exact:true}).click();await page.locator('#punctuality-history tbody tr').waitFor();
  assert.match(await page.locator('#punctuality-history').innerText(),/Fictional <source>/);assert.equal(await page.locator('#punctuality-history script').count(),0);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('#register .delay-minutes').innerText(),'+12');assert.deepEqual(errors,[]);

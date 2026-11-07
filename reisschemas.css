@@ -19,3 +19,5 @@ h1{display:flex;align-items:center;gap:12px}.section-icon{display:inline-flex;al
 .selection-cell input{width:20px;height:20px;cursor:pointer}.selection-cell{min-width:40px}
 
 .controls-panel{margin-bottom:20px}.controls-panel p:empty{display:none}.control-settings{margin-top:10px}.control-settings summary{cursor:pointer;font-size:.85rem;color:#60757e}.control-settings button{margin-top:10px}
+
+.check-light{display:inline-block;margin-right:.35rem;font-size:14px;cursor:help}.check-light:focus{outline:2px solid #155469;outline-offset:2px}.control-details{margin-top:.4rem;font-size:.85em}.control-details summary{cursor:pointer;color:#426171}.control-details[open]{max-width:38rem}

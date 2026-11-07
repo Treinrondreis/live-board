@@ -20,6 +20,7 @@ try{
  assert.equal(await page.getByText('Nu ICE 701',{exact:true}).count(),1);
  await page.locator('[data-edit-leg="number"]').click();assert.equal(await page.locator('#new-train-number').inputValue(),'ICE 701');assert.equal(await page.locator('#reservation-status').inputValue(),'auto');assert.equal(await page.locator('#db-verified').isChecked(),false);
  await page.getByRole('button',{name:'Handmatige DB-taken',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),1);
+ await page.locator('#register .control-details summary').click();
  assert.equal(await page.getByRole('link',{name:'Extra DB-controle openen ↗',exact:true}).count(),1);
  await page.getByRole('button',{name:'Meldingen',exact:true}).click();assert.equal(await page.locator('#register tbody tr').count(),3);
  await page.getByRole('button',{name:'Alle ritten',exact:true}).click();
