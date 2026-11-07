@@ -24,7 +24,7 @@ try{
   });
   await page.goto('https://report.test/treinrapport');
   await page.locator('section').last().locator('table').waitFor();
-  assert.equal(await page.locator('section').count(),7);
+  assert.equal(await page.locator('section').count(),9);
   assert.equal(await page.locator('section').nth(2).locator('tbody tr').first().locator('td').nth(1).locator('.fallback').textContent(),'V');
   const first=page.locator('section').first();
   assert.equal(await first.locator('tbody tr').count(),30);
@@ -46,6 +46,14 @@ try{
   await page.waitForURL(/station=Hengelo/);
   assert.equal(await first.getByRole('combobox',{name:/^Bron/}).inputValue(),'NDOV');
   await first.locator('.value').first().click();assert.match(await first.locator('.detail').textContent(),/Hengelo/);
+  const prague=page.locator('section').nth(6);
+  assert.match(await prague.locator('thead').textContent(),/RJ 177.*RJ 385/);
+  assert.match(await prague.locator('.foot').first().textContent(),/Vertrekmetingen bij Dresden Hbf/);
+  await prague.getByRole('combobox',{name:/^Meetstation/}).selectOption('Praha hl.n.');
+  await prague.locator('.matrix:not([aria-busy])').waitFor();
+  assert.match(await prague.locator('.foot').first().textContent(),/Aankomstmetingen bij Praha hl.n./);
+  const returnTrip=page.locator('section').nth(7);
+  assert.match(await returnTrip.locator('thead').textContent(),/RJ 384.*RJ 178.*RJ 382/);
   const single=page.locator('section').nth(4);const width=await single.locator('table').evaluate(el=>el.getBoundingClientRect().width);assert.ok(width<320);
   const last=page.locator('section').last(),anchor=last.locator('.section-head');
   await anchor.evaluate(el=>el.scrollIntoView({block:'start'}));

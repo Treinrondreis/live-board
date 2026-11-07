@@ -76,3 +76,25 @@ test('225 uses an explicitly labelled departure when no usable arrival exists',a
  r=await readTrainReport(q,{group:'frankfurt-east',source:'DB'},now);assert.equal(r.rows[0].cells[2].status,'cancelled');assert.equal(r.rows[0].cells[2].eventMode,'departure');
  sqlite.close();
 });
+
+
+test('Railjet departures stay separate from arrivals and Prague stations never substitute silently',async()=>{
+ const {sqlite,q}=database();await initAnalytics({sqlite});
+ const e={...event,category:'RJ',number:'177',station:'Dresden Hbf'};
+ await recordStopSummaries([{...e,delay:2},{...e,mode:'departure',delay:37},{...e,number:'385',category:'ICE',mode:'departure',delay:98}]);
+ let r=await readTrainReport(q,{group:'prague-east'},now);
+ assert.equal(r.station,'Dresden Hbf');assert.equal(r.source,'DB');assert.equal(r.rows[0].cells[0].delay,37);assert.equal(r.rows[0].cells[0].eventMode,'departure');assert.equal(r.rows[0].cells[1].status,'unknown');
+ await recordStopSummaries([{...e,station:'Praha-Holesovice',delay:52},{...e,station:'Praha hl.n.',mode:'departure',delay:8}]);
+ r=await readTrainReport(q,{group:'prague-east',station:'Praha hl.n.'},now);assert.equal(r.rows[0].cells[0].status,'unknown');
+ r=await readTrainReport(q,{group:'prague-east',station:'Praha-Holešovice'},now);assert.equal(r.rows[0].cells[0].delay,52);assert.equal(r.rows[0].cells[0].eventMode,'arrival');
+ await recordStopSummaries([{...e,number:'384',station:'Berlin Hbf',mode:'departure',cancelled:true},{...e,number:'384',station:'Berlin Hbf',mode:'arrival',delay:0}]);
+ r=await readTrainReport(q,{group:'prague-west'},now);assert.equal(r.rows[0].cells[0].status,'cancelled');assert.equal(r.rows[0].cells[0].eventMode,'departure');
+ sqlite.close();
+});
+
+test('Railjet journey archive observes required event mode and ignores planning-only departures',()=>{
+ const selection=reportSelection({group:'prague-west'},now),planned=event.planned;
+ const state={trainNumber:'384',category:'RJ',stops:[{station:'Berlin Hbf',arrival:{planning:{time:planned},realtime:{source:'DB',recordedAt:planned+60000,expectedTime:planned}},departure:{planning:{time:planned},realtime:{source:'DB',recordedAt:planned+60000,expectedTime:planned+180000}}}]};
+ const rows=journeyReportRows([{state_json:JSON.stringify(state)}],selection);assert.equal(rows.length,1);assert.equal(rows[0].event_mode,'departure');assert.equal(JSON.parse(rows[0].payload).delay,3);
+ delete state.stops[0].departure.realtime;assert.deepEqual(journeyReportRows([{state_json:JSON.stringify(state)}],selection),[]);
+});

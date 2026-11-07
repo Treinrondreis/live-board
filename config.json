@@ -233,6 +233,30 @@
   },
   "collectors": [
     {
+      "id": "praha-all",
+      "name": "Praha hl.n.",
+      "eva": "5400014",
+      "allDepartures": true,
+      "categories": [],
+      "planHoursAfter": 2
+    },
+    {
+      "id": "praha-holesovice-all",
+      "name": "Praha-Holesovice",
+      "eva": "5400201",
+      "allDepartures": true,
+      "categories": [],
+      "planHoursAfter": 2
+    },
+    {
+      "id": "hamburg-altona-all",
+      "name": "Hamburg-Altona",
+      "eva": "8002553",
+      "allDepartures": true,
+      "categories": [],
+      "planHoursAfter": 2
+    },
+    {
       "id": "mannheim-fernverkehr",
       "name": "Mannheim Hbf",
       "allDepartures": true,

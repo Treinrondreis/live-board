@@ -1081,7 +1081,7 @@ const pageRoutes={
 
 const appStations=[...(config.ndov?.stations||[]).map(s=>({id:'nl-'+s.code.toLowerCase(),name:s.name,country:'NL',page:s.page})),
  ...[[swissStations,'CH'],[norwegianStations,'NO'],[belgianStations,'BE'],[rfiStations,'IT'],[frenchStations,'FR'],[spanishStations,'ES'],[swedishStations,'SE'],[oebbStations,'AT']].flatMap(([registry,country])=>Object.entries(registry).map(([page,s])=>({id:page,name:s.name,country:s.country||country,page}))),
- ...(config.collectors||[]).filter(s=>!(config.ndov?.stations||[]).some(n=>n.name===s.name)).map(s=>({id:s.id,name:s.name,country:/Wien|Innsbruck/.test(s.name)?'AT':/Basel/.test(s.name)?'CH':'DE',db:true}))];
+ ...(config.collectors||[]).filter(s=>!(config.ndov?.stations||[]).some(n=>n.name===s.name)).map(s=>({id:s.id,name:s.name,country:/Praha/.test(s.name)?'CZ':/Wien|Innsbruck/.test(s.name)?'AT':/Basel/.test(s.name)?'CH':'DE',db:true}))];
 const handleTreinreiziger=createTreinreizigerHandler({stations:[...new Map(appStations.map(s=>[s.name,s])).values()],getBoard:s=>{
  if(s.db)return {source:'DB Timetables',departures:{all:stationUpcomingDepartures(s.name)}};
  const page=s.page;return internationalPayload(page,Object.hasOwn(oebbStations,page)?oebbPayload(page):Object.hasOwn(swedishStations,page)?swedishPayload(page):Object.hasOwn(frenchStations,page)?frenchPayload(page):Object.hasOwn(spanishStations,page)?null:Object.hasOwn(rfiStations,page)?italianEmbedPayload(page):Object.hasOwn(swissStations,page)?swissPayload(page):Object.hasOwn(norwegianStations,page)?norwegianPayload(page):Object.hasOwn(belgianStations,page)?belgianPayload(page):stationPagePayload(page));
