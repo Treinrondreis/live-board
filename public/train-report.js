@@ -1,11 +1,13 @@
 import {reportGroups,reportNumbers,delayClass,defaultReportSource} from './train-report-config.mjs';
-const root=document.getElementById('reports');
+const root=document.getElementById('reports'),overview=document.getElementById('rapport-overzicht');
 const dateFormat=new Intl.DateTimeFormat('nl-NL',{timeZone:'Europe/Amsterdam',weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
 const timeFormat=new Intl.DateTimeFormat('nl-NL',{timeZone:'Europe/Amsterdam',dateStyle:'short',timeStyle:'short'});
 function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
 function picker(label,values,value){const field=el('label',label),select=el('select');for(const v of values){const option=el('option',v);option.value=v;select.append(option);}select.value=value;field.append(select);return{field,select};}
 for(const group of reportGroups){
   const section=el('section'),head=el('div',undefined,'section-head'),title=el('div');title.append(el('h2',group.title),el('div',group.direction,'sub'));head.append(title);
+  section.id='rapport-'+group.id;section.tabIndex=-1;
+  const jump=el('a',group.title+' · '+group.direction);jump.href='#'+section.id;overview.append(jump);
   const params=new URLSearchParams(location.search),prefix=group.id+'-';
   const station=picker('Meetstation',group.stations,group.stations.includes(params.get(prefix+'station'))?params.get(prefix+'station'):group.stations[0]);
   const source=picker('Bron',['DB','NDOV'],['DB','NDOV'].includes(params.get(prefix+'source'))?params.get(prefix+'source'):defaultReportSource(group,station.select.value));
@@ -17,6 +19,7 @@ for(const group of reportGroups){
   if(group.id==='berlin-east')section.append(el('p','G = Berlin Gesundbrunnen, als terugval wanneer voor Berlin Hbf geen bruikbare aankomstmeting beschikbaar is.','foot'));
   if(group.id==='swiss')section.append(el('p','15 mei t/m 9 juli 2027: 108 → 1074 en 106 → 1072.','foot'));
   if(group.note)section.append(el('p',group.note,'foot'));
+  const back=el('a','↑ Naar overzicht','report-back');back.href='#rapport-overzicht';section.append(back);
   root.append(section);let controller;
   async function load(save=false){
     controller?.abort();controller=new AbortController();const request=controller;
