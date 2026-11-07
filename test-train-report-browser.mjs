@@ -39,9 +39,12 @@ try{
   await first.getByRole('combobox',{name:/^Aantal dagen/}).selectOption('90');
   await first.locator('tbody tr').nth(89).waitFor();
   assert.equal(requests.at(-1).source,'NDOV');assert.equal(requests.at(-1).days,'90');
+  await first.getByRole('combobox',{name:/^Bron/}).selectOption('DB');
+  await first.locator('.status').filter({hasText:'DB'}).waitFor();
   await first.getByRole('combobox',{name:/^Meetstation/}).selectOption('Hengelo');
   await first.getByRole('button',{name:/Hengelo/}).first().waitFor();
   await page.waitForURL(/station=Hengelo/);
+  assert.equal(await first.getByRole('combobox',{name:/^Bron/}).inputValue(),'NDOV');
   await first.locator('.value').first().click();assert.match(await first.locator('.detail').textContent(),/Hengelo/);
   const single=page.locator('section').nth(4);const width=await single.locator('table').evaluate(el=>el.getBoundingClientRect().width);assert.ok(width<320);
   const last=page.locator('section').last(),anchor=last.locator('.section-head');

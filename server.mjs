@@ -1,3 +1,4 @@
+import {iceArrivalSelector} from './ice-arrival-collection.mjs';
 import {iceRadar} from './ice-radar.mjs';
 import {chooseNextBoardStop,selectBoardStops} from './board-stop-selection.mjs';
 import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
@@ -499,6 +500,8 @@ async function performScan(){
         boardRows.push(...selectedRows);
 
         const cRows=[...selectedRows,...rowsForSelector(fetched.stops,fetched.station,{trainNumbers:screenCollectAllAtStation(name)?[]:screenTrainNumbers(),allEvents:true}),...rowsForSelector(fetched.stops,fetched.station,{allEvents:true,categories:["ICE"]})];
+        const iceArrivals=iceArrivalSelector(fetched.stops);
+        if(iceArrivals)collectorRows.push(...rowsForSelector(fetched.stops,fetched.station,iceArrivals));
         const connectionArrivals=connectionArrivalSelector(name,fetched.stops);
         if(connectionArrivals)collectorRows.push(...rowsForSelector(fetched.stops,fetched.station,connectionArrivals));
         for(const cfg of collectorSelectors){
