@@ -54,6 +54,19 @@ try{
   assert.match(await prague.locator('.foot').first().textContent(),/Aankomstmetingen bij Praha hl.n./);
   const returnTrip=page.locator('section').nth(7);
   assert.match(await returnTrip.locator('thead').textContent(),/RJ 384.*RJ 178.*RJ 382/);
+  for(const station of ['Praha hl.n.','Praha-Holešovice']){
+    await returnTrip.getByRole('combobox',{name:/^Meetstation/}).selectOption(station);
+    await returnTrip.locator('.matrix:not([aria-busy])').waitFor();
+    assert.equal(await returnTrip.locator('.foot').first().textContent(),'Vertrekmetingen bij '+station+'.');
+    assert.equal(requests.at(-1).station,station);
+  }
+  const overview=page.getByRole('navigation',{name:'Direct naar een tabel'});
+  assert.equal(await overview.getByRole('link').count(),9);
+  await overview.getByRole('link',{name:'Railjet Praag – Hamburg (– Kopenhagen) · Richting Hamburg',exact:true}).click();
+  assert.equal(new URL(page.url()).hash,'#rapport-prague-west');
+  assert.ok(Math.abs(await returnTrip.evaluate(e=>e.getBoundingClientRect().top)-16)<3);
+  await returnTrip.getByRole('link',{name:'↑ Naar overzicht',exact:true}).click();
+  assert.equal(new URL(page.url()).hash,'#rapport-overzicht');
   const single=page.locator('section').nth(4);const width=await single.locator('table').evaluate(el=>el.getBoundingClientRect().width);assert.ok(width<320);
   const last=page.locator('section').last(),anchor=last.locator('.section-head');
   await anchor.evaluate(el=>el.scrollIntoView({block:'start'}));
