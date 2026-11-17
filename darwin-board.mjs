@@ -55,12 +55,13 @@ export function createDarwinBoards({
   fetchBoard = globalThis.fetch,
   clock = Date.now,
   apiKey = () => process.env.RDM_LDB_STAFF_API_KEY,
+  reportFailure = (crs, reason) => console.warn('[Darwin Staff] '+crs+' '+reason),
 } = {}) {
   const cache = new Map();
   async function refresh(station, entry) {
     try {
-      const key = apiKey();
-      if (!key) return;
+      const key = apiKey()?.trim();
+      if (!key) return reportFailure(station.crs, 'missing-key');
       const now = clock();
       const time = timeFormat.format(new Date(now)).replaceAll(':', '');
       const url = endpoint + '/' + station.crs + '/' + time + '?numRows=30';
@@ -68,14 +69,16 @@ export function createDarwinBoards({
         headers: { 'x-apikey': key, Accept: 'application/json' },
         redirect: 'error', signal: AbortSignal.timeout(8000),
       });
-      if (!response.ok) return;
+      if (!response.ok) return reportFailure(station.crs, 'HTTP '+response.status);
       const data = await response.json();
-      if (data?.crs !== station.crs || (data.trainServices != null && !Array.isArray(data.trainServices))) return;
-      if (!Object.hasOwn(data, 'trainServices') && !data.generatedAt) return;
+      if (data?.crs !== station.crs || (data.trainServices != null && !Array.isArray(data.trainServices))) return reportFailure(station.crs, 'invalid-board');
+      if (!Object.hasOwn(data, 'trainServices') && !data.generatedAt) return reportFailure(station.crs, 'missing-board');
       entry.rows = (data.trainServices || []).map(service => normalizeDeparture(service, now)).filter(Boolean)
         .sort((a, b) => a.plannedTimestamp - b.plannedTimestamp);
       entry.updated = now;
-    } catch {
+    } catch (error) {
+      const reason = error?.name === 'TimeoutError' ? 'timeout' : error?.name === 'SyntaxError' ? 'invalid-json' : 'request-failed';
+      reportFailure(station.crs, reason);
       // A failed refresh leaves the last successful result in place.
     } finally {
       entry.retryAt = clock() + 60000;
