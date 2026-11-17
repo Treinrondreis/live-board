@@ -94,7 +94,7 @@ function renderFull(){
     <div class="destination">${esc(t.to||"—")}</div>
     <div class="track"><span class="mobile-track-label">${t.transportMode==='water'?'steiger':'spoor'} </span><strong>${esc(t.track||"—")}</strong></div>
     <div class="status ${statusClass(t)}">${esc(statusText(t))}</div>
-  </div>`).join(""):'<div class="empty">Geen actuele vertrekken gevonden.</div>';
+  </div>`).join(""):'<div class="empty">'+(data?.layout==='all-departures'&&data.status==='starting'?'Vertrekken laden…':'Geen actuele vertrekken gevonden.')+'</div>';
 }
 toggleFull.addEventListener("click",()=>{
   fullEl.hidden=!fullEl.hidden;
@@ -119,6 +119,7 @@ async function refresh(){
     document.querySelector(".board-head h2").textContent=document.title;
     const showAll=p.layout==='all-departures';
     if(showAll){
+      document.body.dataset.departureLayout='all';
       activeTab='all';
       quickEl.hidden=true;
       fullEl.hidden=false;
@@ -141,11 +142,12 @@ async function refresh(){
     const sources=document.querySelector('.board-sources');if(!sources.children.length&&p.source){const label=document.createElement('span');label.textContent='Bron: '+p.source;sources.appendChild(label);}
     let notice=document.getElementById('station-notice');if(p.notice&&!notice){notice=document.createElement('p');notice.id='station-notice';document.querySelector('.board').insertBefore(notice,document.querySelector('.board-sources'));}if(notice){notice.textContent=p.notice||'';notice.hidden=!p.notice;}
     applyAppearance(p);data=p;if(!showAll)renderQuick();if(!fullEl.hidden){if(!p.departures&&!previewPayload){void refresh();return;}renderFull();}
+    if(showAll&&p.status==="starting")setTimeout(()=>{if(sequence===requestSequence)void refresh();},1500);
     const d=p.lastScanAt?new Date(p.lastScanAt):null;
     scanStatus.textContent=d&&!Number.isNaN(d.getTime())
       ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit",timeZone:showAll?"Europe/London":undefined}).format(d)}${showAll?" Britse tijd":""}`
       :"actueel";
-    if((["BE","NO","IT","FR","ES","SE","AT","GB"].includes(p.country)||p.source?.includes("OJP"))&&p.status!=="ready")scanStatus.textContent=p.status==="starting"?"dienstregeling laden…":"realtime tijdelijk niet beschikbaar";
+    if((["BE","NO","IT","FR","ES","SE","AT","GB"].includes(p.country)||p.source?.includes("OJP"))&&p.status!=="ready")scanStatus.textContent=p.status==="starting"?(showAll?"vertrekken laden…":"dienstregeling laden…"):"realtime tijdelijk niet beschikbaar";
   }catch(e){
     scanStatus.textContent="tijdelijk niet beschikbaar";
     if(!data)quickEl.innerHTML=`<div class="empty">${esc(e.message)}</div>`;
