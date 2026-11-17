@@ -98,11 +98,10 @@ export function createDarwinBoards({
     const age = entry.updated === null ? Infinity : clock() - entry.updated;
     const rows = age < 300000 ? entry.rows : [];
     return {
-      source: 'National Rail Darwin', page, station: station.name, title: station.name, country: 'GB',
+      source: 'National Rail Darwin', page, station: station.name, title: station.name, country: 'GB', layout: 'all-departures',
       lastScanAt: entry.updated === null ? null : new Date(entry.updated).toISOString(),
       status: age < 120000 ? 'ready' : 'unavailable',
       notice: age >= 120000 ? 'Live vertrekgegevens tijdelijk niet beschikbaar.' : '',
-      quick: [{ label: 'Eerstvolgende vertrekken', trains: rows.slice(0, 8) }],
       departures: { all: rows, fernverkehr: [], regional: [] },
     };
   };

@@ -2,3 +2,14 @@ import test from 'node:test';import assert from 'node:assert/strict';import {emb
 const rows=Array.from({length:65},(_,i)=>({number:String(i),train:'IC '+i,to:'Utrecht',track:'1',rawStop:{large:'secret'},route:['X']}));const payload={title:'Test',quick:[{id:'a',trains:rows.slice(0,2)}],departures:{all:rows,regional:rows.slice(0,5)},trains:rows};
 test('compact response removes full board and raw source data without changing normal API',()=>{const quick=embedPayload(payload,new URLSearchParams('embed=quick'));assert.equal(quick.departures,undefined);assert.equal(quick.trains,undefined);assert.equal(quick.quick[0].trains[0].rawStop,undefined);assert.equal(embedPayload(payload,new URLSearchParams()),payload);});
 test('full board returns selected tab only, with bounded pagination',()=>{const full=embedPayload(payload,new URLSearchParams('embed=full&tab=all&limit=30'));assert.equal(full.departures.all.length,30);assert.equal(full.pagination.hasMore,true);assert.equal(full.pagination.total,65);assert.equal(full.departures.regional,undefined);const next=embedPayload(payload,new URLSearchParams('embed=full&limit=90'));assert.equal(next.pagination.hasMore,false);assert.equal(next.departures.all.length,65);});
+
+test('single departure board returns all directions by default',()=>{
+ const british={...payload,layout:'all-departures',quick:[]};
+ for(const query of ['embed=quick','embed=full&tab=regional']){
+  const board=embedPayload(british,new URLSearchParams(query));
+  assert.equal(board.layout,'all-departures');
+  assert.equal(board.departures.all.length,30);
+  assert.equal(board.pagination.total,65);
+  assert.equal(board.departures.regional,undefined);
+ }
+});
