@@ -9,14 +9,15 @@ test('shares a departure request and preserves the distinction between live and 
     apiKey: () => 'fixture-key',
     fetchBoard: async (url, options) => {
       requests++;
-      assert.match(url, /GetDepBoardWithDetails\/YRK\/235500\?numRows=30$/);
+      assert.match(url, /GetDepartureBoard\/YRK\?numRows=30$/);
       assert.equal(options.headers['x-apikey'], 'fixture-key');
       assert.equal(options.redirect, 'error');
       return {ok: true, json: async () => ({crs: 'YRK', trainServices: [
-        {rid: '1', std: '23:57', etd: '00:03', destination: [{locationName: 'Teststation'}]},
-        {rid: '2', std: '23:59', isCancelled: true},
+        {serviceID: '1', std: '23:57', etd: '00:03', destination: [{locationName: 'Teststation'}]},
+        {rid: '2', std: '23:59', etd: 'Cancelled'},
         {rid: '3', std: '00:01', etd: '00:01', etdSpecified: false},
-        {rid: '4', std: '00:03', departureType: 'Delayed'},
+        {rid: '4', std: '00:03', etd: 'Delayed'},
+        {rid: '5', std: '00:04', etd: 'On time'},
       ]})};
     },
   });
@@ -25,7 +26,7 @@ test('shares a departure request and preserves the distinction between live and 
   assert.equal(requests, 1);
   assert.equal(a.status, 'ready');
   assert.deepEqual(a.departures.all.map(r => [r.delay, r.cancelled, r.hasRealtime]),
-    [[6, false, true], [null, true, true], [null, false, false], [null, false, true]]);
+    [[6, false, true], [null, true, true], [null, false, false], [null, false, true], [0, false, true]]);
   assert.equal(a.departures.all[3].status, 'Vertraagd');
   assert.equal(JSON.stringify(a).includes('fixture-key'), false);
   assert.equal(await board('unsupported'), null);
