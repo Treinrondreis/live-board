@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { initBoardCache } from './board-cache.mjs';
+import { initBoardAdmin, applyBoardSettings, defaultBoardSettings, validateBoardSettings } from './board-admin.mjs';
 import { setImmediate as settled } from 'node:timers/promises';
-import { createDarwinBoards } from './darwin-board.mjs';
+import { createDarwinBoards, darwinStations } from './darwin-board.mjs';
 
 test('shares a departure request and preserves the distinction between live and scheduled', async () => {
   let requests = 0;
@@ -46,4 +49,23 @@ test('does not continuously retry an unavailable feed', async () => {
   await settled();
   assert.equal((await board('inverness')).status, 'unavailable');
   assert.equal(requests, 1);
+});
+
+test('Darwin filters use the published destination, operator and via label', async () => {
+  await initBoardCache({backend:'sqlite',sqlite:new DatabaseSync(':memory:')});
+  await initBoardAdmin({config:{},swissStations:{},norwegianStations:{},belgianStations:{},darwinStations});
+  const rows = [
+    {destinationNames:['London Kings Cross'], operator:'LNER', viaLabels:['via Doncaster']},
+    {destinationNames:['London Kings Cross'], operator:'LNER', viaLabels:[]},
+    {destinationNames:['Leeds'], operator:'Northern', viaLabels:['via Doncaster']},
+  ];
+  const settings = defaultBoardSettings('york');
+  settings.directions = [
+    {id:'all-matching', label:'London via Doncaster', futureStops:['London Kings Cross'], operator:'lner', via:'Doncaster'},
+    {id:'destination', label:'London', futureStops:['London Kings Cross']},
+  ];
+  const payload = applyBoardSettings('york', {layout:'all-departures', departures:{all:rows}},
+    validateBoardSettings('york', settings));
+  assert.deepEqual(payload.quick.map(group=>group.trains.length), [1,2]);
+  assert.equal(payload.departures.all.length, 3);
 });

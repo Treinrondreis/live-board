@@ -1,4 +1,4 @@
-const fields=['id','source','train','number','category','plannedTime','time','to','track','transportMode','status','delay','cancelled','type','partialCancellation','hasRealtime'];
+const fields=['id','source','train','number','category','plannedTime','time','to','viaLabels','track','transportMode','status','delay','cancelled','type','partialCancellation','hasRealtime'];
 const compact=row=>Object.fromEntries(fields.filter(k=>row[k]!==undefined).map(k=>[k,row[k]]));
 export function embedPayload(payload,query){
  if(!payload?.departures||!['quick','full'].includes(query.get('embed')))return payload;
