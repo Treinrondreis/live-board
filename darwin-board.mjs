@@ -9,6 +9,9 @@ const timeFormat = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
 });
 
+const dateFormat = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+});
 function reading(service, key, reference) {
   if (service[key + 'Specified'] === false) return null;
   const value = service[key];
@@ -63,7 +66,8 @@ export function createDarwinBoards({
       const key = apiKey()?.trim();
       if (!key) return reportFailure(station.crs, 'missing-key');
       const now = clock();
-      const time = timeFormat.format(new Date(now)).replaceAll(':', '');
+      const date = new Date(now);
+      const time = dateFormat.format(date).replaceAll('-', '') + 'T' + timeFormat.format(date).replaceAll(':', '');
       const url = endpoint + '/' + station.crs + '/' + time + '?numRows=30';
       const response = await fetchBoard(url, {
         headers: { 'x-apikey': key, Accept: 'application/json' },
