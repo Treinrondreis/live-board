@@ -8,7 +8,9 @@ import {dsbBoard,dsbStations,startDsb} from './dsb-board.mjs';
 import {darwinBoard,darwinStations} from './darwin-board.mjs';
 import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
-import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
+import {handleAnalytics,startAnalyticsBackfill,setSummaryFilter,analyticsQuery} from './train-analytics.mjs';
+import {startSummaryCleanup} from './summaries-cleanup.mjs';
+import {createWatchlist,registerNumbers} from './watchlist.mjs';
 import {handleAdminHub} from './admin-hub.mjs';
 import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
@@ -1256,6 +1258,8 @@ await initStorage();
 await initScreenSettings(config,{OJP:Object.values(swissStations).map(s=>s.name),NMBS:Object.values(belgianStations).map(s=>s.name)},settings=>screenBoardTrains(Date.now(),settings));
 configurePunctuality({getLegs:()=>floraRegister.summary(),screenMatch:screenPunctualityMatches});
 startConnectionMonitor(getStationPlatformLayout);
+if(process.env.SUMMARY_WATCHLIST!=='off'){const watchlist=createWatchlist({extraNumbers:registerNumbers({register:floraRegister})});setSummaryFilter(watchlist.includes);}
+if(process.env.SUMMARY_CLEANUP)setTimeout(()=>startSummaryCleanup({q:analyticsQuery,register:floraRegister}).catch(e=>console.error('[opruiming] Fout:',e.message)),60000);
 startAnalyticsBackfill();
 startDayReports(()=>{
  const now=Date.now(),recent=iso=>Number.isFinite(Date.parse(iso))&&now-Date.parse(iso)<15*60000;
