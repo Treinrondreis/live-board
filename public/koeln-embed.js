@@ -117,7 +117,15 @@ async function refresh(){
     if(!r.ok)throw new Error(p.error||`HTTP ${r.status}`);
     document.title=p.title||"Vertrektijden";
     document.querySelector(".board-head h2").textContent=document.title;
-    if(!data){
+    const showAll=p.layout==='all-departures';
+    if(showAll){
+      activeTab='all';
+      quickEl.hidden=true;
+      fullEl.hidden=false;
+      fullEl.querySelector('.tabs').style.display='none';
+      fullEl.querySelector('.columns span:nth-child(2)').textContent='Vervoerder';
+      toggleFull.closest('.board-footer').hidden=true;
+    }else if(!data){
       const allTab=document.querySelector('[data-tab="all"]');
       allTab.hidden=!(["NL","BE","NO","IT","FR","ES","SE","AT"].includes(p.country)||p.source?.includes("OJP"));
       if((["NL","BE","NO","IT","FR","ES","SE","AT"].includes(p.country)||p.source?.includes("OJP")))activeTab="all";
@@ -132,10 +140,10 @@ async function refresh(){
     for(const [source,label,url] of [['TRAFIKVERKET','Trafikverket (CC0)','https://data.trafikverket.se/'],['RENFE','Renfe (CC BY 4.0)','https://data.renfe.com/'],['EUROSTAR','Eurostar (Licence Ouverte 2.0)','https://www.data.gouv.fr/datasets/eurostar-gtfs-plan-de-transport-et-temps-reel']]){if(p.source?.includes(source)&&!document.getElementById(source+'-source')){const a=document.createElement('a');a.id=source+'-source';a.href=url;a.textContent='Bron: '+label;document.querySelector('.board-sources').appendChild(a);}}
     const sources=document.querySelector('.board-sources');if(!sources.children.length&&p.source){const label=document.createElement('span');label.textContent='Bron: '+p.source;sources.appendChild(label);}
     let notice=document.getElementById('station-notice');if(p.notice&&!notice){notice=document.createElement('p');notice.id='station-notice';document.querySelector('.board').insertBefore(notice,document.querySelector('.board-sources'));}if(notice){notice.textContent=p.notice||'';notice.hidden=!p.notice;}
-    applyAppearance(p);data=p;renderQuick();if(!fullEl.hidden){if(!p.departures&&!previewPayload){void refresh();return;}renderFull();}
+    applyAppearance(p);data=p;if(!showAll)renderQuick();if(!fullEl.hidden){if(!p.departures&&!previewPayload){void refresh();return;}renderFull();}
     const d=p.lastScanAt?new Date(p.lastScanAt):null;
     scanStatus.textContent=d&&!Number.isNaN(d.getTime())
-      ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit"}).format(d)}`
+      ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit",timeZone:showAll?"Europe/London":undefined}).format(d)}${showAll?" Britse tijd":""}`
       :"actueel";
     if((["BE","NO","IT","FR","ES","SE","AT","GB"].includes(p.country)||p.source?.includes("OJP"))&&p.status!=="ready")scanStatus.textContent=p.status==="starting"?"dienstregeling laden…":"realtime tijdelijk niet beschikbaar";
   }catch(e){
