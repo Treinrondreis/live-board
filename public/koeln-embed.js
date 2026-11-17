@@ -155,8 +155,9 @@ async function refresh(){
       toggleFull.closest('.board-footer').hidden=true;
     }else if(!data){
       const allTab=document.querySelector('[data-tab="all"]');
-      allTab.hidden=!(["NL","BE","NO","IT","FR","ES","SE","AT"].includes(p.country)||p.source?.includes("OJP"));
-      if((["NL","BE","NO","IT","FR","ES","SE","AT"].includes(p.country)||p.source?.includes("OJP")))activeTab="all";
+      const showAllTab=["NL","BE","NO","IT","FR","ES","SE","AT","DK"].includes(p.country)||p.source?.includes("OJP");
+      allTab.hidden=!showAllTab;
+      if(showAllTab)activeTab="all";
       if(!p.quick?.length){fullEl.hidden=false;toggleFull.textContent="Verberg compleet vertrekbord";}
       document.querySelectorAll(".tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===activeTab));
     }
