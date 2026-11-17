@@ -4,6 +4,7 @@ import {chooseNextBoardStop,selectBoardStops} from './board-stop-selection.mjs';
 import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
 import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
+import {darwinBoard,darwinStations} from './darwin-board.mjs';
 import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
 import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
@@ -1211,6 +1212,7 @@ const server=http.createServer(async(req,res)=>{
     if(copyPage&&boardSource(copyPage)&&boardSource(copyPage)!==copyPage)return sendJson(res,200,duplicatePayload(copyPage));
     if(url.pathname==='/api/oebb/status')return sendJson(res,200,oebbState);
     const belgianPage=url.pathname.match(/^\/api\/views\/([a-z0-9-]+)\/?$/)?.[1];
+    if(belgianPage&&Object.hasOwn(darwinStations,belgianPage))return sendJson(res,200,await darwinBoard(belgianPage));
     if(belgianPage&&Object.hasOwn(oebbStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,oebbPayload(belgianPage)));
     if(belgianPage&&Object.hasOwn(swedishStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,swedishPayload(belgianPage)));
     if(belgianPage&&(Object.hasOwn(frenchStations,belgianPage)||Object.hasOwn(spanishStations,belgianPage)))return sendJson(res,200,applyBoardSettings(belgianPage,internationalPayload(belgianPage,Object.hasOwn(frenchStations,belgianPage)?frenchPayload(belgianPage):null)));
@@ -1242,7 +1244,7 @@ const server=http.createServer(async(req,res)=>{
       return sendJson(res,200,{source:"DB Timetables",updatedAt:dbState.lastScanAt,lastScanAt:dbState.lastScanAt,nextScanAt:dbState.nextScanAt,currentIntervalMinutes:dbState.currentIntervalMinutes,warnings:dbState.warnings,stations:dbState.stations,settings,...await attachBoardBookings(screenBoardTrains(Date.now(),settings),settings)});
     }
     const embedPage=url.pathname.match(/^\/embed\/([a-z0-9-]+)\/?$/)?.[1];
-    if(embedPage&&boardSource(embedPage))return sendFile(res,path.join(publicDir,'koeln-embed.html'));
+    if(embedPage&&(Object.hasOwn(darwinStations,embedPage)||boardSource(embedPage)))return sendFile(res,path.join(publicDir,'koeln-embed.html'));
     if(/^\/[1-9]\d{0,2}\/?$/.test(url.pathname)){const id=url.pathname.replaceAll("/","");if(!screenSettings(id)){res.writeHead(404);return res.end("Onbekend scherm");}return sendFile(res,path.join(publicDir,"index.html"));}
     let requested=pageRoutes[url.pathname]||(url.pathname==="/"?"/index.html":url.pathname);requested=path.normalize(requested).replace(/^(\.\.[/\\])+/,'');const filename=path.join(publicDir,requested);if(!filename.startsWith(publicDir)){res.writeHead(403);return res.end("Forbidden");}sendFile(res,filename);
   }catch(e){sendJson(res,500,{error:e.message});}
