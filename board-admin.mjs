@@ -5,7 +5,7 @@ import {swissDirections,matchesSwissDirection} from './swiss-directions.mjs';
 let catalog={},saved=new Map(),provider,legacyMatch;
 const attempts=new Map(),cookieName='treinbord_beheer';
 export const defaultAppearance={design:'standard',accent:'#e5303c',text:'#252525',background:'#ffffff',alternate:'#faf8f5',buttonStart:'#1c6e92',buttonEnd:'#669620',font:'treinrondreis',width:1050,density:'normal',fullOpen:false,defaultTab:'all',showUpdated:true,showFullButton:true,showSource:true};
-export async function initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations={},frenchStations={},spanishStations={},swedishStations={},oebbStations={},getPayload,matchDirection}){
+export async function initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations={},frenchStations={},spanishStations={},swedishStations={},oebbStations={},darwinStations={},getPayload,matchDirection}){
  provider=getPayload;legacyMatch=matchDirection;
  catalog={...Object.fromEntries(Object.entries(config.stationPages||{}).map(([id,p])=>[id,{id,name:p.station||p.title,country:p.country||'DE',engine:'standard',title:p.title,directions:p.quickDirections||[]}]))};
  for(const [stations,country,engine] of [[belgianStations,'BE','standard'],[norwegianStations,'NO','standard'],[swissStations,'CH','swiss']])for(const [id,s] of Object.entries(stations))catalog[id]={id,name:s.name,country:s.country||country,engine,title:'Vertrektijden '+s.name,directions:engine==='swiss'?swissDirections[id]||[]:[]};
@@ -14,6 +14,7 @@ export async function initBoardAdmin({config,swissStations,norwegianStations,bel
  for(const [id,s] of Object.entries(swedishStations))catalog[id]={id,name:s.name,country:'SE',engine:'standard',title:'Vertrektijden '+s.name,directions:[]};
  for(const [id,s] of Object.entries(oebbStations))catalog[id]={id,name:s.name+' · ÖBB Scotty',country:'AT',engine:'standard',title:'Vertrektijden '+s.name,directions:[{id:'nightjet',label:'Nightjet / EuroNight',categories:['NJ','EN']}]};
  for(const [id,s] of Object.entries(spanishStations))catalog[id]={id,name:s.name,country:'ES',engine:'standard',title:'Vertrektijden '+s.name,directions:[]};
+ for(const [id,s] of Object.entries(darwinStations))catalog[id]={id,name:s.name,country:'GB',engine:'darwin',title:s.name,directions:[]};
  saved=new Map((await readBoardSettings()).map(r=>[r.page,r]));
  for(const [page,r] of saved)if(r.settings.sourcePage&&Object.hasOwn(catalog,r.settings.sourcePage)&&!Object.hasOwn(catalog,page))catalog[page]={...catalog[r.settings.sourcePage],id:page,sourcePage:r.settings.sourcePage};
 }
@@ -29,7 +30,7 @@ export const standardLayouts=[
  {id:'quiet',name:'Rustig',appearance:{...defaultAppearance,accent:'#24546a',alternate:'#f2f5f6',buttonStart:'#24546a',buttonEnd:'#467b87',font:'system',density:'roomy'}}
 ];
 export function boardSource(page){return Object.hasOwn(catalog,page)?catalog[page].sourcePage||page:null;}
-export function duplicatePayload(page){return applyBoardSettings(page,provider(boardSource(page)));}
+export async function duplicatePayload(page){return applyBoardSettings(page,await provider(boardSource(page)));}
 function boardInfo(c){return {...c,directions:undefined,revision:saved.get(c.id)?.revision||0,updatedAt:saved.get(c.id)?.updatedAt||null,settings:saved.get(c.id)?.settings||defaultBoardSettings(c.id),defaults:defaultBoardSettings(c.id)};}
 export async function deleteBoard(page,revision){
  if(!catalog[page]?.sourcePage)throw Error('Alleen gekopieerde borden kunnen worden verwijderd.');
@@ -50,13 +51,13 @@ export function validateBoardSettings(page,input){
  if(!Object.hasOwn(catalog,page)||!input||typeof input!=='object'||Array.isArray(input))throw Error('Ongeldige instellingen');
  const result=defaultBoardSettings(page);result.title=cleanText(input.title,120)||result.title;result.footer=cleanText(input.footer,1500);result.enabled=input.enabled!==false;result.name=cleanText(input.name,80);if(catalog[page].sourcePage)result.sourcePage=catalog[page].sourcePage;
  if(!Array.isArray(input.directions)||input.directions.length>40)throw Error('Gebruik maximaal 40 richtingsfilters.');
- const allowed=['id','label','target','also','futureStops','categories','excludedCategories','mode','brand','excludeBrand','serviceBrand','via','avoid','internationalIC','regionalOnly','enabled','limit'];
+ const allowed=['id','label','target','also','futureStops','categories','excludedCategories','mode','brand','excludeBrand','serviceBrand','operator','via','avoid','internationalIC','regionalOnly','enabled','limit'];
  result.directions=input.directions.map((v,i)=>{
   if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Ongeldig filter');
   const d={};for(const key of allowed)if(v[key]!==undefined)d[key]=v[key];
   d.id=cleanText(d.id,80)||'richting-'+i;d.label=cleanText(d.label,120);if(!d.label)throw Error('Geef elk filter een naam.');
   for(const key of ['also','futureStops','categories','excludedCategories'])if(d[key]!==undefined){if(!Array.isArray(d[key])||d[key].length>40)throw Error('Ongeldige filterlijst');d[key]=d[key].map(s=>cleanText(s,120)).filter(Boolean);}
-  for(const key of ['target','brand','excludeBrand','serviceBrand','via','avoid'])if(d[key]!=null)d[key]=cleanText(d[key],120);
+  for(const key of ['target','brand','excludeBrand','serviceBrand','operator','via','avoid'])if(d[key]!=null)d[key]=cleanText(d[key],120);
   d.mode=d.mode==='water'?'water':'rail';d.enabled=d.enabled!==false;d.limit=Math.min(30,Math.max(1,Number(d.limit)||8));return d;
  });
  if(new Set(result.directions.map(d=>d.id)).size!==result.directions.length)throw Error('Filters moeten een unieke identificatie hebben.');
@@ -74,6 +75,12 @@ function matches(page,row,d){
  if(d.excludedCategories?.includes(row.category))return false;
  if((row.transportMode||'rail')!==(d.mode||'rail'))return false;
  if(catalog[page].engine==='swiss')return matchesSwissDirection(row,d);
+ if(catalog[page].engine==='darwin'){
+  const key=value=>String(value||'').trim().toLowerCase();
+  return (!d.futureStops?.length||d.futureStops.some(stop=>row.destinationNames?.some(name=>key(name)===key(stop))))&&
+   (!d.operator||key(d.operator)===key(row.operator))&&
+   (!d.via||row.viaLabels?.some(label=>key(label).replace(/^via\s+/,'')===key(d.via).replace(/^via\s+/,'')));
+ }
  const stops=row.futureRoute?.length?row.futureRoute:[row.to],norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
  if(d.avoid&&stops.some(s=>norm(s)===norm(d.avoid)))return false;
  if(!d.categories?.length&&!d.futureStops?.length&&!d.serviceBrand&&!d.internationalIC&&!d.regionalOnly)return !d.via||stops.some(s=>norm(s)===norm(d.via));
@@ -133,7 +140,7 @@ export async function handleBoardAdmin(req,res,url){
   if(req.method==='POST'&&action==='duplicate'){const input=await body(req);reply(res,200,{board:await duplicateBoard(String(input.page||''),input.settings)});return true;}
   if(req.method==='POST'&&['save','preview'].includes(action)){
    const input=await body(req),page=String(input.page||''),settings=validateBoardSettings(page,input.settings);
-   if(action==='preview'){reply(res,200,applyBoardSettings(page,provider(boardSource(page)),settings));return true;}
+   if(action==='preview'){reply(res,200,applyBoardSettings(page,await provider(boardSource(page)),settings));return true;}
    if(Number(input.revision)!==(saved.get(page)?.revision||0)){reply(res,409,{error:'Dit bord is ondertussen gewijzigd. Laad het opnieuw.'});return true;}
    const state=await writeBoardSettings(page,settings,Number(input.revision));saved.set(page,{...state,settings});reply(res,200,{ok:true,...state,settings});return true;
   }

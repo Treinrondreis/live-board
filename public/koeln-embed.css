@@ -152,3 +152,6 @@ body[data-departure-layout=all] .full-row .destination{font-weight:700}
 @media(max-width:520px){
   body[data-departure-layout=all] .full-row{grid-template-areas:"time dest track" "train train train" "status status status"}
 }
+
+.full-row .via-label{display:block;color:var(--muted);font-size:.85em;font-weight:400}
+body[data-departure-layout=all] .tabs{flex-wrap:wrap}

@@ -20,6 +20,6 @@ const workerPlan=await new Promise((resolve,reject)=>{const w=new Worker(new URL
 await initBoardCache({backend:'sqlite',sqlite:new DatabaseSync(':memory:')});await saveBoardCache('SNCF:plan',{plan,planDay:'20260910'});await saveBoardCache('SNCF:live',feed);await restoreFrance();
 for(const page of Object.keys(frenchStations))assert(frenchPayload(page,now).departures.all.length>0);
 await initBoardAdmin({config:{},swissStations:{},norwegianStations:{},belgianStations:{},frenchStations,getPayload:p=>frenchPayload(p,now),matchDirection:(row,d)=>row.futureRoute.some(s=>d.futureStops.includes(s))});
-const copy=await duplicateBoard('paris-nord',defaultBoardSettings('paris-nord'));assert.equal(copy.id,'paris-nord-1');assert(duplicatePayload(copy.id).departures.all.length>0);
+const copy=await duplicateBoard('paris-nord',defaultBoardSettings('paris-nord'));assert.equal(copy.id,'paris-nord-1');assert((await duplicatePayload(copy.id)).departures.all.length>0);
 const settings=defaultBoardSettings('lyon'),target=frenchPayload('lyon',now).departures.all[0].futureRoute[0];settings.directions=[{id:'test',enabled:true,label:target,futureStops:[target],limit:8}];assert(applyBoardSettings('lyon',frenchPayload('lyon',now),settings).quick[0].trains.length>0);
 console.log('PASS: 21 stations, '+plan.rows.length+' planned departures, '+rows.filter(r=>r.hasRealtime).length+' realtime matches; worker, cache restore, cancellations, missing/stale/wrong-date updates, filters and duplicate');

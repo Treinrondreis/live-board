@@ -61,11 +61,13 @@ function normalizeDeparture(service, now) {
   const expected = departureStatus === 'on time' ? planned : reading(service, 'etd', planned.timestamp);
   const delayed = departureStatus === 'delayed' || service.departureType === 'Delayed';
   const destinations = service.currentDestinations?.length ? service.currentDestinations : service.destination;
-  const to = Array.isArray(destinations) ? destinations.map(stop => stop?.locationName).filter(Boolean).join(' / ') : '';
+  const destinationNames = Array.isArray(destinations) ? destinations.map(stop => stop?.locationName).filter(Boolean) : [];
+  const viaLabels = Array.isArray(destinations) ? [...new Set(destinations.map(stop => stop?.via?.trim()).filter(Boolean))] : [];
+  const to = destinationNames.join(' / ');
   const delay = expected ? Math.round((expected.timestamp - planned.timestamp) / 60000) : null;
   return {
     id: String(service.serviceID || service.rid || [service.uid, planned.timestamp, to].join('|')),
-    source: 'DARWIN', train: service.operator || 'Trein', number: '', category: '',
+    source: 'DARWIN', destinationNames, viaLabels, operator: service.operator, train: service.operator || 'Trein', number: '', category: '',
     plannedTime: planned.time, time: cancelled ? planned.time : expected?.time || planned.time,
     to: to || 'Onbekend', track: service.platformIsHidden ? '—' : service.platform || '—',
     cancelled, delay, hasRealtime: Boolean(expected || cancelled || delayed),
@@ -109,7 +111,7 @@ export function createDarwinBoards({
       entry.pending = null;
     }
   }
-  return async page => {
+  return async (page, {waitForData=false}={}) => {
     if (!Object.hasOwn(darwinStations, page)) return null;
     const station = darwinStations[page];
     if (!cache.has(page)) cache.set(page, { rows: [], updated: null, retryAt: 0, pending: null });
@@ -117,6 +119,7 @@ export function createDarwinBoards({
     if (!entry.pending && clock() >= entry.retryAt) {
       entry.pending = Promise.resolve().then(() => refresh(station, entry));
     }
+    if (waitForData && entry.updated === null) await entry.pending;
     const starting = entry.updated === null && entry.pending !== null;
     const age = entry.updated === null ? Infinity : clock() - entry.updated;
     const rows = age < 300000 ? entry.rows : [];

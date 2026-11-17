@@ -3,6 +3,7 @@ document.title="Vertrektijden";
 document.querySelector(".board-head h2").textContent="Vertrektijden";
 let data=null,activeTab="fernverkehr",previewPayload=null,appearanceKey=null;
 let fullLimit=30,requestSequence=0;
+let departureFilter='',departureFiltersKey='';
 const expandedDirections=new Set();
 const quickEl=document.getElementById("quick");
 const fullEl=document.getElementById("full-board");
@@ -39,7 +40,7 @@ function compactRow(t){
     <div class="where-line"></div>
     <div class="time">${esc(t.plannedTime||t.time||"--:--")}</div>
     <div class="train">${trainLabel(t)}</div>
-    <div class="destination">${esc(t.to||"—")}</div>
+    <div class="destination">${esc(t.to||"—")}${t.viaLabels?.length?`<span class="via-label">${esc(t.viaLabels.join(" · "))}</span>`:""}</div>
     <div class="track">${t.transportMode==='water'?'steiger':'spoor'} <strong>${esc(t.track||"—")}</strong></div>
     <div class="status ${statusClass(t)}">${esc(statusText(t))}</div>
   </div>`;
@@ -85,13 +86,39 @@ function renderQuick(){
     quickEl.appendChild(section);
   }
 }
+function renderDepartureFilters(p){
+  const tabs=fullEl.querySelector('.tabs');
+  const groups=p.quick||[];
+  if(!groups.some(group=>group.id===departureFilter))departureFilter='';
+  tabs.style.display=groups.length?'':'none';
+  const key=JSON.stringify(groups.map(group=>[group.id,group.label]));
+  if(departureFiltersKey===key)return;
+  departureFiltersKey=key;
+  tabs.replaceChildren();
+  for(const [id,label] of [['','Alle vertrekken'],...groups.map(group=>[group.id,group.label])]){
+    const button=document.createElement('button');
+    button.type='button';button.className='tab';button.textContent=label;
+    button.setAttribute('aria-pressed',String(id===departureFilter));
+    button.classList.toggle('active',id===departureFilter);
+    button.onclick=()=>{
+      departureFilter=id;
+      for(const btn of tabs.querySelectorAll('button')){
+        btn.classList.toggle('active',btn===button);
+        btn.setAttribute('aria-pressed',String(btn===button));
+      }
+      renderFull();
+    };
+    tabs.appendChild(button);
+  }
+}
 function renderFull(){
-  const more=document.getElementById("more-departures");more.hidden=!(data?.pagination?.hasMore);more.textContent="Meer vertrekken tonen ("+(data?.pagination?.shown||0)+" van "+(data?.pagination?.total||0)+")";
-  const rows=data?.departures?.[activeTab]||[];
+  const more=document.getElementById("more-departures");more.hidden=Boolean(departureFilter)||!(data?.pagination?.hasMore);more.textContent="Meer vertrekken tonen ("+(data?.pagination?.shown||0)+" van "+(data?.pagination?.total||0)+")";
+  const group=departureFilter?data?.quick?.find(g=>g.id===departureFilter):null;
+  const rows=group?.trains||data?.departures?.[activeTab]||[];
   fullRowsEl.innerHTML=rows.length?rows.map(t=>`<div class="full-row">
     <div class="time">${esc(t.plannedTime||t.time||"--:--")}</div>
     <div class="train">${trainLabel(t)}</div>
-    <div class="destination">${esc(t.to||"—")}</div>
+    <div class="destination">${esc(t.to||"—")}${t.viaLabels?.length?`<span class="via-label">${esc(t.viaLabels.join(" · "))}</span>`:""}</div>
     <div class="track"><span class="mobile-track-label">${t.transportMode==='water'?'steiger':'spoor'} </span><strong>${esc(t.track||"—")}</strong></div>
     <div class="status ${statusClass(t)}">${esc(statusText(t))}</div>
   </div>`).join(""):'<div class="empty">'+(data?.layout==='all-departures'&&data.status==='starting'?'Vertrekken laden…':'Geen actuele vertrekken gevonden.')+'</div>';
@@ -123,7 +150,7 @@ async function refresh(){
       activeTab='all';
       quickEl.hidden=true;
       fullEl.hidden=false;
-      fullEl.querySelector('.tabs').style.display='none';
+      renderDepartureFilters(p);
       fullEl.querySelector('.columns span:nth-child(2)').textContent='Vervoerder';
       toggleFull.closest('.board-footer').hidden=true;
     }else if(!data){
@@ -186,6 +213,7 @@ function applyAppearance(p){
  root.style.setProperty('--board-font',font[0]);root.style.setProperty('--board-heading-font',font[1]);root.style.setProperty('--board-row-padding',({compact:3,normal:6,roomy:12}[a.density]||6)+'px');
  document.querySelector('.live').hidden=a.showUpdated===false;toggleFull.hidden=a.showFullButton===false;document.querySelector('.board-sources').hidden=a.showSource===false;
  let foot=document.getElementById('custom-footer');if(!foot){foot=document.createElement('p');foot.id='custom-footer';board.insertBefore(foot,document.querySelector('.board-sources'));}foot.textContent=settings.footer||'';foot.hidden=!settings.footer;
+ if(p.layout==='all-departures'){fullEl.hidden=settings.enabled===false;return;}
  const key=JSON.stringify([a.defaultTab,a.fullOpen,settings.enabled,!p.quick?.length]);if(key!==appearanceKey){appearanceKey=key;activeTab=a.defaultTab||'all';fullEl.hidden=settings.enabled===false||!(a.fullOpen||!p.quick?.length);document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===activeTab));}
  document.querySelector('[data-tab="all"]').hidden=false;toggleFull.hidden=settings.enabled===false||a.showFullButton===false;toggleFull.textContent=fullEl.hidden?'Toon compleet vertrekbord':'Verberg compleet vertrekbord';
 }
