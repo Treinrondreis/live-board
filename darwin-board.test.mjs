@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setImmediate as settled } from 'node:timers/promises';
 import { createDarwinBoards } from './darwin-board.mjs';
 
 test('shares a departure request and preserves the distinction between live and scheduled', async () => {
@@ -24,10 +25,13 @@ test('shares a departure request and preserves the distinction between live and 
   const [a, b] = await Promise.all([board('york'), board('york')]);
   assert.deepEqual(a, b);
   assert.equal(requests, 1);
-  assert.equal(a.status, 'ready');
-  assert.deepEqual(a.departures.all.map(r => [r.delay, r.cancelled, r.hasRealtime]),
+  assert.equal(a.status, 'starting');
+  await settled();
+  const ready = await board('york');
+  assert.equal(ready.status, 'ready');
+  assert.deepEqual(ready.departures.all.map(r => [r.delay, r.cancelled, r.hasRealtime]),
     [[6, false, true], [null, true, true], [null, false, false], [null, false, true], [0, false, true]]);
-  assert.equal(a.departures.all[3].status, 'Vertraagd');
+  assert.equal(ready.departures.all[3].status, 'Vertraagd');
   assert.equal(JSON.stringify(a).includes('fixture-key'), false);
   assert.equal(await board('unsupported'), null);
 });
@@ -38,7 +42,8 @@ test('does not continuously retry an unavailable feed', async () => {
     apiKey: () => 'fixture-key',
     fetchBoard: async () => { requests++; return {ok: false, status: 403}; },
   });
-  assert.equal((await board('inverness')).status, 'unavailable');
+  assert.equal((await board('inverness')).status, 'starting');
+  await settled();
   assert.equal((await board('inverness')).status, 'unavailable');
   assert.equal(requests, 1);
 });

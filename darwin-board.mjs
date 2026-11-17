@@ -117,14 +117,14 @@ export function createDarwinBoards({
     if (!entry.pending && clock() >= entry.retryAt) {
       entry.pending = Promise.resolve().then(() => refresh(station, entry));
     }
-    if (entry.pending && entry.updated === null) await entry.pending;
+    const starting = entry.updated === null && entry.pending !== null;
     const age = entry.updated === null ? Infinity : clock() - entry.updated;
     const rows = age < 300000 ? entry.rows : [];
     return {
       source: 'National Rail Darwin', page, station: station.name, title: station.name, country: 'GB', layout: 'all-departures',
       lastScanAt: entry.updated === null ? null : new Date(entry.updated).toISOString(),
-      status: age < 120000 ? 'ready' : 'unavailable',
-      notice: age >= 120000 ? 'Live vertrekgegevens tijdelijk niet beschikbaar.' : '',
+      status: starting ? 'starting' : age < 120000 ? 'ready' : 'unavailable',
+      notice: !starting && age >= 120000 ? 'Live vertrekgegevens tijdelijk niet beschikbaar.' : '',
       departures: { all: rows, fernverkehr: [], regional: [] },
     };
   };

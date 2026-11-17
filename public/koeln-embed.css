@@ -145,3 +145,10 @@ body[data-custom-board][data-board-design=treinreiziger] .full-row{min-height:48
 body[data-custom-board][data-board-design=treinreiziger] .primary{color:#fff!important}
 
 .board-sources[hidden]{display:none;}
+
+body[data-departure-layout=all] .board-footer[hidden]{display:none}
+body[data-departure-layout=all] .full-row .train{color:var(--muted);font-weight:400}
+body[data-departure-layout=all] .full-row .destination{font-weight:700}
+@media(max-width:520px){
+  body[data-departure-layout=all] .full-row{grid-template-areas:"time dest track" "train train train" "status status status"}
+}
