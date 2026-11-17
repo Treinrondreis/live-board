@@ -8,10 +8,23 @@
 // met het voorvoegsel "[opruiming]".
 import {createWatchlist} from './watchlist.mjs';
 
-export async function cleanupSummaries({q, includes, dryRun = true, batch = 2000, pause = 200, log = console.log} = {}) {
+// Bij een drukke database (verbinding of query time-out) opnieuw proberen
+// in plaats van te stoppen. Halverwege stoppen is veilig: opnieuw starten gaat
+// gewoon verder met wat er nog over is.
+async function retry(fn, {tries = 30, wait = 5000, log}) {
+  for (let i = 1; ; i++) {
+    try { return await fn(); } catch (e) {
+      if (i >= tries) throw e;
+      log(`[opruiming] Database druk (${e.message}); poging ${i}/${tries}, opnieuw over ${Math.round(wait * i / 1000)} s`);
+      await new Promise(r => setTimeout(r, wait * i));
+    }
+  }
+}
+
+export async function cleanupSummaries({q, includes, dryRun = true, batch = 1000, deleteChunk = 250, pause = 300, retryWait = 5000, log = console.log} = {}) {
   let after = '', scanned = 0, keep = 0, removed = 0;
   while (true) {
-    const rows = await q('SELECT summary_key,source,train_number,category,station,event_mode,payload FROM train_stop_summaries WHERE summary_key > $1 ORDER BY summary_key LIMIT $2', [after, batch]);
+    const rows = await retry(() => q('SELECT summary_key,source,train_number,category,station,event_mode,payload FROM train_stop_summaries WHERE summary_key > $1 ORDER BY summary_key LIMIT $2', [after, batch]), {wait: retryWait, log});
     if (!rows.length) break;
     after = rows.at(-1).summary_key;
     const drop = [];
@@ -22,12 +35,12 @@ export async function cleanupSummaries({q, includes, dryRun = true, batch = 2000
       if (includes(e)) keep++; else drop.push(r.summary_key);
     }
     scanned += rows.length;
-    if (!dryRun && drop.length) {
-      const args = drop.map((_, i) => '$' + (i + 1)).join(',');
-      await q(`DELETE FROM train_stop_summaries WHERE summary_key IN (${args}) RETURNING summary_key`, drop);
+    if (!dryRun) for (let i = 0; i < drop.length; i += deleteChunk) {
+      const part = drop.slice(i, i + deleteChunk), args = part.map((_, j) => '$' + (j + 1)).join(',');
+      await retry(() => q(`DELETE FROM train_stop_summaries WHERE summary_key IN (${args}) RETURNING summary_key`, part), {wait: retryWait, log});
     }
     removed += drop.length;
-    if (scanned % (batch * 50) < batch) log(`[opruiming] ${scanned} bekeken, ${keep} bewaren, ${removed} ${dryRun ? 'zouden weg kunnen' : 'verwijderd'}`);
+    if (scanned % (batch * 100) < batch) log(`[opruiming] ${scanned} bekeken, ${keep} bewaren, ${removed} ${dryRun ? 'zouden weg kunnen' : 'verwijderd'}`);
     if (pause) await new Promise(r => setTimeout(r, pause));
   }
   log(`[opruiming] KLAAR: ${scanned} bekeken, ${keep} bewaren, ${removed} ${dryRun ? 'zouden weg kunnen (niets verwijderd)' : 'verwijderd'}`);
