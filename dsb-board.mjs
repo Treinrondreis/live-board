@@ -28,6 +28,13 @@ const list = value => value == null ? [] : Array.isArray(value) ? value : [value
 const text = value => String(value?.['#text'] ?? (typeof value === 'string' ? value : '')).trim();
 const flag = value => /^(true|1)$/i.test(text(value));
 const stamp = value => Date.parse(text(value));
+const longDistance = new Set(['IC', 'ICL', 'EC', 'ICE', 'EN', 'NJ']);
+const regional = new Set(['RE', 'REG', 'R', 'S', 'S-TOG']);
+
+function callName(call) {
+  const page = stationIds.get(text(call.StopPointRef));
+  return text(call.StopPointName) || dsbStations[page]?.name || '';
+}
 
 export function parseDsbMessage(xml, now=Date.now()) {
   if(typeof xml!=='string'||xml.length>4_000_000||/<!DOCTYPE|<!ENTITY/i.test(xml)||XMLValidator.validate(xml)!==true)return [];
@@ -41,8 +48,12 @@ export function parseDsbMessage(xml, now=Date.now()) {
         if(!ref)continue;
         const observedAt=stamp(journey.RecordedAtTime)||deliveredAt||now;
         const train=text(journey.PublishedLineName)||text(journey.LineRef)||'DSB';
-        const destination=text(journey.DestinationName);
-        for(const call of list(journey.EstimatedCalls?.EstimatedCall)){
+        const category=train.match(/^([a-z]+(?:-tog)?)(?=\s|\d|$)/i)?.[1].toUpperCase() || '';
+        const calls=list(journey.EstimatedCalls?.EstimatedCall);
+        const destinationRef=text(journey.DestinationRef);
+        const destination=text(journey.DestinationName) ||
+          (destinationRef && callName(calls.find(call=>text(call.StopPointRef)===destinationRef) || {StopPointRef:destinationRef}));
+        for(const [index,call] of calls.entries()){
           const stopRef=text(call.StopPointRef);
           const page=stationIds.get(stopRef)||stationNames.get(normalize(text(call.StopPointName)));
           const planned=stamp(call.AimedDepartureTime);
@@ -55,9 +66,10 @@ export function parseDsbMessage(xml, now=Date.now()) {
           const delay=Number.isFinite(expected)?Math.round((expected-planned)/60000):null;
           const id=JSON.stringify([ref,text(journey.FramedVehicleJourneyRef?.DataFrameRef)||day.format(planned),stopRef||page,text(call.Order)]);
           rows.push({page,observedAt,skipped,row:{
-            id,source:'DSB',train,plannedTimestamp:planned,expectedTimestamp:Number.isFinite(expected)?expected:planned,
+            id,source:'DSB',train,category,plannedTimestamp:planned,expectedTimestamp:Number.isFinite(expected)?expected:planned,
             plannedTime:clock.format(planned),time:clock.format(Number.isFinite(expected)?expected:planned),
-            to:destination||'Onbekend',track:text(call.DeparturePlatformName)||'—',cancelled,delay,
+            to:destination||'',futureRoute:[...new Set([...calls.slice(index+1).filter(stop=>!flag(stop.Cancellation)).map(callName),destination].filter(Boolean))],
+            track:text(call.DeparturePlatformName)||'—',cancelled,delay,
             status:cancelled?'Geannuleerd':delay>0?'+'+delay:delay===0?'Op tijd':'',
             type:cancelled?'cancel':delay>0?'delay':'normal',hasRealtime:cancelled||Number.isFinite(expected),
           }});
@@ -84,7 +96,8 @@ export function createDsbBoards(){
         const old=entries.get(entry.row.id);
         if(old&&entry.observedAt<old.observedAt)continue;
         if(old){
-          if(entry.row.to==='Onbekend')entry.row.to=old.row.to;
+          if(!entry.row.to)entry.row.to=old.row.to;
+          if(!entry.row.futureRoute.length)entry.row.futureRoute=old.row.futureRoute;
           if(entry.row.track==='—')entry.row.track=old.row.track;
         }
         entries.set(entry.row.id,entry);
@@ -98,11 +111,12 @@ export function createDsbBoards(){
       prune(entries,now);
       const rows=[...entries.values()].filter(item=>!item.skipped).map(item=>item.row)
         .sort((a,b)=>a.plannedTimestamp-b.plannedTimestamp).slice(0,60);
-      return {source:'Rejseplanen / DSB (SIRI-ET)',page,station,title:station,country:'DK',layout:'all-departures',
+      return {source:'Rejseplanen / DSB (SIRI-ET)',page,station,title:station,country:'DK',
+        quick:[{id:'volgende',label:'Eerstvolgende vertrekken',trains:rows.slice(0,8)}],
         lastScanAt:entries.size?new Date(Math.max(...[...entries.values()].map(item=>item.observedAt))).toISOString():null,
         status:receivedAt&&now-receivedAt<600000?'ready':'unavailable',
         notice:'Uitsluitend ritten waarvoor de DSB-feed een update heeft geleverd.',
-        departures:{all:rows,fernverkehr:[],regional:[]}};
+        departures:{all:rows,fernverkehr:rows.filter(row=>longDistance.has(row.category)),regional:rows.filter(row=>regional.has(row.category))}};
     },
   };
 }

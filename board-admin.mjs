@@ -92,7 +92,7 @@ export function applyBoardSettings(page,payload,override){
  const settings=override||saved.get(page)?.settings;if(!settings)return payload;
  const rows=payload.departures?.all||[];
  return {...payload,title:settings.title,boardSettings:{footer:settings.footer,appearance:settings.appearance,enabled:settings.enabled},
-  quick:settings.enabled?settings.directions.filter(d=>d.enabled).map(d=>{const trains=rows.filter(r=>matches(page,r,d)).slice(0,d.limit);return {id:d.id,label:d.label,count:trains.length,trains};}):[],
+  quick:settings.enabled?(settings.directions.length||payload.country!=='DK'?settings.directions.filter(d=>d.enabled).map(d=>{const trains=rows.filter(r=>matches(page,r,d)).slice(0,d.limit);return {id:d.id,label:d.label,count:trains.length,trains};}):payload.quick):[],
   departures:settings.enabled?payload.departures:{all:[],fernverkehr:[],regional:[]},notice:settings.enabled?payload.notice:'Dit vertrekbord is tijdelijk uitgeschakeld.'};
 }
 const password=()=>String(process.env.BOARD_ADMIN_PASSWORD||'');
