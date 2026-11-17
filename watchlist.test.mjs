@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWatchlist, registerNumbers} from './watchlist.mjs';
+import {cleanupSummaries as cleanupSummaries2} from './summaries-cleanup.mjs';
 
 const w = createWatchlist({extraNumbers: () => ['9876']});
 const t = (category, number, station, origin, destination, country = '') => ({category, number, station, origin, destination, country});
@@ -98,4 +99,16 @@ test('samenvattingen: filter en opruiming houden alleen volglijsttreinen', async
   await recordStopSummaries([{...local, date: '2026-11-11'}, {...ice, date: '2026-11-11'}]);
   setSummaryFilter(null);
   assert.equal(await count(), 2);
+});
+
+test('opruiming gaat door na een tijdelijke databasefout', async () => {
+  let fails = 2; const deleted = [];
+  const rows = [{summary_key: 'a', category: 'RE', train_number: '1', station: 'X', payload: '{}'}];
+  const q = async (sql, args) => {
+    if (fails-- > 0) throw Error('timeout exceeded when trying to connect');
+    if (sql.startsWith('SELECT')) return args[0] === '' ? rows : [];
+    deleted.push(...args); return [];
+  };
+  const r = await cleanupSummaries2({q, includes: () => false, dryRun: false, pause: 0, retryWait: 1, log: () => {}});
+  assert.deepEqual([r.removed, deleted], [1, ['a']]);
 });
