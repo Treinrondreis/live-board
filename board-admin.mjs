@@ -5,7 +5,7 @@ import {swissDirections,matchesSwissDirection} from './swiss-directions.mjs';
 let catalog={},saved=new Map(),provider,legacyMatch;
 const attempts=new Map(),cookieName='treinbord_beheer';
 export const defaultAppearance={design:'standard',accent:'#e5303c',text:'#252525',background:'#ffffff',alternate:'#faf8f5',buttonStart:'#1c6e92',buttonEnd:'#669620',font:'treinrondreis',width:1050,density:'normal',fullOpen:false,defaultTab:'all',showUpdated:true,showFullButton:true,showSource:true};
-export async function initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations={},frenchStations={},spanishStations={},swedishStations={},oebbStations={},darwinStations={},getPayload,matchDirection}){
+export async function initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations={},frenchStations={},spanishStations={},swedishStations={},oebbStations={},darwinStations={},dsbStations={},getPayload,matchDirection}){
  provider=getPayload;legacyMatch=matchDirection;
  catalog={...Object.fromEntries(Object.entries(config.stationPages||{}).map(([id,p])=>[id,{id,name:p.station||p.title,country:p.country||'DE',engine:'standard',title:p.title,directions:p.quickDirections||[]}]))};
  for(const [stations,country,engine] of [[belgianStations,'BE','standard'],[norwegianStations,'NO','standard'],[swissStations,'CH','swiss']])for(const [id,s] of Object.entries(stations))catalog[id]={id,name:s.name,country:s.country||country,engine,title:'Vertrektijden '+s.name,directions:engine==='swiss'?swissDirections[id]||[]:[]};
@@ -15,6 +15,7 @@ export async function initBoardAdmin({config,swissStations,norwegianStations,bel
  for(const [id,s] of Object.entries(oebbStations))catalog[id]={id,name:s.name+' · ÖBB Scotty',country:'AT',engine:'standard',title:'Vertrektijden '+s.name,directions:[{id:'nightjet',label:'Nightjet / EuroNight',categories:['NJ','EN']}]};
  for(const [id,s] of Object.entries(spanishStations))catalog[id]={id,name:s.name,country:'ES',engine:'standard',title:'Vertrektijden '+s.name,directions:[]};
  for(const [id,s] of Object.entries(darwinStations))catalog[id]={id,name:s.name,country:'GB',engine:'darwin',title:s.name,directions:[]};
+ for(const [id,s] of Object.entries(dsbStations))catalog[id]={id,name:s.name,country:'DK',engine:'standard',title:s.name,directions:[]};
  saved=new Map((await readBoardSettings()).map(r=>[r.page,r]));
  for(const [page,r] of saved)if(r.settings.sourcePage&&Object.hasOwn(catalog,r.settings.sourcePage)&&!Object.hasOwn(catalog,page))catalog[page]={...catalog[r.settings.sourcePage],id:page,sourcePage:r.settings.sourcePage};
 }

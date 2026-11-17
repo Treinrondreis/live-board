@@ -26,7 +26,7 @@ function statusClass(t){
 function statusText(t){
   if(['SNCF','RENFE','EUROSTAR'].includes(t.source)&&!t.cancelled&&(!t.hasRealtime||!Number(t.delay)))return '';
   if(t.source==='RFI'&&!t.cancelled&&(!t.hasRealtime||!Number(t.delay)))return t.hasRealtime?(t.status||''):'';
-  if(["ENTUR","OJP","NDOV_IFF","NDOV","OEBB","DARWIN"].includes(t.source)&&!t.hasRealtime&&!t.cancelled)return "";
+  if(["ENTUR","OJP","NDOV_IFF","NDOV","OEBB","DARWIN","DSB"].includes(t.source)&&!t.hasRealtime&&!t.cancelled)return "";
   if(t.source==="NMBS"&&!t.hasRealtime&&!t.cancelled)return "";
   if(t.source==='DARWIN'&&t.delay===null&&!t.cancelled)return t.status||'';
   if(t.partialCancellation)return t.status||"Deels geannuleerd";
@@ -151,7 +151,7 @@ async function refresh(){
       quickEl.hidden=true;
       fullEl.hidden=false;
       renderDepartureFilters(p);
-      fullEl.querySelector('.columns span:nth-child(2)').textContent='Vervoerder';
+      fullEl.querySelector('.columns span:nth-child(2)').textContent=p.country==='GB'?'Vervoerder':'Trein';
       toggleFull.closest('.board-footer').hidden=true;
     }else if(!data){
       const allTab=document.querySelector('[data-tab="all"]');
@@ -172,9 +172,9 @@ async function refresh(){
     if(showAll&&p.status==="starting")setTimeout(()=>{if(sequence===requestSequence)void refresh();},1500);
     const d=p.lastScanAt?new Date(p.lastScanAt):null;
     scanStatus.textContent=d&&!Number.isNaN(d.getTime())
-      ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit",timeZone:showAll?"Europe/London":undefined}).format(d)}${showAll?" Britse tijd":""}`
+      ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit",timeZone:p.country==="GB"?"Europe/London":p.country==="DK"?"Europe/Copenhagen":undefined}).format(d)}${p.country==="GB"?" Britse tijd":""}`
       :"actueel";
-    if((["BE","NO","IT","FR","ES","SE","AT","GB"].includes(p.country)||p.source?.includes("OJP"))&&p.status!=="ready")scanStatus.textContent=p.status==="starting"?(showAll?"vertrekken laden…":"dienstregeling laden…"):"realtime tijdelijk niet beschikbaar";
+    if((["BE","NO","IT","FR","ES","SE","AT","GB","DK"].includes(p.country)||p.source?.includes("OJP"))&&p.status!=="ready")scanStatus.textContent=p.status==="starting"?(showAll?"vertrekken laden…":"dienstregeling laden…"):"realtime tijdelijk niet beschikbaar";
   }catch(e){
     scanStatus.textContent="tijdelijk niet beschikbaar";
     if(!data)quickEl.innerHTML=`<div class="empty">${esc(e.message)}</div>`;
