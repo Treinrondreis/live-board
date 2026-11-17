@@ -9,7 +9,7 @@ test('shares a departure request and preserves the distinction between live and 
     apiKey: () => 'fixture-key',
     fetchBoard: async (url, options) => {
       requests++;
-      assert.match(url, /GetDepBoardWithDetails\/YRK\/235500\?numRows=30$/);
+      assert.match(url, /GetDepBoardWithDetails\/YRK\/20260701T235500\?numRows=30$/);
       assert.equal(options.headers['x-apikey'], 'fixture-key');
       assert.equal(options.redirect, 'error');
       return {ok: true, json: async () => ({crs: 'YRK', trainServices: [
