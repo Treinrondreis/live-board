@@ -10,6 +10,7 @@ import {handleAnalytics,startAnalyticsBackfill} from './train-analytics.mjs';
 import {handleAdminHub} from './admin-hub.mjs';
 import {handleGoogleAccess} from './google-access.mjs';
 import {handleFlora} from './flora.mjs';
+import {handleDailyReportSource} from './daily-report-source.mjs';
 import {handleReisschemas} from './reisschemas.mjs';
 import {configurePunctuality,backfillPunctuality} from './punctuality.mjs';
 import {floraRegister} from './flora-register.mjs';
@@ -1095,6 +1096,7 @@ const server=http.createServer(async(req,res)=>{
     if(await handleReishuis(req,res,url))return;
     if(await handleExpedia(req,res,url))return;
     if(await handleReisschemaReceipt(req,res,url))return;
+    if(await handleDailyReportSource(req,res,url))return;
     if(await handleReisschemas(req,res,url))return;
     if(await handleFlora(req,res,url))return;
     if(await handleBooklets(req,res,url))return;
