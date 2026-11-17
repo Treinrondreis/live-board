@@ -88,6 +88,20 @@ export function createPunctualityArchive(db,options={}){
   record(trains,source,at=clock()){const task=queue.then(()=>write(trains,source,at));queue=task.catch(()=>{status.error='Stiptheidsopslag niet voltooid; controleer de opslag.';});return task;},
   status:()=>({...status,retention:'permanent',changesOnly:true}),
   async history(legId,limit=500){if(!status.ready)return [];const rows=await query('SELECT e.* FROM punctuality_events e JOIN punctuality_legs l ON e.event_id=l.event_id WHERE l.leg_id=$1 ORDER BY e.last_seen_at DESC,e.event_id LIMIT $2',[legId,limit]);return rows.map(r=>({...JSON.parse(r.payload),first_seen_at:Number(r.first_seen_at),last_seen_at:Number(r.last_seen_at)}));},
+  async reportMeasurements(legs){
+   if(!status.ready)throw Error('Punctuality archive unavailable');
+   const versions=new Map(legs.map(leg=>[leg.leg_id,leg.version_id]));
+   const ids=[...versions.keys()];
+   const measurements=[];
+   for(let offset=0;offset<ids.length;offset+=200){
+    const batch=ids.slice(offset,offset+200);
+    const rows=await query('SELECT l.leg_id,l.version_id,e.payload,e.first_seen_at,e.last_seen_at FROM punctuality_events e JOIN punctuality_legs l ON e.event_id=l.event_id WHERE l.leg_id IN ('+batch.map((_,i)=>'$'+(i+1)).join(',')+') ORDER BY e.last_seen_at DESC,e.event_id',batch);
+    for(const row of rows){
+     if(versions.get(row.leg_id)===row.version_id)measurements.push({...row,payload:JSON.parse(row.payload)});
+    }
+   }
+   return measurements;
+  },
   async enrich(legs){
    if(!status.ready)return legs;
    const latest=new Map(),ids=[...new Set(legs.map(l=>l.leg_id).filter(Boolean))];
@@ -107,6 +121,10 @@ export async function initPunctuality(db){database=db;instance=createPunctuality
 export const recordPunctuality=(...args)=>instance?.record(...args)||Promise.resolve();
 export const enrichPunctuality=rows=>instance?.enrich(rows)||Promise.resolve(rows);
 export const punctualityHistory=id=>instance?.history(id)||Promise.resolve([]);
+export async function dailyReportMeasurements(legs){
+ if(!instance)throw Error('Punctuality archive unavailable');
+ return instance.reportMeasurements(legs);
+}
 export const punctualityStatus=()=>({...instance?.status(),ready:!!instance?.status().ready,backfill:{...backfill}});
 export async function backfillPunctuality(now=Date.now()){
  if(!database||!instance||backfill.running)return;backfill.running=true;backfill.error=null;let cursor=0;const cutoff=now-31*86400000;
