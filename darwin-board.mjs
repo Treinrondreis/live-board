@@ -1,4 +1,4 @@
-const endpoint = 'https://api1.raildata.org.uk/1010-live-departure-board---staff-version1_0/LDBSVWS/api/20220120/GetDepBoardWithDetails';
+const endpoint = 'https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120/GetDepartureBoard';
 export const darwinStations = Object.freeze({
   'london-paddington': { crs: 'PAD', name: 'London Paddington' },
   york: { crs: 'YRK', name: 'York' },
@@ -30,22 +30,24 @@ function normalizeDeparture(service, now) {
   if (!service || service.serviceIsSupressed || service.serviceIsSuppressed || service.isPass) return null;
   const planned = reading(service, 'std', now);
   if (!planned) return null;
-  const cancelled = service.isCancelled === true;
+  const departureStatus = typeof service.etd === 'string' ? service.etd.trim().toLowerCase() : '';
+  const cancelled = service.isCancelled === true || departureStatus === 'cancelled';
   const actual = service.departureTypeSpecified !== false && service.departureType === 'Actual'
     ? reading(service, 'atd', planned.timestamp) : null;
   if (actual && !cancelled) return null;
-  const expected = reading(service, 'etd', planned.timestamp);
+  const expected = departureStatus === 'on time' ? planned : reading(service, 'etd', planned.timestamp);
+  const delayed = departureStatus === 'delayed' || service.departureType === 'Delayed';
   const destinations = service.currentDestinations?.length ? service.currentDestinations : service.destination;
   const to = Array.isArray(destinations) ? destinations.map(stop => stop?.locationName).filter(Boolean).join(' / ') : '';
   const delay = expected ? Math.round((expected.timestamp - planned.timestamp) / 60000) : null;
   return {
-    id: String(service.rid || [service.uid, planned.timestamp, to].join('|')),
+    id: String(service.serviceID || service.rid || [service.uid, planned.timestamp, to].join('|')),
     source: 'DARWIN', train: service.operator || 'Trein', number: '', category: '',
     plannedTime: planned.time, time: cancelled ? planned.time : expected?.time || planned.time,
     to: to || 'Onbekend', track: service.platformIsHidden ? '—' : service.platform || '—',
-    cancelled, delay, hasRealtime: Boolean(expected || cancelled || service.departureType === 'Delayed'),
+    cancelled, delay, hasRealtime: Boolean(expected || cancelled || delayed),
     status: cancelled ? 'Geannuleerd' : delay > 0 ? '+' + delay
-      : service.departureType === 'Delayed' && !expected ? 'Vertraagd' : expected ? 'Op tijd' : '',
+      : delayed && !expected ? 'Vertraagd' : expected ? 'Op tijd' : '',
     type: cancelled ? 'cancel' : delay > 0 ? 'delay' : 'normal',
     plannedTimestamp: planned.timestamp,
   };
@@ -54,8 +56,8 @@ function normalizeDeparture(service, now) {
 export function createDarwinBoards({
   fetchBoard = globalThis.fetch,
   clock = Date.now,
-  apiKey = () => process.env.RDM_LDB_STAFF_API_KEY,
-  reportFailure = (crs, reason) => console.warn('[Darwin Staff] '+crs+' '+reason),
+  apiKey = () => process.env.RDM_LDB_API_KEY,
+  reportFailure = (crs, reason) => console.warn('[Darwin LDB] '+crs+' '+reason),
 } = {}) {
   const cache = new Map();
   async function refresh(station, entry) {
@@ -63,8 +65,7 @@ export function createDarwinBoards({
       const key = apiKey()?.trim();
       if (!key) return reportFailure(station.crs, 'missing-key');
       const now = clock();
-      const time = timeFormat.format(new Date(now)).replaceAll(':', '');
-      const url = endpoint + '/' + station.crs + '/' + time + '?numRows=30';
+      const url = endpoint + '/' + station.crs + '?numRows=30';
       const response = await fetchBoard(url, {
         headers: { 'x-apikey': key, Accept: 'application/json' },
         redirect: 'error', signal: AbortSignal.timeout(8000),
