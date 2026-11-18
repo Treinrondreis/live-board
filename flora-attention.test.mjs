@@ -58,7 +58,11 @@ test('wrong trip number only links with unique identity, hotel and exact dates',
  assert.equal(resolveEvidence(e,[b,{...b,_id:'other',index:6686}]).todoKey,'');
 });
 test('rules-only rechecks attention without Gmail or touching unrelated evidence',async()=>{
- let state={...emptyState(),bookings:[booking()],findings:[{id:'6685:hotel:missing',trip:'6685',status:'attention',priority:'normaal',history:[]}],evidence:[]};
+ // Vertrek ver in de toekomst houden: de prioriteit van 'missing' hangt af van het aantal dagen tot vertrek
+ // (> 60 dagen = laag). Met de vaste datum 2027-01-13 faalde deze test vanaf half november 2026.
+ const day=d=>new Date(Date.now()+d*86400000).toISOString().slice(0,10),far=booking();
+ far.dateDeparture=day(400);far.dateReturn=day(402);far.todos=far.todos.map(t=>({...t,startDate:day(400),endDate:day(402)}));
+ let state={...emptyState(),bookings:[far],findings:[{id:'6685:hotel:missing',trip:'6685',status:'attention',priority:'normaal',history:[]}],evidence:[]};
  const kv=new Map(),control=createMailControl({read:async k=>structuredClone(kv.get(k)||{value:{},revision:0}),write:async(k,value,r)=>{kv.set(k,{value:structuredClone(value),revision:r+1});return r+1;},readState:async()=>({state:structuredClone(state),revision:1}),writeState:async s=>{state=s;return 2;},google:{status:async()=>{throw Error('Gmail must not be used');},reader:async()=>{throw Error('Gmail must not be used');}}});
  await control.start({mode:'rules-only'});await control.tick();const status=await control.status();assert.equal(status.status,'completed');assert.equal(status.done,1);assert.equal(status.outcome.reviewed,1);assert.equal(status.messages,0);assert.equal(state.findings.find(f=>f.code==='missing').priority,'laag');
 });
