@@ -80,3 +80,26 @@ test('fout na writeHead: tweede writeHead wint', () => serve((req, res) => {
   assert.equal(r.status, 500);
   assert.equal(zlib.gunzipSync(r.body).toString(), big);
 }));
+
+test('fout bij versturen (ongeldige header) laat de server niet crashen', () => serve((req, res) => {
+  res.writeHead(200, {'Content-Type': 'text/html', 'X-Name': 'café €'}); res.end(big);
+}, async url => {
+  const r = await get(url);
+  assert.equal(r.status, 500);
+}));
+
+test('tweede end tijdens comprimeren wordt genegeerd', () => serve((req, res) => {
+  res.writeHead(200, {'Content-Type': 'application/json'}); res.end(big);
+  res.writeHead(500, {'Content-Type': 'application/json'}); res.end('{"error":true}');
+}, async url => {
+  const r = await get(url);
+  assert.equal(r.status, 200);
+  assert.equal(zlib.gunzipSync(r.body).toString(), big);
+}));
+
+test('Uint8Array-body blijft correct', () => serve((req, res) => {
+  res.writeHead(200, {'Content-Type': 'application/json'}); res.end(new Uint8Array(Buffer.from(big)));
+}, async url => {
+  const r = await get(url);
+  assert.equal(zlib.gunzipSync(r.body).toString(), big);
+}));

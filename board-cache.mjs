@@ -7,6 +7,8 @@ import {initExpedia} from './expedia-store.mjs';
 import {initReishuis} from './reishuis-store.mjs';
 let db;
 export async function initBoardCache({backend,pool,sqlite}){
+ for(const st of cacheWrites.values())if(st.timer)clearTimeout(st.timer);
+ cacheWrites.clear();
  db={backend,pool,sqlite};
  initReishuis(db);
  await initFlora(db);
@@ -69,7 +71,7 @@ export async function writeBoardSettings(page,settings,revision){
 // BOARD_CACHE_MIN_INTERVAL_SECONDS (standaard 120 s); de laatste versie wordt dan later
 // alsnog weggeschreven. Scheelt veel schrijfwerk op de database.
 const cacheWrites=new Map();
-const minCacheInterval=()=>Math.max(0,Number(process.env.BOARD_CACHE_MIN_INTERVAL_SECONDS??120))*1000;
+const minCacheInterval=()=>{const n=Number(process.env.BOARD_CACHE_MIN_INTERVAL_SECONDS??120);return (Number.isFinite(n)&&n>=0?n:120)*1000;};
 export async function saveBoardCache(key,value,at=Date.now()){
  if(!db)return;
  const data=JSON.stringify(value),hash=createHash('sha1').update(data).digest('hex');
@@ -80,7 +82,7 @@ export async function saveBoardCache(key,value,at=Date.now()){
  const wait=state.lastAt+minCacheInterval()-Date.now();
  if(wait>0){
   state.pending={data,hash,at};
-  if(!state.timer){state.timer=setTimeout(()=>{state.timer=null;const p=state.pending;state.pending=null;if(p)void writeBoardCache(key,p.data,p.hash,p.at).catch(()=>{});},wait);state.timer.unref?.();}
+  if(!state.timer){state.timer=setTimeout(()=>{state.timer=null;const p=state.pending;state.pending=null;if(p)void writeBoardCache(key,p.data,p.hash,p.at).catch(e=>console.error('[board-cache] Uitgestelde opslag mislukt voor',key+':',e.message));},wait);state.timer.unref?.();}
   return;
  }
  state.pending=null;

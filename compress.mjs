@@ -30,13 +30,14 @@ function withoutHeader(headers, name) {
 export function enableCompression(req, res, {enabled = process.env.COMPRESSION !== 'off'} = {}) {
   if (!enabled || req.method === 'HEAD' || !/\bgzip\b/i.test(String(req.headers['accept-encoding'] || ''))) return;
   const writeHead = res.writeHead, write = res.write, end = res.end;
-  let pending = null, streaming = false;
+  let pending = null, streaming = false, ending = false;
 
   const flush = () => { if (pending) { const args = pending; pending = null; writeHead.apply(res, args); } };
 
-  res.writeHead = function (status, ...rest) { pending = [status, ...rest]; return res; };
+  res.writeHead = function (status, ...rest) { if (!ending) pending = [status, ...rest]; return res; };
   res.write = function (...args) { streaming = true; flush(); return write.apply(res, args); };
   res.end = function (chunk, encoding, callback) {
+    if (ending) return res; // tweede end tijdens comprimeren negeren
     if (typeof chunk === 'function') { callback = chunk; chunk = undefined; encoding = undefined; }
     if (typeof encoding === 'function') { callback = encoding; encoding = undefined; }
     const plain = () => { flush(); return end.call(res, chunk, encoding, callback); };
@@ -46,17 +47,25 @@ export function enableCompression(req, res, {enabled = process.env.COMPRESSION !
     const type = String(headerValue(headerArg, 'content-type') ?? res.getHeader('content-type') ?? '');
     const encoded = headerValue(headerArg, 'content-encoding') ?? res.getHeader('content-encoding');
     if (chunk == null || encoded || status === 204 || status === 304 || status < 200 || !COMPRESSIBLE.test(type)) return plain();
-    const body = Buffer.isBuffer(chunk) ? chunk : Buffer.from(typeof chunk === 'string' ? chunk : String(chunk), encoding || 'utf8');
+    const body = Buffer.isBuffer(chunk) ? chunk : ArrayBuffer.isView(chunk) ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength) : Buffer.from(typeof chunk === 'string' ? chunk : String(chunk), encoding || 'utf8');
     if (body.length < MIN_BYTES) return plain();
-    zlib.gzip(body, {level: 6}, (err, gz) => {
-      if (err) return plain();
+    ending = true;
+    zlib.gzip(body, {level: 4}, (err, gz) => {
+      // Dit draait buiten de try/catch van de request-handler: fouten hier mogen de server niet laten crashen.
+      try {
+        if (err) { ending = false; return plain(); }
       if (pending) pending = pending.map((v, i) => (i > 0 && v && typeof v === 'object') ? withoutHeader(withoutHeader(v, 'content-length'), 'vary') : v);
       res.removeHeader('content-length');
       res.setHeader('Content-Encoding', 'gzip');
       const vary = String(headerValue(headerArg, 'vary') ?? res.getHeader('vary') ?? '');
       if (!/accept-encoding/i.test(vary)) res.setHeader('Vary', vary ? vary + ', Accept-Encoding' : 'Accept-Encoding');
-      flush();
-      end.call(res, gz, callback);
+        flush();
+        end.call(res, gz, callback);
+      } catch (e) {
+        console.error('[compressie] Antwoord kon niet worden verstuurd:', e.message);
+        if (!res.headersSent) { pending = null; try { writeHead.call(res, 500, {'Content-Type': 'text/plain; charset=utf-8'}); end.call(res, 'Serverfout'); return; } catch {} }
+        res.destroy(e);
+      }
     });
     return res;
   };
