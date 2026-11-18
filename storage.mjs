@@ -1,5 +1,6 @@
 import {initBoardCache,cleanupHistory,retentionPolicy} from './board-cache.mjs';
 import {initJourneys,recordJourneyMeasurements} from "./journeys.mjs";
+import {recordWatchlistJourneys} from "./watchlist-journeys.mjs";
 import {initPunctuality,recordPunctuality} from './punctuality.mjs';
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -285,6 +286,7 @@ export async function recordObservations(trains,source,observedAt=Date.now()){
   await recordCanonicalObservations(trains,source,observedAt);
   await recordPunctuality(trains,source,observedAt);
   await recordJourneyMeasurements(trains,source,observedAt);
+  try{await recordWatchlistJourneys(trains,source,observedAt);}catch(e){console.error('Ritarchief volglijst:',e.message);}
   void cleanupOldObservations(observedAt).catch(e=>console.error('Retention:',e.message));
 }
 
