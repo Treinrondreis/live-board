@@ -1274,7 +1274,9 @@ await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPl
 for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>Date.now()-86400000)ndovRows.set(row.id,row);
 server.listen(PORT,async()=>{
   startReishuisCatalogSync();
-  startFlora();
+  // Flora (mail, PDF's, Expedia, Sanity, treincontrole elke 30 s) uit te zetten met Railway-variabele FLORA=off.
+  // Het reisschemaregister en de volglijst blijven dan gewoon werken.
+  if(process.env.FLORA==='off')console.log('[flora] Uitgeschakeld via FLORA=off: geen mail-, Expedia- of treincontroles.');else startFlora();
   startReisschemaControls();
   void backfillPunctuality();
   void checkNdovAccess();
