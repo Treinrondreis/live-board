@@ -5,6 +5,7 @@ import {startReishuisCatalogSync} from './reishuis-catalogs.mjs';
 import {rinkelIncoming} from './reishuis-rinkel.mjs';
 import {oebbStations,oebbState,oebbPayload,restoreOebb,startOebb} from './oebb.mjs';
 import {dsbBoard,dsbStations,startDsb} from './dsb-board.mjs';
+import {czechStations,czechArchivePayload,czechArchiveState,restoreCzechArchive,startCzechArchive} from './archive-czech.mjs';
 import {darwinBoard,darwinStations} from './darwin-board.mjs';
 import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
@@ -1216,6 +1217,8 @@ const server=http.createServer(async(req,res)=>{
     if(copyPage&&boardSource(copyPage)&&boardSource(copyPage)!==copyPage)return sendJson(res,200,await duplicatePayload(copyPage));
     if(url.pathname==='/api/oebb/status')return sendJson(res,200,oebbState);
     const belgianPage=url.pathname.match(/^\/api\/views\/([a-z0-9-]+)\/?$/)?.[1];
+    if(url.pathname==='/api/czech-archive/status')return sendJson(res,200,czechArchiveState);
+    if(belgianPage&&Object.hasOwn(czechStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,czechArchivePayload(belgianPage)));
     if(belgianPage&&Object.hasOwn(dsbStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,dsbBoard(belgianPage)));
     if(belgianPage&&Object.hasOwn(darwinStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,await darwinBoard(belgianPage)));
     if(belgianPage&&Object.hasOwn(oebbStations,belgianPage))return sendJson(res,200,applyBoardSettings(belgianPage,oebbPayload(belgianPage)));
@@ -1268,9 +1271,9 @@ startDayReports(()=>{
  const italyRows=recent(italyState.lastScanAt)?italyState.trains.filter(r=>r.station==='Milano Centrale').map(r=>({...r,source:'ViaggiaTreno'})):[];
  return [...dbRows,...italyRows].filter(r=>!r.plannedTimestamp||r.plannedTimestamp<=now+3*3600000||r.cancelled||Number(r.delay)>=10);
 });
-await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations,frenchStations,spanishStations,swedishStations,oebbStations,darwinStations,dsbStations,matchDirection:stationDirectionMatches,getPayload:page=>Object.hasOwn(dsbStations,page)?dsbBoard(page):Object.hasOwn(darwinStations,page)?darwinBoard(page,{waitForData:true}):
+await initBoardAdmin({config,swissStations,norwegianStations,belgianStations,rfiStations,frenchStations,spanishStations,swedishStations,oebbStations,darwinStations,dsbStations,czechStations,matchDirection:stationDirectionMatches,getPayload:page=>Object.hasOwn(czechStations,page)?czechArchivePayload(page):Object.hasOwn(dsbStations,page)?dsbBoard(page):Object.hasOwn(darwinStations,page)?darwinBoard(page,{waitForData:true}):
  internationalPayload(page,Object.hasOwn(oebbStations,page)?oebbPayload(page):Object.hasOwn(swedishStations,page)?swedishPayload(page):Object.hasOwn(frenchStations,page)?frenchPayload(page):Object.hasOwn(spanishStations,page)?null:Object.hasOwn(rfiStations,page)?italianEmbedPayload(page):Object.hasOwn(swissStations,page)?swissPayload(page):Object.hasOwn(norwegianStations,page)?norwegianPayload(page):Object.hasOwn(belgianStations,page)?belgianPayload(page):stationPagePayload(page))});
-await Promise.all([restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreOebb(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
+await Promise.all([restoreCzechArchive(),restoreSwiss(),restoreEntur(),restoreBelgium(),restoreDutchPlan(),restoreRfi(),restoreFrance(),restoreInternational(),restoreSweden(),restoreOebb(),restoreDbBoards().catch(e=>console.error('DB-bordcache laden mislukt:',e.message))]);
 for(const row of await loadBoardCache('NDOV:rows')||[])if(row.plannedTimestamp>Date.now()-86400000)ndovRows.set(row.id,row);
 server.listen(PORT,async()=>{
   startReishuisCatalogSync();
@@ -1287,6 +1290,7 @@ server.listen(PORT,async()=>{
   startSweden();
   startOebb();
   void startDsb();
+  startCzechArchive();
   startFrance();
   startInternational();
   startSwiss();
