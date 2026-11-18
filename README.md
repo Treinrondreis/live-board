@@ -19,6 +19,25 @@ Zie **RAILWAY-STAPPEN.md** voor de online installatie.
 
 # Treinrondreis vertrekbord v1.1 — DB + ITALIA
 
+## Opslag, volglijst en bewaartermijnen
+
+Het live bord toont alle treinen. Wat langer bewaard wordt, bepaalt de **volglijst** (`watchlist.mjs`):
+ICE van/naar NL/BE/CH/AT en Düsseldorf–München, RJ/EC/NJ/EN/Eurostar/AVE, TGV Lille/Montpellier,
+alles rond Montpellier, Paris Austerlitz–Brive–Cahors–Toulouse, Narbonne–Collioure, Nîmes–Clermont,
+Clermont–Paris Bercy, Voss/Narvik/Boden, Trondheim–Bodø, Schotland, plus alle treinnummers uit het
+reisschemaregister en de treinrapporten. Regels aanpassen: `watchlist.mjs`, voorbeelden in `watchlist.test.mjs`.
+
+| Gegevens | Tabel | Bewaartermijn |
+|---|---|---|
+| Ruwe metingen | `train_observations`, `event_observations` e.a. | 3 dagen; ICE/NJ/RJ 7 dagen |
+| Vertragingssamenvatting per trein/station/dag (incl. spoor) | `train_stop_summaries` | altijd, alleen volglijst |
+| Complete ritten | `journey_archive` | altijd |
+| Ritverloop gedurende de dag | `journey_archive_revisions` | 3 dagen; ICE/NJ/RJ 30 dagen |
+
+Onbewerkte brondata wordt niet meer opgeslagen. Railway-variabelen: `SUMMARY_WATCHLIST=off` en
+`JOURNEY_WATCHLIST=off` zetten de volglijst uit; `DB_POOL_MAX` (standaard 10) is het aantal databaseverbindingen;
+`SUMMARY_CLEANUP=report|delete` is de eenmalige opruiming van oude samenvattingen.
+
 ## Schermwissel
 
 - 10 seconden internationaal / DB
