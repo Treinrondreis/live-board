@@ -10,6 +10,7 @@ import {embedPayload} from './embed-payload.mjs';
 import {handlePasswordReset} from './password-reset.mjs';
 import {handleAnalytics,startAnalyticsBackfill,setSummaryFilter,analyticsQuery} from './train-analytics.mjs';
 import {startSummaryCleanup} from './summaries-cleanup.mjs';
+import {enableCompression} from './compress.mjs';
 import {createWatchlist,registerNumbers} from './watchlist.mjs';
 import {configureWatchlistJourneys} from './watchlist-journeys.mjs';
 import {handleAdminHub} from './admin-hub.mjs';
@@ -1094,6 +1095,7 @@ const handleTreinreiziger=createTreinreizigerHandler({stations:[...new Map(appSt
 }});
 
 const server=http.createServer(async(req,res)=>{
+  enableCompression(req,res);
   try{
     const url=new URL(req.url,`http://${req.headers.host}`);
     if(url.pathname.startsWith('/api/views/'))res.embedQuery=url.searchParams;
