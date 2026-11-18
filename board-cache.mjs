@@ -74,15 +74,18 @@ export async function loadBoardCache(key,maxAge=3*86400000){
  const row=db.pool?(await db.pool.query('SELECT payload FROM board_cache WHERE cache_key=$1 AND updated_at>=$2',[key,Date.now()-maxAge])).rows[0]:db.sqlite.prepare('SELECT payload FROM board_cache WHERE cache_key=? AND updated_at>=?').get(key,Date.now()-maxAge);
  return row?JSON.parse(row.payload):null;
 }
-export const retentionPolicy={defaultDays:3,extendedDays:30,extendedCategories:['ICE','NJ','RJ'],mode:'changes-only'};
+export const retentionPolicy={defaultDays:3,extendedDays:7,extendedCategories:['ICE','NJ','RJ'],mode:'changes-only'};
 let cleaning=false;
 export async function cleanupHistory(now=Date.now()){
  if(!db||cleaning)return;cleaning=true;
- const cutoff=now-3*86400000,longCutoff=now-30*86400000;
+ // Ruwe data: retentionPolicy (3 dagen; ICE/NJ/RJ 7 dagen).
+ // Ritverloop (journey_archive_revisions): 3 dagen; ICE/NJ/RJ 30 dagen.
+ // Ritarchief (journey_archive, complete rit met alle stations): wordt niet opgeruimd.
+ const day=86400000,cutoff=now-retentionPolicy.defaultDays*day,longCutoff=now-retentionPolicy.extendedDays*day,archiveCutoff=now-30*day;
  const dated=(column='category')=>`CASE WHEN UPPER(COALESCE(${column},'')) IN ('ICE','NJ','RJ') THEN ${longCutoff} ELSE ${cutoff} END`;
  const cat=db.pool?"(state_json::jsonb->>'category')":"json_extract(state_json,'$.category')";
- const shortDate=new Date(cutoff).toISOString().slice(0,10),longDate=new Date(longCutoff).toISOString().slice(0,10);
- const dateLimit=column=>`CASE WHEN UPPER(COALESCE(${column},'')) IN ('ICE','NJ','RJ') THEN '${longDate}' ELSE '${shortDate}' END`;
+ const shortDate=new Date(cutoff).toISOString().slice(0,10),longDate=new Date(longCutoff).toISOString().slice(0,10),archiveDate=new Date(archiveCutoff).toISOString().slice(0,10);
+ const dateLimit=(column,long=longDate)=>`CASE WHEN UPPER(COALESCE(${column},'')) IN ('ICE','NJ','RJ') THEN '${long}' ELSE '${shortDate}' END`;
  const tables=[
   ['train_observations','id',`observed_at<${dated()} AND COALESCE(planned_timestamp,0)<${dated()}`],
   ['event_observations','observation_uid',`observed_at<${dated()} AND COALESCE(planned_timestamp,0)<${dated()}`],
@@ -90,8 +93,7 @@ export async function cleanupHistory(now=Date.now()){
   ['service_runs','service_uid',`service_date<${dateLimit('category')}`],
   ['train_observation_state','state_key',`last_seen_at<${longCutoff}`],
   ['ingest_batches','batch_uid',`observed_at<${cutoff}`],
-  ['journey_archive_revisions','revision_id',`journey_id IN (SELECT journey_id FROM journey_archive WHERE service_date<${dateLimit(cat)})`],
-  ['journey_archive','journey_id',`service_date<${dateLimit(cat)}`],
+  ['journey_archive_revisions','revision_id',`journey_id IN (SELECT journey_id FROM journey_archive WHERE service_date<${dateLimit(cat,archiveDate)})`],
   ['board_cache','cache_key',`updated_at<${cutoff}`]
  ];
  try{for(const [table,key,where] of tables){

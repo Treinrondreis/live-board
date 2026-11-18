@@ -385,6 +385,9 @@ async function seedSources(){
   }
 }
 
+// Alleen het migratiekenmerk (_legacyId) bewaren; de volledige brondata werd nergens gelezen.
+function minimalRaw(p){const id=p&&typeof p==='object'?p._legacyId:null;return id?JSON.stringify({_legacyId:id}):null;}
+
 async function inferLegacyProgress(){
   if(backend==="postgresql"){
     const r=await pool.query(`
@@ -557,7 +560,7 @@ async function recordPg(rows,sourceId,observedAt,{migration=false}={}){
           ON CONFLICT(observation_uid) DO NOTHING`,[observationUid,batchUid,r.serviceUid,r.sourceId,r.serviceDate,r.trainNumber,r.category,r.sourceEventId,
           r.stationName,r.stationCode,r.countryCode,r.eventMode,r.observedAt,r.plannedTimestamp,r.expectedTimestamp,r.actualTimestamp,r.plannedPlatform,r.currentPlatform,
           r.delayMinutes,r.status,r.cancelled,r.origin,r.destination,JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),
-          rawChanged?JSON.stringify(r.rawPayload):null,r.stateHash,r.rawHash,kind]);
+          minimalRaw(r.rawPayload),r.stateHash,r.rawHash,kind]);
         persistedCount++;if(stateChanged)changeCount++;else if(rawChanged)rawCount++;else heartbeatCount++;
       }else suppressedCount++;
       if(migration){
@@ -615,7 +618,7 @@ function recordSqlite(rows,sourceId,observedAt,{migration=false}={}){
       if(persist){observationUid=sha([r.eventKey,r.observedAt,r.stateHash,r.rawHash,kind].join("|"));
         eventStmt.run(observationUid,batchUid,r.serviceUid,r.sourceId,r.serviceDate,r.trainNumber,r.category,r.sourceEventId,r.stationName,r.stationCode,r.countryCode,r.eventMode,
           r.observedAt,r.plannedTimestamp,r.expectedTimestamp,r.actualTimestamp,r.plannedPlatform,r.currentPlatform,r.delayMinutes,r.status,r.cancelled?1:0,r.origin,r.destination,
-          JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),rawChanged?JSON.stringify(r.rawPayload):null,r.stateHash,r.rawHash,kind);
+          JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),minimalRaw(r.rawPayload),r.stateHash,r.rawHash,kind);
         persistedCount++;if(stateChanged)changeCount++;else if(rawChanged)rawCount++;else heartbeatCount++;
       }else suppressedCount++;
       if(migration)sqlite.prepare(`INSERT INTO migration_event_state(migration_name,event_key,state_hash,raw_hash,last_observation_at,last_payload_at) VALUES(?,?,?,?,?,?)
@@ -870,7 +873,7 @@ export async function getDataHubStats(){
       storagePolicy:{
         mode:"changes-only",
         heartbeatMinutes:0,
-        rawPayload:"only-when-changed",
+        rawPayload:"migration-id-only",
         dbFernverkehr:"ICE/NJ/RJ 30 days; others 3 days",
         dbRegional:"3 days",
         fernverkehrCategories:FERNVERKEHR_CATEGORIES
@@ -885,7 +888,7 @@ export async function getDataHubStats(){
     storagePolicy:{
         mode:"changes-only",
         heartbeatMinutes:0,
-        rawPayload:"only-when-changed",
+        rawPayload:"migration-id-only",
         dbFernverkehr:"ICE/NJ/RJ 30 days; others 3 days",
         dbRegional:"3 days",
         fernverkehrCategories:FERNVERKEHR_CATEGORIES
