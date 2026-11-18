@@ -98,10 +98,11 @@ export async function cleanupHistory(now=Date.now()){
  ];
  try{for(const [table,key,where] of tables){
   let count;
-  do{const sql=`DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM ${table} WHERE ${where} LIMIT 1000)`;
+  // Kleine porties met een pauze ertussen, zodat het bord zelf ook bij de database kan.
+  do{const sql=`DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM ${table} WHERE ${where} LIMIT 500)`;
    count=db.pool?(await db.pool.query(sql)).rowCount:Number(db.sqlite.prepare(sql).run().changes);
-   if(count===1000)await new Promise(r=>setTimeout(r,50));
-  }while(count===1000);
+   if(count===500&&db.pool)await new Promise(r=>setTimeout(r,300));
+  }while(count===500);
  }}finally{cleaning=false;}
 }
 

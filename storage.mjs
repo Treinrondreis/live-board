@@ -54,9 +54,11 @@ export async function initStorage(){
     const {Pool}=await import("pg");
     pool=new Pool({
       connectionString:databaseUrl,
-      max:4,
+      // Meer verbindingen en langer wachten: bij druk (bijv. groot opruimwerk) gaven
+      // dagverslagen en samenvattingen anders na 10 s op.
+      max:Math.max(2,Number(process.env.DB_POOL_MAX||10)),
       idleTimeoutMillis:30000,
-      connectionTimeoutMillis:10000
+      connectionTimeoutMillis:30000
     });
 
     let lastError=null;
