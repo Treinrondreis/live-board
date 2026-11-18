@@ -17,6 +17,7 @@ function trainLabel(t){
   return esc(t.train||'—')+(stationPart?`<span class="station-part">${stationPart}</span>`:'');
 }
 function statusClass(t){
+  if(t.source==='TRAIN_ARCHIVE_CZ'&&!t.hasRealtime&&!t.cancelled)return 'unknown';
   if(t.partialCancellation)return Number(t.delay||0)>30?"major-delay":"delay";
   if(t.cancelled||t.type==="cancel")return "cancel";
   if(Number(t.delay||0)>30||t.type==="major-delay")return "major-delay";
@@ -24,6 +25,7 @@ function statusClass(t){
   return "";
 }
 function statusText(t){
+  if(t.source==='TRAIN_ARCHIVE_CZ'&&!t.hasRealtime&&!t.cancelled)return 'Geen meting';
   if(['SNCF','RENFE','EUROSTAR'].includes(t.source)&&!t.cancelled&&(!t.hasRealtime||!Number(t.delay)))return '';
   if(t.source==='RFI'&&!t.cancelled&&(!t.hasRealtime||!Number(t.delay)))return t.hasRealtime?(t.status||''):'';
   if(["ENTUR","OJP","NDOV_IFF","NDOV","OEBB","DARWIN","DSB"].includes(t.source)&&!t.hasRealtime&&!t.cancelled)return "";
@@ -155,7 +157,7 @@ async function refresh(){
       toggleFull.closest('.board-footer').hidden=true;
     }else if(!data){
       const allTab=document.querySelector('[data-tab="all"]');
-      const showAllTab=["NL","BE","NO","IT","FR","ES","SE","AT","DK"].includes(p.country)||p.source?.includes("OJP");
+      const showAllTab=["NL","BE","NO","IT","FR","ES","SE","AT","DK","CZ"].includes(p.country)||p.source?.includes("OJP");
       allTab.hidden=!showAllTab;
       if(showAllTab)activeTab="all";
       if(!p.quick?.length){fullEl.hidden=false;toggleFull.textContent="Verberg compleet vertrekbord";}
@@ -175,6 +177,7 @@ async function refresh(){
     scanStatus.textContent=d&&!Number.isNaN(d.getTime())
       ?`bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{hour:"2-digit",minute:"2-digit",timeZone:p.country==="GB"?"Europe/London":p.country==="DK"?"Europe/Copenhagen":undefined}).format(d)}${p.country==="GB"?" Britse tijd":""}`
       :"actueel";
+    if(p.archiveDelayed)scanStatus.textContent=d&&!Number.isNaN(d.getTime())?'Archief · meting '+Math.max(0,Math.floor((Date.now()-d.getTime())/60000))+' min geleden':'Archief · dienstregeling';
     if((["BE","NO","IT","FR","ES","SE","AT","GB","DK"].includes(p.country)||p.source?.includes("OJP"))&&p.status!=="ready")scanStatus.textContent=p.status==="starting"?(showAll?"vertrekken laden…":"dienstregeling laden…"):"realtime tijdelijk niet beschikbaar";
   }catch(e){
     scanStatus.textContent="tijdelijk niet beschikbaar";
