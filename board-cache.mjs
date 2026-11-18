@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {initKKStore} from './kk-store.mjs';
 import {initConnections} from './connections-store.mjs';
 import {initDayReports} from './day-reports.mjs';
@@ -6,6 +7,8 @@ import {initExpedia} from './expedia-store.mjs';
 import {initReishuis} from './reishuis-store.mjs';
 let db;
 export async function initBoardCache({backend,pool,sqlite}){
+ for(const st of cacheWrites.values())if(st.timer)clearTimeout(st.timer);
+ cacheWrites.clear();
  db={backend,pool,sqlite};
  initReishuis(db);
  await initFlora(db);
@@ -63,11 +66,35 @@ export async function writeBoardSettings(page,settings,revision){
  if(!row){const error=Error('Dit bord is ondertussen gewijzigd. Laad het opnieuw voordat je opslaat.');error.status=409;throw error;}
  return {revision:Number(row.revision),updatedAt:now};
 }
+// De board-cache is alleen een herstartbuffer (wordt bij het opstarten gelezen).
+// Daarom: niets wegschrijven als de inhoud gelijk is, en per bord hooguit eens per
+// BOARD_CACHE_MIN_INTERVAL_SECONDS (standaard 120 s); de laatste versie wordt dan later
+// alsnog weggeschreven. Scheelt veel schrijfwerk op de database.
+const cacheWrites=new Map();
+const minCacheInterval=()=>{const n=Number(process.env.BOARD_CACHE_MIN_INTERVAL_SECONDS??120);return (Number.isFinite(n)&&n>=0?n:120)*1000;};
 export async function saveBoardCache(key,value,at=Date.now()){
  if(!db)return;
- const data=JSON.stringify(value);
+ const data=JSON.stringify(value),hash=createHash('sha1').update(data).digest('hex');
+ const state=cacheWrites.get(key)||{hash:null,lastAt:0,timer:null,pending:null};
+ cacheWrites.set(key,state);
+ // Gelijke inhoud overslaan, maar eens per 6 uur toch verversen (loadBoardCache kijkt naar updated_at).
+ if(state.hash===hash&&Date.now()-state.lastAt<6*3600000){state.pending=null;return;}
+ const wait=state.lastAt+minCacheInterval()-Date.now();
+ if(wait>0){
+  state.pending={data,hash,at};
+  if(!state.timer){state.timer=setTimeout(()=>{state.timer=null;const p=state.pending;state.pending=null;if(p)void writeBoardCache(key,p.data,p.hash,p.at).catch(e=>console.error('[board-cache] Uitgestelde opslag mislukt voor',key+':',e.message));},wait);state.timer.unref?.();}
+  return;
+ }
+ state.pending=null;
+ await writeBoardCache(key,data,hash,at);
+}
+async function writeBoardCache(key,data,hash,at){
+ if(!db)return;
+ const state=cacheWrites.get(key);
+ if(state)state.lastAt=Date.now();
  if(db.pool)await db.pool.query('INSERT INTO board_cache VALUES($1,$2,$3) ON CONFLICT(cache_key) DO UPDATE SET updated_at=excluded.updated_at,payload=excluded.payload',[key,at,data]);
  else db.sqlite.prepare('INSERT INTO board_cache VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET updated_at=excluded.updated_at,payload=excluded.payload').run(key,at,data);
+ if(state)state.hash=hash; // pas na een geslaagde write, anders volgt een nieuwe poging
 }
 export async function loadBoardCache(key,maxAge=3*86400000){
  if(!db)return null;
