@@ -133,6 +133,13 @@ async function saveSnapshot(snapshot){
    if(client)await client.query('COMMIT');else sqlite.exec('COMMIT');
  }catch(e){if(client)await client.query('ROLLBACK');else sqlite.exec('ROLLBACK');throw e;}finally{client?.release();}
 }
+// Bestaat er al een rit uit een volledige bron (NDOV, OJP, NMBS) voor deze trein en dag?
+export async function hasSourceJourney(train,date){
+ if(!backend)return false;
+ const sql="SELECT 1 FROM journey_archive WHERE train_number=$1 AND service_date=$2 AND journey_id NOT LIKE 'WL-%' LIMIT 1",args=[String(train),date];
+ const rows=backend==='postgresql'?(await pool.query(sql,args)).rows:sqlite.prepare(sql.replace(/\$\d+/g,'?')).all(...args);
+ return rows.length>0;
+}
 export async function getJourney(train,date,journeyId){
  const id=journeyId||key(train,date),sql='SELECT state_json FROM journey_archive WHERE journey_id=$1';
  const row=backend==='postgresql'?(await pool.query(sql,[id])).rows[0]:sqlite.prepare(sql.replace('$1','?')).get(id);
