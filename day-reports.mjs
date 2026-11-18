@@ -17,8 +17,10 @@ export function normalizeReportEvent(t,source,observedAt){
  const realtime=!isPlan&&(!!actual||t.hasRealtime===true||(delay!==0&&!!expected));
  const date=connectionDate(planned),identity=[t.serviceDate||date,category,number,normalized(origin),normalized(destination)];
  if(!origin||!destination)identity.push(source,String(t.sourceTripId||t.trainKey||''));
- return {run:hash(identity.join('|')),date,number,category,station,mode,origin,destination,source,observedAt:Number(observedAt),planned,expected,actual,delay,realtime,cancelled:!!t.cancelled,country:String(t.countryCode||'').toUpperCase()};
+ return {run:hash(identity.join('|')),date,number,category,station,mode,origin,destination,source,observedAt:Number(observedAt),planned,expected,actual,delay,realtime,cancelled:!!t.cancelled,country:String(t.countryCode||'').toUpperCase(),...platforms(t)};
 }
+// Spoor (gepland en actueel) alleen meenemen als de bron het levert.
+function platforms(t){const clean=v=>String(v??'').trim(),planned=clean(t.plannedTrack??t.plannedPlatform),current=clean(t.currentTrack??t.currentPlatform??t.track??t.platform);const out={};if(planned)out.plannedPlatform=planned;if(current)out.platform=current;return out;}
 export function mergePeaks(old=[],incoming=[]){const groups=new Map();for(const e of [...old,...incoming]){if(!e.realtime||e.cancelled||e.delay<=0)continue;const key=e.number;const previous=groups.get(key);if(!previous||e.delay>previous.delay||(e.delay===previous.delay&&e.observedAt<previous.observedAt))groups.set(key,e);}return [...groups.values()].sort((a,b)=>b.delay-a.delay||a.observedAt-b.observedAt).slice(0,25);}
 export function targetFor(e){
  if(e.number==='225'&&normalized(e.station)==='mannheim hbf'&&e.mode==='arrival')return '225-mannheim';

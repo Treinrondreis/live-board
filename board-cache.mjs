@@ -74,7 +74,7 @@ export async function loadBoardCache(key,maxAge=3*86400000){
  const row=db.pool?(await db.pool.query('SELECT payload FROM board_cache WHERE cache_key=$1 AND updated_at>=$2',[key,Date.now()-maxAge])).rows[0]:db.sqlite.prepare('SELECT payload FROM board_cache WHERE cache_key=? AND updated_at>=?').get(key,Date.now()-maxAge);
  return row?JSON.parse(row.payload):null;
 }
-export const retentionPolicy={defaultDays:3,extendedDays:30,extendedCategories:['ICE','NJ','RJ'],mode:'changes-only'};
+export const retentionPolicy={defaultDays:3,extendedDays:7,extendedCategories:['ICE','NJ','RJ'],mode:'changes-only'};
 let cleaning=false;
 export async function cleanupHistory(now=Date.now()){
  if(!db||cleaning)return;cleaning=true;

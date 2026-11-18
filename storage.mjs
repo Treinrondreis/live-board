@@ -196,7 +196,7 @@ export function getStorageInfo(){
   return {
     backend,
     historyDays:3,
-    retention:"3 days; ICE/NJ/RJ 30 days",retentionPolicy,
+    retention:"3 days; ICE/NJ/RJ 7 days",retentionPolicy,
     punctualityRetention:'permanent for selected large-screen and registered itinerary events',
     legacyHeartbeatMinutes:0,
     dbRetention:{
@@ -260,7 +260,7 @@ export async function recordObservations(trains,source,observedAt=Date.now()){
       for(const r of rows){const key=legacyStateKey(r),prev=states.get(key)||null,stateChanged=!prev||prev.state_hash!==r.stateHash,rawChanged=!prev||prev.raw_hash!==r.rawHash;
         const lastObs=Number(prev?.last_observation_at||0),heartbeat=Boolean(prev)&&r.observedAt-lastObs>=LEGACY_HEARTBEAT_MS,persist=stateChanged;
         if(persist)await client.query(sql,[r.source,r.trainKey,r.trainNumber,r.category,r.station,r.eventMode,r.observedAt,r.plannedTimestamp,r.expectedTimestamp,r.plannedTime,r.currentTime,
-          r.delayMinutes,r.status,r.cancelled,r.origin,r.destination,r.track,r.plannedTrack,r.currentTrack,JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),rawChanged?JSON.stringify(r.payload):null]);
+          r.delayMinutes,r.status,r.cancelled,r.origin,r.destination,r.track,r.plannedTrack,r.currentTrack,JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),null]); // ruwe brondata wordt niet meer opgeslagen (werd nergens gelezen)
         await client.query(`INSERT INTO train_observation_state(state_key,source,train_key,station,event_mode,state_hash,raw_hash,last_seen_at,last_observation_at,last_payload_at)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(state_key) DO UPDATE SET state_hash=EXCLUDED.state_hash,raw_hash=EXCLUDED.raw_hash,
           last_seen_at=GREATEST(train_observation_state.last_seen_at,EXCLUDED.last_seen_at),last_observation_at=CASE WHEN $11 THEN EXCLUDED.last_observation_at ELSE train_observation_state.last_observation_at END,
@@ -275,7 +275,7 @@ export async function recordObservations(trains,source,observedAt=Date.now()){
       for(const r of rows){const key=legacyStateKey(r),prev=legacyStateCache.get(key)||null,stateChanged=!prev||prev.state_hash!==r.stateHash,rawChanged=!prev||prev.raw_hash!==r.rawHash;
         const lastObs=Number(prev?.last_observation_at||0),heartbeat=Boolean(prev)&&r.observedAt-lastObs>=LEGACY_HEARTBEAT_MS,persist=stateChanged;
         if(persist)sqliteInsert.run(r.source,r.trainKey,r.trainNumber,r.category,r.station,r.eventMode,r.observedAt,r.plannedTimestamp,r.expectedTimestamp,r.plannedTime,r.currentTime,r.delayMinutes,r.status,
-          r.cancelled?1:0,r.origin,r.destination,r.track,r.plannedTrack,r.currentTrack,JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),rawChanged?JSON.stringify(r.payload):null);
+          r.cancelled?1:0,r.origin,r.destination,r.track,r.plannedTrack,r.currentTrack,JSON.stringify(r.route),JSON.stringify(r.pastRoute),JSON.stringify(r.futureRoute),null);
         stateStmt.run(key,r.source,r.trainKey,r.station,r.eventMode,r.stateHash,r.rawHash,r.observedAt,persist?r.observedAt:lastObs,rawChanged?r.observedAt:Number(prev?.last_payload_at||0)||null,persist?1:0,rawChanged?1:0);
         const next={state_key:key,state_hash:r.stateHash,raw_hash:r.rawHash,last_seen_at:r.observedAt,last_observation_at:persist?r.observedAt:lastObs,last_payload_at:rawChanged?r.observedAt:Number(prev?.last_payload_at||0)||null};legacyStateCache.set(key,next);}
       sqlite.exec("COMMIT");}catch(e){sqlite.exec("ROLLBACK");throw e;}
