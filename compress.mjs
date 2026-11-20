@@ -32,7 +32,14 @@ export function enableCompression(req, res, {enabled = process.env.COMPRESSION !
   const writeHead = res.writeHead, write = res.write, end = res.end;
   let pending = null, streaming = false, ending = false;
 
-  const flush = () => { if (pending) { const args = pending; pending = null; writeHead.apply(res, args); } };
+  const flush = () => {
+    if (res.headersSent) return;
+    // end/write normally generate implicit headers through writeHead. Our wrapper
+    // defers writeHead, so send those headers explicitly before handing off.
+    const args = pending || [res.statusCode];
+    pending = null;
+    writeHead.apply(res, args);
+  };
 
   res.writeHead = function (status, ...rest) { if (!ending) pending = [status, ...rest]; return res; };
   res.write = function (...args) { streaming = true; flush(); return write.apply(res, args); };
@@ -70,3 +77,4 @@ export function enableCompression(req, res, {enabled = process.env.COMPRESSION !
     return res;
   };
 }
+
