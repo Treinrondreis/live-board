@@ -103,3 +103,38 @@ test('Uint8Array-body blijft correct', () => serve((req, res) => {
   const r = await get(url);
   assert.equal(zlib.gunzipSync(r.body).toString(), big);
 }));
+
+
+test('headers via setHeader zonder writeHead geven geldige gzip-HTTP', () => serve((req, res) => {
+  res.statusCode = 202;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Length', Buffer.byteLength(big));
+  res.end(big);
+}, async url => {
+  const r = await get(url);
+  assert.equal(r.status, 202);
+  assert.equal(r.headers['content-encoding'], 'gzip');
+  assert.equal(r.headers['content-length'], undefined);
+  assert.equal(zlib.gunzipSync(r.body).toString(), big);
+}));
+
+test('kleine impliciete antwoorden en streams geven geldige HTTP', async () => {
+  await serve((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.end('{"ok":true}');
+  }, async url => {
+    const r = await get(url);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.toString(), '{"ok":true}');
+  });
+  await serve((req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.write('data: first\\n\\n');
+    res.end('data: last\\n\\n');
+  }, async url => {
+    const r = await get(url);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers['content-encoding'], undefined);
+    assert.equal(r.body.toString(), 'data: first\\n\\ndata: last\\n\\n');
+  });
+});
