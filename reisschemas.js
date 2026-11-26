@@ -115,8 +115,8 @@ import {punctualityView} from './punctuality-view.mjs';
   panel.scrollIntoView?.({behavior:'smooth',block:'start'});
  }
  let editing=null;
- function openEditor(id){
-  editing=[...legs(),...notificationRows()].find(r=>r.leg_id===id);if(!editing)return;
+ function openEditor(id,versionId){
+  editing=[...legs(),...notificationRows()].find(r=>r.leg_id===id&&(!versionId||r.version_id===versionId));if(!editing)return;
   const r=editing,o=r.observation||{};
   el('observation-form').hidden=!!r.notification_context;
   el('change-editor').hidden=false;el('editor-leg').textContent=r.dossier+' · '+r.train_number+' · '+r.from_station+' → '+r.to_station;
@@ -133,6 +133,27 @@ import {punctualityView} from './punctuality-view.mjs';
   el('communication-change').textContent=o.departure_time?'Getoonde planning: '+o.departure_time+' – '+o.arrival_time+(o.connection_broken?' · aansluiting niet haalbaar':''):'';
   el('editor-status').textContent='';el('change-editor').scrollIntoView?.({behavior:'smooth',block:'start'});
  }
+ function openLinkedTarget(){
+  if(!ready())return;
+  const hash=location.hash;
+  if(!hash.startsWith('#rit=')&&!hash.startsWith('#dossier='))return;
+  editing=null;el('change-editor').hidden=true;
+  const booking=/^#dossier=([0-9]{1,10}[AC]?)$/i.exec(hash);
+  if(booking){
+   const key=dossier(booking[1].replace(/C$/i,'A'));
+   if(!legs().some(r=>dossier(r.dossier)===key)){
+    el('status').textContent='Dit dossier is niet beschikbaar in het actuele register. Zoek het dossier opnieuw.';return;
+   }
+   el('status').textContent='';el('booking-number').value=booking[1].replace(/C$/i,'A');
+   selected=null;resetBookingFilters();setMode('bookings');renderBookings();
+   el('booking-header').scrollIntoView?.({behavior:'smooth',block:'start'});return;
+  }
+  const match=/^#rit=([a-f0-9-]{36})&versie=([a-f0-9-]{36})$/i.exec(hash);
+  const row=match&&[...legs(),...notificationRows()].find(r=>r.leg_id===match[1]&&r.version_id===match[2]);
+  if(!row){el('status').textContent='Deze ritlink is niet meer beschikbaar. Zoek het dossier in het register.';return;}
+  el('status').textContent='';openEditor(row.leg_id,row.version_id);
+ }
+ window.addEventListener('hashchange',openLinkedTarget);
  async function save(path,data){
   el('save-observation').disabled=true;el('save-communication').disabled=true;el('editor-status').textContent='Opslaan…';
   try{
@@ -164,5 +185,5 @@ import {punctualityView} from './punctuality-view.mjs';
  for(const id of ['toggle-controls','run-controls','connect-drafts'])el(id).onclick=async()=>{const button=el(id);button.disabled=true;try{const path=id==='toggle-controls'?'controls':id==='run-controls'?'run-controls':'google-start',data=id==='toggle-controls'?{enabled:!controlState?.enabled}:{};const result=await controlAction(path,data);if(result.url){const u=new URL(result.url);if(u.origin!=='https://accounts.google.com')throw Error('Ongeldige Google-link');location.assign(u.href);return;}el('control-action-status').textContent=id==='run-controls'?'Controle aangevraagd. Vernieuw later voor de resultaten.':'Instelling opgeslagen.';await loadControls();}catch(e){el('control-action-status').textContent=e.message;}finally{button.disabled=false;}};
  el('draft-form').onsubmit=async e=>{e.preventDefault();if(!editing?.observation_revision)return;el('create-draft').disabled=true;try{const result=await controlAction('draft',{legId:editing.leg_id,changeKey:editing.observation.change_key,observationRevision:editing.observation_revision,to:el('draft-to').value,destination:el('draft-destination').value,advice:el('draft-advice').value});el('editor-status').textContent=result.existing?'Er bestaat al een concept voor deze wijziging. Controleer Gmail.':'Concept in Gmail aangemaakt. Controleer en verstuur het daar; registreer daarna de communicatie.';}catch(e){el('editor-status').textContent=e.message;}finally{el('create-draft').disabled=false;}};
  el('train-date').value=amsterdamDay();
- el('refresh').onclick=async()=>{await Promise.all([load(),loadControls()]);};setMode(mode);void load();void loadControls();
+ el('refresh').onclick=async()=>{await Promise.all([load(),loadControls()]);openLinkedTarget();};setMode(mode);void load().then(openLinkedTarget);void loadControls();
 })();
