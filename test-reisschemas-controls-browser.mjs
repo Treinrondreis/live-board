@@ -30,5 +30,17 @@ try{
  await page.locator('#draft-to').fill('example@example.invalid');await page.locator('#draft-destination').fill('Voorbeeld Zuid');await page.locator('#draft-advice').fill('Gecontroleerd fictief advies.');
  assert.equal(await page.locator('#create-draft').isEnabled(),true);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('#draft-form').isVisible(),true);assert.deepEqual(errors,[]);
+ const editorLink='http://127.0.0.1:'+server.address().port+'/seinhuis/reisschemas#rit='+leg.leg_id+'&versie=';
+ const linked=await browser.newPage();
+ let writes=0;
+ linked.on('request',request=>{if(request.method()!=='GET')writes++;});
+ await linked.goto(editorLink+leg.version_id);
+ await linked.locator('#communication-form').waitFor({state:'visible'});
+ assert.match(await linked.locator('#editor-leg').textContent(),/DEMO.*TEST 700/);
+ assert.equal(writes,0);
+ const obsolete=await browser.newPage();
+ await obsolete.goto(editorLink+'00000000-0000-4000-8000-000000000099');
+ await obsolete.getByText('Deze ritlink verwijst niet naar een actuele schemaversie.',{exact:false}).waitFor();
+ assert.equal(await obsolete.locator('#change-editor').isVisible(),false);
  console.log('Reisschema controls: desktop, mobile, manual task escaping and separate draft form passed.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
